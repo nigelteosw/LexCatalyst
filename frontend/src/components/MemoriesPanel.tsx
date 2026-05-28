@@ -5,7 +5,7 @@ import type { Memory, MemoryCategory } from '../types/workspace'
 
 export function MemoriesPanel() {
   const [memories, setMemories] = useState<Memory[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
