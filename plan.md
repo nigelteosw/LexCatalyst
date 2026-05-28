@@ -154,11 +154,11 @@ Auth must include workspace and matter access checks before document search or s
 
 ### Database
 
-For the fastest demo, use:
+Use:
 
-**SQLite locally, Postgres on Railway**
+**Postgres locally through Docker, Postgres on Railway**
 
-If time allows, use:
+When document embeddings are added, use:
 
 **Postgres + pgvector**
 
@@ -182,25 +182,15 @@ agent_traces
 insights
 ```
 
-For a hackathon, there are two acceptable retrieval paths:
-
-### Option A: Simpler MVP
-
 Store embeddings in Postgres with `pgvector`.
 
 Use raw SQL for vector similarity search if SQLAlchemy support becomes awkward.
 
-### Option B: Fastest Local Demo
-
-Use SQLite for app data and a local vector store such as Chroma.
-
-This is easier to get working locally, but less clean for production.
-
 Recommended choice:
 
 ```txt
-Use Postgres + pgvector if the team can handle it.
-Use SQLite + Chroma if the team needs the simplest working demo.
+Use Postgres in local dev and production.
+Use pgvector when embeddings are implemented.
 ```
 
 ---
@@ -449,14 +439,14 @@ Use this order:
 
 ```txt
 1. FastAPI app skeleton
-2. SQLite/Postgres connection
-3. User model and auth routes
-4. React login/signup flow
-5. Document upload endpoint
-6. Text extraction for PDF and DOCX
-7. Chunking and embeddings
-8. RAG search endpoint
-9. Chat endpoint
+2. Postgres connection
+3. DeepSeek chat endpoint with persisted chat threads
+4. User model and auth routes
+5. React login/signup flow
+6. Document upload endpoint
+7. Text extraction for PDF and DOCX
+8. Chunking and embeddings
+9. RAG search endpoint
 10. Memory suggestion and retrieval
 11. Admin insight page
 12. Deployment
@@ -477,7 +467,7 @@ Frontend hosting: Cloudflare Pages or Vercel
 Backend: FastAPI + Python
 Backend hosting: Railway
 
-Database: SQLite for local demo, Postgres + pgvector if the team can handle it
+Database: Postgres locally through Docker, Postgres + pgvector when embeddings are implemented
 
 Blob storage: Railway local volume first, Cloudflare R2 if time allows
 

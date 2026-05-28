@@ -1,98 +1,298 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import { Menu } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
-import { ContextPanel } from './components/ContextPanel'
 import { Sidebar } from './components/Sidebar'
-import { Topbar } from './components/Topbar'
-import { workspaceContent } from './content/workspaceContent'
-import type { Message, Memory } from './types/workspace'
+import { LoginPage } from './components/LoginPage'
+import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle } from './lib/api'
+import type { ChatThread, Message } from './types/workspace'
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>(workspaceContent.chat.initialMessages)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'))
+  const [user, setUser] = useState<{ full_name: string; email: string } | null>(() => {
+    const saved = localStorage.getItem('user')
+    return saved ? JSON.parse(saved) : null
+  })
+  const [threads, setThreads] = useState<ChatThread[]>([])
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
   const [prompt, setPrompt] = useState('')
-  const [activeThread, setActiveThread] = useState(workspaceContent.threads[0])
-  const [memories, setMemories] = useState<Memory[]>(workspaceContent.memories.initialItems)
-  const [uploadState, setUploadState] = useState(workspaceContent.upload.initialState)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const documentCount = useMemo(() => {
-    const readyDocuments = workspaceContent.documents.filter((document) => document.status === 'ready')
-    return `${readyDocuments.length}/${workspaceContent.documents.length} ready`
-  }, [])
+  const activeThread = useMemo(
+    () => threads.find((thread) => thread.id === activeThreadId) ?? null,
+    [activeThreadId, threads],
+  )
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const trimmedPrompt = prompt.trim()
+  // Initial load
+  useEffect(() => {
+    if (!isAuthenticated) return
 
-    if (!trimmedPrompt) {
+    let isMounted = true
+
+    async function loadThreads() {
+      try {
+        const nextThreads = await listChatThreads()
+        if (!isMounted) return
+        setThreads(nextThreads)
+        if (nextThreads.length > 0 && !activeThreadId) {
+          setActiveThreadId(nextThreads[0].id)
+        }
+      } catch (caughtError) {
+        if (isMounted) {
+          setError(getErrorMessage(caughtError))
+        }
+      }
+    }
+
+    void loadThreads()
+    return () => { isMounted = false }
+  }, [isAuthenticated]) // Re-load when auth status changes
+
+  // Load messages when active thread changes
+  useEffect(() => {
+    if (!isAuthenticated || !activeThreadId) {
+      if (!activeThreadId) setMessages([])
       return
     }
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { role: 'user', body: trimmedPrompt },
-      workspaceContent.chat.followUpResponse,
-    ])
+    let isMounted = true
+
+    async function loadMessages(threadId: string) {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const nextMessages = await listThreadMessages(threadId)
+        if (isMounted) {
+          setMessages(nextMessages)
+        }
+      } catch (caughtError) {
+        if (isMounted) {
+          setError(getErrorMessage(caughtError))
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadMessages(activeThreadId)
+    return () => { isMounted = false }
+  }, [activeThreadId, isAuthenticated])
+
+  async function handleLoginSuccess(credential: string) {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await loginWithGoogle(credential)
+      localStorage.setItem('token', response.access_token)
+      localStorage.setItem('user', JSON.stringify(response.user))
+      setUser(response.user)
+      setIsAuthenticated(true)
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    setIsAuthenticated(false)
+    setUser(null)
+    setThreads([])
+    setActiveThreadId(null)
+    setMessages([])
+    setIsSidebarOpen(false)
+  }
+
+  async function refreshThreads(nextActiveThreadId: string) {
+    try {
+      const nextThreads = await listChatThreads()
+      setThreads(nextThreads)
+      setActiveThreadId(nextActiveThreadId)
+    } catch (err) {
+      setError(getErrorMessage(err))
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmedPrompt = prompt.trim()
+
+    if (!trimmedPrompt || isLoading) {
+      return
+    }
+
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      body: trimmedPrompt,
+    }
+    const assistantDraftId = crypto.randomUUID()
+    const assistantDraft: Message = {
+      id: assistantDraftId,
+      role: 'assistant',
+      body: '',
+    }
+
+    setMessages((currentMessages) => [...currentMessages, userMessage, assistantDraft])
     setPrompt('')
+    setError(null)
+    setIsLoading(true)
+
+    try {
+      await streamChatMessage({
+        message: trimmedPrompt,
+        threadId: activeThreadId,
+        onThread: (threadId, title) => {
+          setThreads((currentThreads) => {
+            if (currentThreads.some((thread) => thread.id === threadId)) {
+              return currentThreads
+            }
+
+            return [
+              {
+                id: threadId,
+                title,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+              ...currentThreads,
+            ]
+          })
+          // If this was a new thread, we might want to set it active
+          // but we'll wait for onDone to do a full refresh to be safe
+        },
+        onToken: (content) => {
+          setMessages((currentMessages) =>
+            currentMessages.map((message) =>
+              message.id === assistantDraftId
+                ? { ...message, body: `${message.body}${content}` }
+                : message,
+            ),
+          )
+        },
+        onDone: async (response) => {
+          setMessages((currentMessages) =>
+            currentMessages.map((message) =>
+              message.id === assistantDraftId ? response.message : message,
+            ),
+          )
+          await refreshThreads(response.threadId)
+        },
+      })
+    } catch (caughtError) {
+      setMessages((currentMessages) =>
+        currentMessages.filter(
+          (message) => message.id !== assistantDraftId || message.body.trim().length > 0,
+        ),
+      )
+      setError(getErrorMessage(caughtError))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  function saveDraftMemory() {
-    setMemories((currentMemories) => [workspaceContent.memories.draftItem, ...currentMemories])
+  function startNewChat() {
+    setActiveThreadId(null)
+    setMessages([])
+    setPrompt('')
+    setError(null)
   }
 
-  function handleUpload() {
-    setUploadState(workspaceContent.upload.queuedState)
-    window.setTimeout(() => setUploadState(workspaceContent.upload.processingState), 700)
-    window.setTimeout(() => setUploadState(workspaceContent.upload.readyState), 1600)
+  function selectThread(threadId: string) {
+    setActiveThreadId(threadId || null)
+    if (!threadId) {
+      setMessages([])
+      setPrompt('')
+      setError(null)
+    }
+  }
+
+  const userInitials = useMemo(() => {
+    if (!user?.full_name) return 'LC'
+    return user.full_name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }, [user])
+
+  if (!isAuthenticated) {
+    return <LoginPage error={error} onLoginSuccess={handleLoginSuccess} />
   }
 
   return (
-    <main className="grid min-h-screen bg-stone-50 text-stone-950 md:grid-cols-[236px_minmax(0,1fr)] xl:grid-cols-[284px_minmax(0,1fr)]">
+    <div className="flex h-screen bg-[#fcfcfb] text-neutral-900 overflow-hidden">
       <Sidebar
-        activeThread={activeThread}
-        brand={workspaceContent.brand}
-        newChatLabel={workspaceContent.newChatLabel}
-        onSelectThread={setActiveThread}
-        threads={workspaceContent.threads}
-        workspace={workspaceContent.workspace}
+        activeThreadId={activeThreadId}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onNewChat={startNewChat}
+        onSelectThread={selectThread}
+        threads={threads}
+        userFullName={user?.full_name ?? ''}
+        userInitials={userInitials}
       />
 
-      <section className="flex min-w-0 flex-col">
-        <Topbar
-          actions={workspaceContent.actions}
-          label={workspaceContent.matterLabel}
-          title={activeThread}
+      <main className="flex-1 flex flex-col min-w-0 bg-white lg:rounded-tl-2xl lg:border-t lg:border-l lg:border-neutral-200 lg:shadow-sm lg:my-2 lg:mr-2">
+        <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 -ml-2 text-neutral-500 hover:bg-neutral-100 rounded-md"
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+            <h2 className="truncate text-sm font-semibold text-neutral-900">
+              {activeThread?.title ?? 'New Chat'}
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleLogout}
+              className="text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors px-3 py-1.5 rounded-md hover:bg-neutral-50"
+            >
+              Log out
+            </button>
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.25 rounded-full bg-emerald-50 text-[11px] font-medium text-emerald-700 border border-emerald-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              AI Online
+            </div>
+          </div>
+        </header>
+
+        <ChatPanel
+          assistantInitials="LC"
+          error={error}
+          inputLabel="Ask LexCatalyst"
+          isLoading={isLoading}
+          messages={messages}
+          onPromptChange={setPrompt}
+          onSubmit={handleSubmit}
+          placeholder="Type your legal question or request..."
+          prompt={prompt}
+          sendLabel="Send"
+          userInitials={userInitials}
         />
-
-        <div className="grid flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <ChatPanel
-            assistantInitials={workspaceContent.chat.assistantInitials}
-            inputLabel={workspaceContent.chat.inputLabel}
-            messages={messages}
-            onPromptChange={setPrompt}
-            onSubmit={handleSubmit}
-            placeholder={workspaceContent.chat.placeholder}
-            prompt={prompt}
-            sendLabel={workspaceContent.chat.sendLabel}
-            suggestions={workspaceContent.suggestions}
-            userInitials={workspaceContent.chat.userInitials}
-          />
-
-          <ContextPanel
-            addMemoryLabel={workspaceContent.memories.addLabel}
-            documentCount={documentCount}
-            documents={workspaceContent.documents}
-            insight={workspaceContent.insight}
-            memories={memories}
-            memoryLabel={workspaceContent.memories.label}
-            onAddMemory={saveDraftMemory}
-            onUpload={handleUpload}
-            uploadLabel={workspaceContent.upload.label}
-            uploadState={uploadState}
-          />
-        </div>
-      </section>
-    </main>
+      </main>
+    </div>
   )
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return 'Something went wrong.'
 }
 
 export default App

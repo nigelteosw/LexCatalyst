@@ -52,23 +52,24 @@ Suggested routes:
 - FastAPI
 - Python
 - Uvicorn
+- SQLAlchemy
+- Postgres
+- DeepSeek via the OpenAI-compatible SDK
 
 Planned backend additions:
 
-- SQLAlchemy
 - Alembic
 - passlib[argon2]
 - PyJWT or python-jose
 - httpx
 - pypdf
 - python-docx
-- OpenAI-compatible LLM provider client
 
-The planned demo LLM provider is DeepSeek or OpenAI behind a provider abstraction.
+The demo LLM provider is DeepSeek behind a provider abstraction. The default model is `deepseek-v4-flash`; use `deepseek-v4-pro` only when the extra reasoning quality is worth the latency/cost tradeoff.
 
 ### Data
 
-Use SQLite for the fastest local demo. Use Postgres with pgvector if the team is ready for a more production-like path.
+Use local Postgres through Docker Compose. Add pgvector later when document embeddings are implemented.
 
 Core tables to add:
 
@@ -106,7 +107,45 @@ Do not store uploaded PDFs or DOCX files directly in Postgres. Use local disk or
 
 ## Local Setup
 
+### Local Database
+
+Run Postgres locally with Docker Compose:
+
+```sh
+cp backend/.env.example backend/.env
+# Fill DEEPSEEK_API_KEY in backend/.env
+docker compose up -d
+```
+
+Services:
+
+```txt
+Postgres: 127.0.0.1:5432
+```
+
+Stop the stack:
+
+```sh
+docker compose down
+```
+
+Delete the local Postgres volume and all local database data:
+
+```sh
+docker compose down -v
+```
+
 ### Backend
+
+The backend runs locally from the Python virtual environment and connects to Docker Postgres through `127.0.0.1:5432`.
+
+Start Postgres first:
+
+```sh
+docker compose up -d
+```
+
+Then run the backend:
 
 ```sh
 cd backend
@@ -130,27 +169,29 @@ GET /health
 
 ### Frontend
 
+The frontend is its own local Vite app:
+
 ```sh
 cd frontend
+cp .env.example .env
 bun install
 bun run dev
 ```
 
-Vite will print the local frontend URL.
+Vite will print the local frontend URL. By default the frontend calls `http://127.0.0.1:8000`; override it with `VITE_API_URL` in `frontend/.env`.
 
 ## Environment
 
 Create `backend/.env` for backend-only secrets.
 
-Expected variables as the LLM integration is added:
+Expected variables:
 
 ```txt
+DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
 DEEPSEEK_API_KEY=...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
-LANGSMITH_API_KEY=...
-LANGSMITH_TRACING=true
-LANGSMITH_PROJECT=lexcatalyst-local
+DEEPSEEK_TEMPERATURE=0.2
 ```
 
 Only use synthetic or non-confidential documents for demos unless everyone understands which external model providers receive document text.
@@ -168,6 +209,9 @@ GET  /documents
 GET  /documents/{document_id}
 
 POST /chat
+POST /chat/stream
+GET  /chat/threads
+GET  /chat/threads/{thread_id}/messages
 
 POST /memories
 GET  /memories/search
@@ -210,14 +254,14 @@ tools = {
 ## Build Order
 
 1. FastAPI app skeleton
-2. SQLite database connection
-3. User model and auth routes
-4. React login/signup flow
-5. Document upload endpoint
-6. PDF and DOCX text extraction
-7. Chunking and embeddings
-8. RAG search endpoint
-9. Chat endpoint
+2. Postgres database connection
+3. DeepSeek chat endpoint with persisted chat threads
+4. User model and auth routes
+5. React login/signup flow
+6. Document upload endpoint
+7. PDF and DOCX text extraction
+8. Chunking and embeddings
+9. RAG search endpoint
 10. Memory suggestion and retrieval
 11. Admin insight page
 12. Deployment

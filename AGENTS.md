@@ -20,8 +20,8 @@ Keep the stack boring and Python-first:
 
 - Frontend: React + Vite + TypeScript + Tailwind
 - Backend: FastAPI + Python
-- Local database: SQLite
-- Production database, if needed: Postgres + pgvector
+- Local database: Postgres through Docker Compose
+- Production database: Postgres, with pgvector when embeddings are implemented
 - Auth: backend-owned email/password auth
 - Deployment targets: frontend on Cloudflare Pages or Vercel, backend on Railway
 
@@ -44,7 +44,7 @@ frontend/
   bun.lock
 ```
 
-The current frontend is a static prototype. The current backend only exposes `/health`.
+The current frontend is a static prototype. The current backend exposes health/config endpoints plus DeepSeek-backed chat routes persisted to Postgres.
 
 ## Local Commands
 
@@ -72,6 +72,23 @@ Backend dev server:
 http://127.0.0.1:8000
 ```
 
+Local Docker database:
+
+```sh
+cp backend/.env.example backend/.env
+docker compose up -d
+```
+
+Docker services:
+
+```txt
+postgres: 127.0.0.1:5432
+```
+
+The backend is not part of Docker Compose. Run it locally from `backend/.venv` with `make dev`.
+
+The frontend is not part of Docker Compose. Run it separately with `bun run dev` from `frontend/`.
+
 If port `8000` is already in use, inspect it before killing anything:
 
 ```sh
@@ -83,12 +100,12 @@ lsof -nP -iTCP:8000 -sTCP:LISTEN
 Build in this order:
 
 1. Database connection and models
-2. Auth routes and session hydration
-3. Document upload
-4. Text extraction for PDF and DOCX
-5. Chunking and embeddings
-6. RAG search
-7. Chat endpoint
+2. DeepSeek chat endpoint with persisted chat threads
+3. Auth routes and session hydration
+4. Document upload
+5. Text extraction for PDF and DOCX
+6. Chunking and embeddings
+7. RAG search
 8. Memory CRUD and retrieval
 9. Admin insights
 10. Deployment wiring
@@ -148,12 +165,11 @@ Use a provider abstraction instead of scattering SDK calls through routes.
 Expected backend env vars:
 
 ```txt
+DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
 DEEPSEEK_API_KEY=...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
-LANGSMITH_API_KEY=...
-LANGSMITH_TRACING=true
-LANGSMITH_PROJECT=lexcatalyst-local
+DEEPSEEK_TEMPERATURE=0.2
 ```
 
 Default to `deepseek-v4-flash` for the demo unless the user asks for the slower or more capable DeepSeek V4 Pro model.

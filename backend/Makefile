@@ -9,3 +9,7 @@ dev:
 
 install:
 	$(PIP) install -r requirements.txt
+
+migrate:
+	$(PYTHON) -m alembic revision --autogenerate -m "Auto migration"
+	$(PYTHON) -m alembic upgrade head

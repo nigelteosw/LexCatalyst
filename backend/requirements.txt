@@ -1,3 +1,13 @@
 fastapi==0.136.3
+openai==2.9.0
+psycopg[binary]==3.3.2
+pydantic==2.12.5
+python-dotenv==1.2.1
 python-multipart==0.0.29
+SQLAlchemy==2.0.44
 uvicorn[standard]==0.48.0
+requests>=2.32.0
+google-auth==2.38.0
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+alembic==1.15.1

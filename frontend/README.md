@@ -1,6 +1,12 @@
 # LexCatalyst Frontend
 
-React + Vite + TypeScript frontend for the LexCatalyst legal workspace prototype.
+React + Vite + TypeScript frontend for the LexCatalyst legal search UI.
+
+Create a local env file if the backend is not running on the default URL:
+
+```sh
+cp .env.example .env
+```
 
 ## Commands
 
@@ -11,6 +17,6 @@ bun run lint
 bun run build
 ```
 
-The current app is a static workspace prototype for the core demo path: matter chat, document status, memory review, and admin insight.
+The current app connects to the FastAPI backend at `VITE_API_URL`, streams chat/search prompts through `/chat/stream`, and loads persisted threads from local Postgres through the backend.
 
-Keep the UI focused on the legal workflow. Avoid marketing-page patterns and keep document status, citations, and memory review visible.
+Keep the UI focused on real backend data. Do not reintroduce mock documents, memory cards, or sidebar-only demo content.
