@@ -33,7 +33,7 @@ class Settings(BaseModel):
 
     cors_origins: list[str] = getenv(
         "CORS_ORIGINS", 
-        "http://127.0.0.1:5173,http://localhost:5173"
+        "http://127.0.0.1:5173,http://localhost:5173,https://lexcatalyst.pages.dev"
     ).split(",")
 
 
