@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
-import { SendHorizontal, User, Sparkles, AlertCircle } from 'lucide-react'
+import { SendHorizontal, Sparkles, AlertCircle } from 'lucide-react'
 import type { Message } from '../types/workspace'
 
 type ChatPanelProps = {

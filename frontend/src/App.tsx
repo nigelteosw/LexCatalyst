@@ -37,7 +37,8 @@ function App() {
         const nextThreads = await listChatThreads()
         if (!isMounted) return
         setThreads(nextThreads)
-        if (nextThreads.length > 0 && !activeThreadId) {
+        // Only set active thread if we don't have one and we just loaded threads
+        if (nextThreads.length > 0 && activeThreadId === null) {
           setActiveThreadId(nextThreads[0].id)
         }
       } catch (caughtError) {
@@ -49,12 +50,11 @@ function App() {
 
     void loadThreads()
     return () => { isMounted = false }
-  }, [isAuthenticated]) // Re-load when auth status changes
+  }, [isAuthenticated, activeThreadId]) // Added activeThreadId to deps
 
   // Load messages when active thread changes
   useEffect(() => {
     if (!isAuthenticated || !activeThreadId) {
-      if (!activeThreadId) setMessages([])
       return
     }
 
