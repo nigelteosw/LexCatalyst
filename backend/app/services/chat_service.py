@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import ChatMessage, ChatThread
 from app.providers.deepseek import DeepSeekProvider
+from app.services.memory_service import (
+    extract_memory_candidates,
+    list_memories,
+    save_memory_candidates,
+)
 
 SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Answer clearly and conservatively. If the question needs document evidence, say what evidence is missing.
@@ -70,8 +75,22 @@ def get_recent_messages(db: Session, thread_id: str, limit: int = 20) -> list[Ch
     return list(reversed(messages))
 
 
-def build_provider_messages(history: list[ChatMessage], user_message: str) -> list[dict[str, str]]:
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+def build_provider_messages(
+    history: list[ChatMessage], user_message: str, memories: list = None
+) -> list[dict[str, str]]:
+    system_content = SYSTEM_PROMPT
+    if memories:
+        memory_blocks = []
+        categories = {"semantic": "Stable facts/preferences", "procedural": "Working style", "episodic": "Past events"}
+        for cat, label in categories.items():
+            cat_memories = [m.content for m in memories if m.category == cat]
+            if cat_memories:
+                memory_blocks.append(f"{label}:\n- " + "\n- ".join(cat_memories))
+        
+        if memory_blocks:
+            system_content += "\n\nUser Context (Long-term Memory):\n" + "\n\n".join(memory_blocks)
+
+    messages = [{"role": "system", "content": system_content}]
     messages.extend(
         {"role": message.role, "content": message.content}
         for message in history
@@ -91,14 +110,17 @@ async def create_chat_response(
     settings = get_settings()
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     history = get_recent_messages(db, thread.id)
+    memories = list_memories(db, user_id=user_id)
 
-    add_message(db, thread_id=thread.id, role="user", content=user_message)
+    user_msg_obj = add_message(db, thread_id=thread.id, role="user", content=user_message)
     thread.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(thread)
 
     provider = DeepSeekProvider()
-    assistant_content, usage = await provider.chat(build_provider_messages(history, user_message))
+    assistant_content, usage = await provider.chat(
+        build_provider_messages(history, user_message, memories=memories)
+    )
 
     assistant_message = add_message(
         db,
@@ -114,6 +136,11 @@ async def create_chat_response(
     db.commit()
     db.refresh(assistant_message)
     db.refresh(thread)
+
+    # Extract memories
+    candidates = await extract_memory_candidates(user_message, assistant_content)
+    save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
+
     return thread, assistant_message
 
 
@@ -126,20 +153,23 @@ def create_chat_request(
 ) -> tuple[ChatThread, list[dict[str, str]]]:
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     history = get_recent_messages(db, thread.id)
+    memories = list_memories(db, user_id=user_id)
 
     add_message(db, thread_id=thread.id, role="user", content=user_message)
     thread.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(thread)
 
-    return thread, build_provider_messages(history, user_message)
+    return thread, build_provider_messages(history, user_message, memories=memories)
 
 
-def save_assistant_response(
+async def save_assistant_response(
     db: Session,
     *,
+    user_id: str,
     thread: ChatThread,
     content: str,
+    user_message: str | None = None,
 ) -> ChatMessage:
     settings = get_settings()
     assistant_message = add_message(
@@ -153,6 +183,11 @@ def save_assistant_response(
     db.commit()
     db.refresh(assistant_message)
     db.refresh(thread)
+
+    if user_message:
+        candidates = await extract_memory_candidates(user_message, content)
+        save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
+
     return assistant_message
 
 

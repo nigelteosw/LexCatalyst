@@ -1,4 +1,4 @@
-import type { ChatThread, Message } from '../types/workspace'
+import type { ChatThread, Memory, MemoryCategory, Message } from '../types/workspace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -221,5 +221,67 @@ export async function loginWithGoogle(credential: string) {
   }>('/auth/google', {
     method: 'POST',
     body: JSON.stringify({ credential }),
+  })
+}
+
+export async function listMemories(category?: MemoryCategory): Promise<Memory[]> {
+  const params = category ? `?category=${category}` : ''
+  const response = await request<any[]>(`/memories${params}`)
+  return response.map((m) => ({
+    id: m.id,
+    category: m.category as MemoryCategory,
+    content: m.content,
+    confidence: m.confidence,
+    createdAt: m.created_at,
+    updatedAt: m.updated_at,
+  }))
+}
+
+export async function createMemory(payload: {
+  category: MemoryCategory
+  content: string
+  sourceThreadId?: string
+  sourceMessageId?: string
+}): Promise<Memory> {
+  const m = await request<any>('/memories', {
+    method: 'POST',
+    body: JSON.stringify({
+      category: payload.category,
+      content: payload.content,
+      source_thread_id: payload.sourceThreadId,
+      source_message_id: payload.sourceMessageId,
+    }),
+  })
+  return {
+    id: m.id,
+    category: m.category as MemoryCategory,
+    content: m.content,
+    confidence: m.confidence,
+    createdAt: m.created_at,
+    updatedAt: m.updated_at,
+  }
+}
+
+export async function updateMemory(
+  id: string,
+  payload: { category?: MemoryCategory; content?: string },
+): Promise<Memory> {
+  const m = await request<any>(`/memories/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+  return {
+    id: m.id,
+    category: m.category as MemoryCategory,
+    content: m.content,
+    confidence: m.confidence,
+    createdAt: m.created_at,
+    updatedAt: m.updated_at,
+  }
+}
+
+export async function deleteMemory(id: string): Promise<void> {
+  await request(`/memories/${id}`, {
+    method: 'DELETE',
   })
 }

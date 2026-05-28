@@ -28,6 +28,10 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    memories: Mapped[list["Memory"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class ChatThread(Base):
@@ -82,3 +86,43 @@ class ChatMessage(Base):
     )
 
     thread: Mapped[ChatThread] = relationship(back_populates="messages")
+    memories: Mapped[list["Memory"]] = relationship(back_populates="source_message")
+
+
+class Memory(Base):
+    __tablename__ = "memories"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    category: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    source_thread_id: Mapped[str | None] = mapped_column(
+        ForeignKey("chat_threads.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    source_message_id: Mapped[str | None] = mapped_column(
+        ForeignKey("chat_messages.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    confidence: Mapped[float] = mapped_column(default=1.0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped[User] = relationship(back_populates="memories")
+    source_thread: Mapped[ChatThread | None] = relationship()
+    source_message: Mapped[ChatMessage | None] = relationship(back_populates="memories")

@@ -11,3 +11,14 @@ export type ChatThread = {
   createdAt: string
   updatedAt: string
 }
+
+export type MemoryCategory = 'semantic' | 'procedural' | 'episodic'
+
+export type Memory = {
+  id: string
+  category: MemoryCategory
+  content: string
+  confidence: number
+  createdAt: string
+  updatedAt: string
+}

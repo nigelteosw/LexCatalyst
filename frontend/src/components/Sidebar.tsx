@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { MessageSquare, Plus, X, Clock } from 'lucide-react'
+import { MessageSquare, Plus, X, Clock, Brain } from 'lucide-react'
 import type { ChatThread } from '../types/workspace'
 
 type SidebarProps = {
   threads: ChatThread[]
   activeThreadId: string | null
   onSelectThread: (threadId: string) => void
+  onSelectMemories: () => void
   onNewChat: () => void
   isOpen: boolean
   onClose: () => void
@@ -21,6 +22,7 @@ export function Sidebar({
   threads,
   activeThreadId,
   onSelectThread,
+  onSelectMemories,
   onNewChat,
   isOpen,
   onClose,
@@ -95,7 +97,7 @@ export function Sidebar({
             </button>
           </div>
 
-          <div className="p-3">
+          <div className="p-3 space-y-2">
             <button
               onClick={() => {
                 onNewChat()
@@ -105,6 +107,20 @@ export function Sidebar({
             >
               <Plus size={16} />
               New chat
+            </button>
+            <button
+              onClick={() => {
+                onSelectMemories()
+                if (window.innerWidth < 1024) onClose()
+              }}
+              className={`flex items-center gap-2 w-full px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                activeThreadId === 'memories'
+                  ? 'bg-neutral-100 text-neutral-900 border border-neutral-200 shadow-sm'
+                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 border border-transparent'
+              }`}
+            >
+              <Brain size={16} />
+              Memories
             </button>
           </div>
 

@@ -7,8 +7,12 @@ from sqlalchemy import pool
 
 from alembic import context
 
+from pathlib import Path
+
 # Add the project root to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+root_path = Path(__file__).parent.parent.absolute()
+if str(root_path) not in sys.path:
+    sys.path.insert(0, str(root_path))
 
 from app.config import get_settings
 from app.database import Base
@@ -25,6 +29,15 @@ if config.config_file_name is not None:
 
 # Set the database URL from settings
 settings = get_settings()
+db_url = settings.database_url
+if "@" in db_url:
+    prefix, rest = db_url.split("@", 1)
+    if ":" in prefix:
+        proto, auth = prefix.split("://", 1)
+        if ":" in auth:
+            user, pw = auth.split(":", 1)
+            db_url = f"{proto}://{user}:***@{rest}"
+print(f"Migrations connecting to: {db_url}")
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # add your model's MetaData object here

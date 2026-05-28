@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
 import { Sidebar } from './components/Sidebar'
 import { LoginPage } from './components/LoginPage'
+import { MemoriesPanel } from './components/MemoriesPanel'
 import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle } from './lib/api'
 import type { ChatThread, Message } from './types/workspace'
 
@@ -14,7 +15,7 @@ function App() {
     return saved ? JSON.parse(saved) : null
   })
   const [threads, setThreads] = useState<ChatThread[]>([])
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null) // null means new chat, 'memories' means memories panel
   const [messages, setMessages] = useState<Message[]>([])
   const [prompt, setPrompt] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -54,7 +55,8 @@ function App() {
 
   // Load messages when active thread changes
   useEffect(() => {
-    if (!isAuthenticated || !activeThreadId) {
+    if (!isAuthenticated || !activeThreadId || activeThreadId === 'memories') {
+      if (!activeThreadId || activeThreadId === 'memories') setMessages([])
       return
     }
 
@@ -149,7 +151,7 @@ function App() {
     try {
       await streamChatMessage({
         message: trimmedPrompt,
-        threadId: activeThreadId,
+        threadId: activeThreadId === 'memories' ? null : activeThreadId,
         onThread: (threadId, title) => {
           setThreads((currentThreads) => {
             if (currentThreads.some((thread) => thread.id === threadId)) {
@@ -215,6 +217,10 @@ function App() {
     }
   }
 
+  function selectMemories() {
+    setActiveThreadId('memories')
+  }
+
   const userInitials = useMemo(() => {
     if (!user?.full_name) return 'LC'
     return user.full_name
@@ -237,52 +243,59 @@ function App() {
         onClose={() => setIsSidebarOpen(false)}
         onNewChat={startNewChat}
         onSelectThread={selectThread}
+        onSelectMemories={selectMemories}
         threads={threads}
         userFullName={user?.full_name ?? ''}
         userInitials={userInitials}
       />
 
       <main className="flex-1 flex flex-col min-w-0 bg-white lg:rounded-tl-2xl lg:border-t lg:border-l lg:border-neutral-200 lg:shadow-sm lg:my-2 lg:mr-2">
-        <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 -ml-2 text-neutral-500 hover:bg-neutral-100 rounded-md"
-              aria-label="Open menu"
-            >
-              <Menu size={20} />
-            </button>
-            <h2 className="truncate text-sm font-semibold text-neutral-900">
-              {activeThread?.title ?? 'New Chat'}
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleLogout}
-              className="text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors px-3 py-1.5 rounded-md hover:bg-neutral-50"
-            >
-              Log out
-            </button>
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.25 rounded-full bg-emerald-50 text-[11px] font-medium text-emerald-700 border border-emerald-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              AI Online
-            </div>
-          </div>
-        </header>
+        {activeThreadId === 'memories' ? (
+          <MemoriesPanel />
+        ) : (
+          <>
+            <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="lg:hidden p-2 -ml-2 text-neutral-500 hover:bg-neutral-100 rounded-md"
+                  aria-label="Open menu"
+                >
+                  <Menu size={20} />
+                </button>
+                <h2 className="truncate text-sm font-semibold text-neutral-900">
+                  {activeThread?.title ?? 'New Chat'}
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleLogout}
+                  className="text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors px-3 py-1.5 rounded-md hover:bg-neutral-50"
+                >
+                  Log out
+                </button>
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.25 rounded-full bg-emerald-50 text-[11px] font-medium text-emerald-700 border border-emerald-100">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  AI Online
+                </div>
+              </div>
+            </header>
 
-        <ChatPanel
-          assistantInitials="LC"
-          error={error}
-          inputLabel="Ask LexCatalyst"
-          isLoading={isLoading}
-          messages={messages}
-          onPromptChange={setPrompt}
-          onSubmit={handleSubmit}
-          placeholder="Type your legal question or request..."
-          prompt={prompt}
-          sendLabel="Send"
-          userInitials={userInitials}
-        />
+            <ChatPanel
+              assistantInitials="LC"
+              error={error}
+              inputLabel="Ask LexCatalyst"
+              isLoading={isLoading}
+              messages={messages}
+              onPromptChange={setPrompt}
+              onSubmit={handleSubmit}
+              placeholder="Type your legal question or request..."
+              prompt={prompt}
+              sendLabel="Send"
+              userInitials={userInitials}
+            />
+          </>
+        )}
       </main>
     </div>
   )
