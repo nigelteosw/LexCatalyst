@@ -22,7 +22,7 @@ class Settings(BaseModel):
         return self
     deepseek_api_key: str | None = getenv("DEEPSEEK_API_KEY")
     deepseek_base_url: str = getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-    deepseek_model: str = getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    deepseek_model: str = getenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
     deepseek_temperature: float = float(getenv("DEEPSEEK_TEMPERATURE", "0.2"))
 
     # Auth Settings

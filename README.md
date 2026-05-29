@@ -65,7 +65,7 @@ Planned backend additions:
 - pypdf
 - python-docx
 
-The demo LLM provider is DeepSeek behind a provider abstraction. The default model is `deepseek-v4-flash`; use `deepseek-v4-pro` only when the extra reasoning quality is worth the latency/cost tradeoff.
+The demo LLM provider is DeepSeek behind a provider abstraction. The default model is `deepseek-v4-pro` because the demo benefits from stronger legal reasoning; switch to `deepseek-v4-flash` when lower latency or cost matters more.
 
 ### Data
 
@@ -190,7 +190,7 @@ Expected variables:
 DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
 DEEPSEEK_API_KEY=...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_TEMPERATURE=0.2
 ```
 

@@ -168,11 +168,11 @@ Expected backend env vars:
 DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
 DEEPSEEK_API_KEY=...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_TEMPERATURE=0.2
 ```
 
-Default to `deepseek-v4-flash` for the demo unless the user asks for the slower or more capable DeepSeek V4 Pro model.
+Default to `deepseek-v4-pro` for the demo because the user asked to prioritize the slower, more capable DeepSeek V4 Pro model. Use `deepseek-v4-flash` only when latency or cost matters more than answer quality.
 
 Keep the provider interface minimal:
 
