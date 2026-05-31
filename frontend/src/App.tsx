@@ -1,12 +1,36 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Menu } from 'lucide-react'
+import { Gauge, Menu, Sparkles } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
 import { Sidebar } from './components/Sidebar'
 import { LoginPage } from './components/LoginPage'
 import { MemoriesPanel } from './components/MemoriesPanel'
 import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle } from './lib/api'
-import type { ChatThread, Message } from './types/workspace'
+import type { ChatModel, ChatThread, Message } from './types/workspace'
+
+const CHAT_MODELS: Array<{
+  id: ChatModel
+  label: string
+  description: string
+}> = [
+  {
+    id: 'deepseek-v4-flash',
+    label: 'Flash',
+    description: 'Faster, lower-cost responses',
+  },
+  {
+    id: 'deepseek-v4-pro',
+    label: 'Pro',
+    description: 'Deeper legal reasoning',
+  },
+]
+
+function getSavedChatModel(): ChatModel {
+  const saved = localStorage.getItem('chatModel')
+  return saved === 'deepseek-v4-flash' || saved === 'deepseek-v4-pro'
+    ? saved
+    : 'deepseek-v4-pro'
+}
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'))
@@ -21,6 +45,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<ChatModel>(getSavedChatModel)
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
@@ -151,6 +176,7 @@ function App() {
     try {
       await streamChatMessage({
         message: trimmedPrompt,
+        model: selectedModel,
         threadId: activeThreadId === 'memories' ? null : activeThreadId,
         onThread: (threadId, title) => {
           setThreads((currentThreads) => {
@@ -221,6 +247,11 @@ function App() {
     setActiveThreadId('memories')
   }
 
+  function handleModelChange(model: ChatModel) {
+    setSelectedModel(model)
+    localStorage.setItem('chatModel', model)
+  }
+
   const userInitials = useMemo(() => {
     if (!user?.full_name) return 'LC'
     return user.full_name
@@ -268,6 +299,31 @@ function App() {
                 </h2>
               </div>
               <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center rounded-lg border border-neutral-200 bg-neutral-50 p-1"
+                  aria-label="Chat model"
+                >
+                  {CHAT_MODELS.map((model) => {
+                    const isSelected = selectedModel === model.id
+                    return (
+                      <button
+                        key={model.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        title={model.description}
+                        onClick={() => handleModelChange(model.id)}
+                        className={`flex h-8 items-center gap-1.5 rounded-md px-2 sm:px-2.5 text-xs font-medium transition-colors ${
+                          isSelected
+                            ? 'bg-white text-neutral-950 shadow-sm ring-1 ring-neutral-200'
+                            : 'text-neutral-500 hover:text-neutral-900'
+                        }`}
+                      >
+                        {model.id === 'deepseek-v4-flash' ? <Gauge size={14} /> : <Sparkles size={14} />}
+                        <span className="hidden sm:inline">{model.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
                 <button
                   onClick={handleLogout}
                   className="text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors px-3 py-1.5 rounded-md hover:bg-neutral-50"

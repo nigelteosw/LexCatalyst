@@ -172,7 +172,7 @@ DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_TEMPERATURE=0.2
 ```
 
-Default to `deepseek-v4-pro` for the demo because the user asked to prioritize the slower, more capable DeepSeek V4 Pro model. Use `deepseek-v4-flash` only when latency or cost matters more than answer quality.
+Default to `deepseek-v4-pro` for the demo because the user asked to prioritize the slower, more capable DeepSeek V4 Pro model. Surface model choice in the chat navbar so users can switch each prompt between `deepseek-v4-pro` for deeper legal reasoning and `deepseek-v4-flash` for faster, lower-cost responses.
 
 Keep the provider interface minimal:
 

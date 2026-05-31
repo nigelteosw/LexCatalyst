@@ -65,7 +65,7 @@ Planned backend additions:
 - pypdf
 - python-docx
 
-The demo LLM provider is DeepSeek behind a provider abstraction. The default model is `deepseek-v4-pro` because the demo benefits from stronger legal reasoning; switch to `deepseek-v4-flash` when lower latency or cost matters more.
+The demo LLM provider is DeepSeek behind a provider abstraction. The default model is `deepseek-v4-pro` because the demo benefits from stronger legal reasoning. The chat navbar lets users switch each prompt between `deepseek-v4-pro` for deeper legal reasoning and `deepseek-v4-flash` for faster, lower-cost responses.
 
 ### Data
 
@@ -218,6 +218,13 @@ GET  /memories/search
 POST /memories/{memory_id}/promote
 
 GET  /admin/insights
+```
+
+`POST /chat` and `POST /chat/stream` accept an optional `model` value:
+
+```txt
+deepseek-v4-pro
+deepseek-v4-flash
 ```
 
 Every document, memory, and chat lookup must be scoped to the current user, workspace, and matter.

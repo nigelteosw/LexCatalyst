@@ -2,9 +2,19 @@ from openai import APIError, AsyncOpenAI, OpenAIError
 
 from app.config import get_settings
 
+SUPPORTED_CHAT_MODELS = ("deepseek-v4-flash", "deepseek-v4-pro")
+
 
 class DeepSeekError(RuntimeError):
     pass
+
+
+def resolve_chat_model(model: str | None) -> str:
+    settings = get_settings()
+    selected_model = model or settings.deepseek_model
+    if selected_model not in SUPPORTED_CHAT_MODELS:
+        raise DeepSeekError(f"Unsupported DeepSeek model: {selected_model}")
+    return selected_model
 
 
 class DeepSeekProvider:
@@ -17,13 +27,20 @@ class DeepSeekProvider:
                 base_url=self.settings.deepseek_base_url,
             )
 
-    async def chat(self, messages: list[dict[str, str]]) -> tuple[str, dict[str, int | None]]:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None = None,
+    ) -> tuple[str, dict[str, int | None]]:
         if not self.client:
             raise DeepSeekError("DEEPSEEK_API_KEY is not configured")
 
+        selected_model = resolve_chat_model(model)
+
         try:
             response = await self.client.chat.completions.create(
-                model=self.settings.deepseek_model,
+                model=selected_model,
                 messages=messages,
                 temperature=self.settings.deepseek_temperature,
             )
@@ -44,13 +61,15 @@ class DeepSeekProvider:
         }
         return content, usage_payload
 
-    async def stream_chat(self, messages: list[dict[str, str]]):
+    async def stream_chat(self, messages: list[dict[str, str]], *, model: str | None = None):
         if not self.client:
             raise DeepSeekError("DEEPSEEK_API_KEY is not configured")
 
+        selected_model = resolve_chat_model(model)
+
         try:
             stream = await self.client.chat.completions.create(
-                model=self.settings.deepseek_model,
+                model=selected_model,
                 messages=messages,
                 temperature=self.settings.deepseek_temperature,
                 stream=True,

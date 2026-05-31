@@ -12,7 +12,7 @@ from app.config import get_settings
 from app.database import create_db_tables, get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.providers.deepseek import DeepSeekError, DeepSeekProvider
+from app.providers.deepseek import DeepSeekError, DeepSeekProvider, SUPPORTED_CHAT_MODELS
 from app.schemas import (
     ChatMessageResponse,
     ChatRequest,
@@ -93,11 +93,12 @@ def health() -> dict[str, str]:
 
 
 @app.get("/config")
-def config() -> dict[str, str]:
+def config() -> dict[str, object]:
     settings = get_settings()
     return {
         "deepseek_model": settings.deepseek_model,
         "deepseek_base_url": settings.deepseek_base_url,
+        "available_chat_models": list(SUPPORTED_CHAT_MODELS),
     }
 
 
@@ -113,6 +114,7 @@ async def chat(
             user_message=request.message,
             user_id=current_user.id,
             thread_id=request.thread_id,
+            model=request.model,
         )
     except DeepSeekError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -137,17 +139,18 @@ async def chat_stream(
 
     async def stream():
         try:
-            thread, provider_messages = create_chat_request(
+            thread, provider_messages, selected_model = create_chat_request(
                 db,
                 user_message=request.message,
                 user_id=current_user.id,
                 thread_id=request.thread_id,
+                model=request.model,
             )
             yield event("thread", {"thread_id": thread.id, "title": thread.title})
 
             provider = DeepSeekProvider()
             chunks: list[str] = []
-            async for chunk in provider.stream_chat(provider_messages):
+            async for chunk in provider.stream_chat(provider_messages, model=selected_model):
                 chunks.append(chunk)
                 yield event("token", {"content": chunk})
 
@@ -162,6 +165,7 @@ async def chat_stream(
                 thread=thread,
                 content=assistant_content,
                 user_message=request.message,
+                model=selected_model,
             )
             yield event(
                 "done",
@@ -170,7 +174,7 @@ async def chat_stream(
                     "message": ChatMessageResponse.model_validate(assistant_message).model_dump(
                         mode="json"
                     ),
-                    "model": assistant_message.model or get_settings().deepseek_model,
+                    "model": assistant_message.model or selected_model,
                 },
             )
         except DeepSeekError as exc:

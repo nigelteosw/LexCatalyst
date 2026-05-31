@@ -1,4 +1,4 @@
-import type { ChatThread, Memory, MemoryCategory, Message } from '../types/workspace'
+import type { ChatModel, ChatThread, Memory, MemoryCategory, Message } from '../types/workspace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -40,6 +40,7 @@ type StreamErrorPayload = {
 
 type StreamChatOptions = {
   message: string
+  model: ChatModel
   threadId: string | null
   onThread: (threadId: string, title: string) => void
   onToken: (content: string) => void
@@ -96,12 +97,13 @@ export async function listThreadMessages(threadId: string): Promise<Message[]> {
   return messages.map(mapMessage)
 }
 
-export async function sendChatMessage(message: string, threadId: string | null) {
+export async function sendChatMessage(message: string, threadId: string | null, model: ChatModel) {
   const response = await request<BackendChatResponse>('/chat', {
     method: 'POST',
     body: JSON.stringify({
       message,
       thread_id: threadId,
+      model,
     }),
   })
 
@@ -114,6 +116,7 @@ export async function sendChatMessage(message: string, threadId: string | null) 
 
 export async function streamChatMessage({
   message,
+  model,
   threadId,
   onThread,
   onToken,
@@ -133,6 +136,7 @@ export async function streamChatMessage({
     body: JSON.stringify({
       message,
       thread_id: threadId,
+      model,
     }),
   })
 

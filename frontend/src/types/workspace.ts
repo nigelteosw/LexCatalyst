@@ -12,6 +12,8 @@ export type ChatThread = {
   updatedAt: string
 }
 
+export type ChatModel = 'deepseek-v4-flash' | 'deepseek-v4-pro'
+
 export type MemoryCategory = 'semantic' | 'procedural' | 'episodic'
 
 export type Memory = {

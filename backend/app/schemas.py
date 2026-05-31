@@ -3,10 +3,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+ChatModel = Literal["deepseek-v4-flash", "deepseek-v4-pro"]
+
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     thread_id: str | None = None
+    model: ChatModel | None = None
 
 
 class ChatMessageResponse(BaseModel):

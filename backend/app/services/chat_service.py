@@ -3,9 +3,8 @@ from datetime import UTC, datetime
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.models import ChatMessage, ChatThread
-from app.providers.deepseek import DeepSeekProvider
+from app.providers.deepseek import DeepSeekProvider, resolve_chat_model
 from app.services.memory_service import (
     extract_memory_candidates,
     list_memories,
@@ -106,8 +105,9 @@ async def create_chat_response(
     user_message: str,
     user_id: str,
     thread_id: str | None = None,
+    model: str | None = None,
 ) -> tuple[ChatThread, ChatMessage]:
-    settings = get_settings()
+    selected_model = resolve_chat_model(model)
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id)
@@ -119,7 +119,8 @@ async def create_chat_response(
 
     provider = DeepSeekProvider()
     assistant_content, usage = await provider.chat(
-        build_provider_messages(history, user_message, memories=memories)
+        build_provider_messages(history, user_message, memories=memories),
+        model=selected_model,
     )
 
     assistant_message = add_message(
@@ -127,7 +128,7 @@ async def create_chat_response(
         thread_id=thread.id,
         role="assistant",
         content=assistant_content,
-        model=settings.deepseek_model,
+        model=selected_model,
         prompt_tokens=usage["prompt_tokens"],
         completion_tokens=usage["completion_tokens"],
         total_tokens=usage["total_tokens"],
@@ -150,7 +151,9 @@ def create_chat_request(
     user_message: str,
     user_id: str,
     thread_id: str | None = None,
-) -> tuple[ChatThread, list[dict[str, str]]]:
+    model: str | None = None,
+) -> tuple[ChatThread, list[dict[str, str]], str]:
+    selected_model = resolve_chat_model(model)
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id)
@@ -160,7 +163,7 @@ def create_chat_request(
     db.commit()
     db.refresh(thread)
 
-    return thread, build_provider_messages(history, user_message, memories=memories)
+    return thread, build_provider_messages(history, user_message, memories=memories), selected_model
 
 
 async def save_assistant_response(
@@ -170,14 +173,15 @@ async def save_assistant_response(
     thread: ChatThread,
     content: str,
     user_message: str | None = None,
+    model: str | None = None,
 ) -> ChatMessage:
-    settings = get_settings()
+    selected_model = resolve_chat_model(model)
     assistant_message = add_message(
         db,
         thread_id=thread.id,
         role="assistant",
         content=content,
-        model=settings.deepseek_model,
+        model=selected_model,
     )
     thread.updated_at = datetime.now(UTC)
     db.commit()
