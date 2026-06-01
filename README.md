@@ -69,7 +69,7 @@ The demo LLM provider is DeepSeek behind a provider abstraction. The default mod
 
 ### Data
 
-Use local Postgres through Docker Compose. Add pgvector later when document embeddings are implemented.
+Use local Postgres through Docker Compose with pgvector enabled for document embeddings.
 
 Core tables to add:
 
@@ -113,7 +113,7 @@ Run Postgres locally with Docker Compose:
 
 ```sh
 cp backend/.env.example backend/.env
-# Fill DEEPSEEK_API_KEY in backend/.env
+# Fill DEEPSEEK_API_KEY, OPENAI_API_KEY, and R2 credentials in backend/.env
 docker compose up -d
 ```
 
@@ -152,8 +152,11 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 make install
+make migrate
 make dev
 ```
+
+On a server, run `make migrate` or `.venv/bin/alembic upgrade head` as a release/startup step before starting Uvicorn. Alembic is the deploy migration path. The backend only runs `create_all()` on startup when `AUTO_CREATE_TABLES=true`, which should stay disabled in Railway.
 
 The backend runs on:
 
@@ -188,10 +191,21 @@ Expected variables:
 
 ```txt
 DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
+AUTO_CREATE_TABLES=false
+
 DEEPSEEK_API_KEY=...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_TEMPERATURE=0.2
+
+OPENAI_API_KEY=...
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_EMBEDDING_DIMENSIONS=1536
+
+CLOUDFLARE_R2_BUCKET_NAME=lexcatalyst
+CLOUDFLARE_R2_ENDPOINT_URL=https://aa1656cdf4783d312f507847447334cb.r2.cloudflarestorage.com
+CLOUDFLARE_R2_ACCESS_KEY_ID=...
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=...
 ```
 
 Only use synthetic or non-confidential documents for demos unless everyone understands which external model providers receive document text.

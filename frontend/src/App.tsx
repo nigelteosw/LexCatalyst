@@ -5,6 +5,7 @@ import { ChatPanel } from './components/ChatPanel'
 import { Sidebar } from './components/Sidebar'
 import { LoginPage } from './components/LoginPage'
 import { MemoriesPanel } from './components/MemoriesPanel'
+import { DocumentsPanel } from './components/DocumentsPanel'
 import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle } from './lib/api'
 import type { ChatModel, ChatThread, Message } from './types/workspace'
 
@@ -39,7 +40,7 @@ function App() {
     return saved ? JSON.parse(saved) : null
   })
   const [threads, setThreads] = useState<ChatThread[]>([])
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null) // null means new chat, 'memories' means memories panel
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null) // null means new chat; special panels use string keys
   const [messages, setMessages] = useState<Message[]>([])
   const [prompt, setPrompt] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -80,8 +81,15 @@ function App() {
 
   // Load messages when active thread changes
   useEffect(() => {
-    if (!isAuthenticated || !activeThreadId || activeThreadId === 'memories') {
-      if (!activeThreadId || activeThreadId === 'memories') setMessages([])
+    if (
+      !isAuthenticated ||
+      !activeThreadId ||
+      activeThreadId === 'memories' ||
+      activeThreadId === 'documents'
+    ) {
+      if (!activeThreadId || activeThreadId === 'memories' || activeThreadId === 'documents') {
+        setMessages([])
+      }
       return
     }
 
@@ -177,7 +185,10 @@ function App() {
       await streamChatMessage({
         message: trimmedPrompt,
         model: selectedModel,
-        threadId: activeThreadId === 'memories' ? null : activeThreadId,
+        threadId:
+          activeThreadId === 'memories' || activeThreadId === 'documents'
+            ? null
+            : activeThreadId,
         onThread: (threadId, title) => {
           setThreads((currentThreads) => {
             if (currentThreads.some((thread) => thread.id === threadId)) {
@@ -247,6 +258,10 @@ function App() {
     setActiveThreadId('memories')
   }
 
+  function selectDocuments() {
+    setActiveThreadId('documents')
+  }
+
   function handleModelChange(model: ChatModel) {
     setSelectedModel(model)
     localStorage.setItem('chatModel', model)
@@ -275,6 +290,7 @@ function App() {
         onNewChat={startNewChat}
         onSelectThread={selectThread}
         onSelectMemories={selectMemories}
+        onSelectDocuments={selectDocuments}
         threads={threads}
         userFullName={user?.full_name ?? ''}
         userInitials={userInitials}
@@ -283,6 +299,8 @@ function App() {
       <main className="flex-1 flex flex-col min-w-0 bg-white lg:rounded-tl-2xl lg:border-t lg:border-l lg:border-neutral-200 lg:shadow-sm lg:my-2 lg:mr-2">
         {activeThreadId === 'memories' ? (
           <MemoriesPanel />
+        ) : activeThreadId === 'documents' ? (
+          <DocumentsPanel />
         ) : (
           <>
             <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">

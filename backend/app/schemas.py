@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 ChatModel = Literal["deepseek-v4-flash", "deepseek-v4-pro"]
+DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
 
 
 class ChatRequest(BaseModel):
@@ -35,6 +36,19 @@ class ChatResponse(BaseModel):
     thread_id: str
     message: ChatMessageResponse
     model: str
+
+
+class DocumentResponse(BaseModel):
+    id: str
+    filename: str
+    content_type: str
+    status: DocumentStatus | str
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    chunk_count: int = 0
+
+    model_config = {"from_attributes": True}
 
 
 class MemoryCreate(BaseModel):

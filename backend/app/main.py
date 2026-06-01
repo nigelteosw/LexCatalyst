@@ -1,6 +1,6 @@
 import json
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -13,11 +13,13 @@ from app.database import create_db_tables, get_db
 from app.dependencies import get_current_user
 from app.models import User
 from app.providers.deepseek import DeepSeekError, DeepSeekProvider, SUPPORTED_CHAT_MODELS
+from app.providers.embedding_provider import EmbeddingError
 from app.schemas import (
     ChatMessageResponse,
     ChatRequest,
     ChatResponse,
     ChatThreadResponse,
+    DocumentResponse,
     MemoryCreate,
     MemoryResponse,
     MemoryUpdate,
@@ -29,6 +31,12 @@ from app.services.chat_service import (
     list_threads,
     save_assistant_response,
 )
+from app.services.document_service import (
+    get_user_document,
+    ingest_uploaded_document,
+    list_user_documents,
+)
+from app.services.ingestion_service import UnsupportedDocumentError
 from app.services.memory_service import (
     create_memory,
     delete_memory,
@@ -37,6 +45,7 @@ from app.services.memory_service import (
 )
 
 app = FastAPI(title="LexCatalyst API")
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,6 +58,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup() -> None:
+    settings = get_settings()
+    if not settings.auto_create_tables:
+        return
+
     try:
         create_db_tables()
     except SQLAlchemyError as exc:
@@ -102,6 +115,89 @@ def config() -> dict[str, object]:
     }
 
 
+def build_document_response(
+    document,
+    chunk_count: int,
+) -> DocumentResponse:
+    return DocumentResponse(
+        id=document.id,
+        filename=document.filename,
+        content_type=document.content_type,
+        status=document.status,
+        error_message=document.error_message,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+        chunk_count=chunk_count,
+    )
+
+
+@app.post(
+    "/documents/upload",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_document(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DocumentResponse:
+    filename = file.filename or "document"
+    content_type = file.content_type or "application/octet-stream"
+
+    try:
+        file_bytes = await file.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+        if len(file_bytes) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Uploaded file is too large")
+
+        document = await ingest_uploaded_document(
+            db,
+            user_id=current_user.id,
+            filename=filename,
+            content_type=content_type,
+            file_bytes=file_bytes,
+        )
+        document_with_count = get_user_document(db, current_user.id, document.id)
+        chunk_count = document_with_count[1] if document_with_count else 0
+        return build_document_response(document, chunk_count)
+    except UnsupportedDocumentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Document database is unavailable") from exc
+
+
+@app.get("/documents", response_model=list[DocumentResponse])
+def documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[DocumentResponse]:
+    try:
+        return [
+            build_document_response(document, chunk_count)
+            for document, chunk_count in list_user_documents(db, current_user.id)
+        ]
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Document database is unavailable") from exc
+
+
+@app.get("/documents/{document_id}", response_model=DocumentResponse)
+def document_detail(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DocumentResponse:
+    try:
+        document_with_count = get_user_document(db, current_user.id, document_id)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Document database is unavailable") from exc
+
+    if not document_with_count:
+        raise HTTPException(status_code=404, detail="Document not found")
+    document, chunk_count = document_with_count
+    return build_document_response(document, chunk_count)
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
@@ -118,6 +214,8 @@ async def chat(
         )
     except DeepSeekError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except EmbeddingError as exc:
+        raise HTTPException(status_code=502, detail=f"Document search is unavailable: {exc}") from exc
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc
 
@@ -139,7 +237,7 @@ async def chat_stream(
 
     async def stream():
         try:
-            thread, provider_messages, selected_model = create_chat_request(
+            thread, provider_messages, selected_model = await create_chat_request(
                 db,
                 user_message=request.message,
                 user_id=current_user.id,
@@ -179,6 +277,8 @@ async def chat_stream(
             )
         except DeepSeekError as exc:
             yield event("error", {"detail": str(exc)})
+        except EmbeddingError as exc:
+            yield event("error", {"detail": f"Document search is unavailable: {exc}"})
         except SQLAlchemyError:
             yield event("error", {"detail": "Chat database is unavailable"})
 

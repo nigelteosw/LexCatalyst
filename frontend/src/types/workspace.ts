@@ -12,6 +12,19 @@ export type ChatThread = {
   updatedAt: string
 }
 
+export type DocumentStatus = 'uploaded' | 'processing' | 'ready' | 'failed'
+
+export type WorkspaceDocument = {
+  id: string
+  filename: string
+  contentType: string
+  status: DocumentStatus
+  errorMessage?: string | null
+  createdAt: string
+  updatedAt: string
+  chunkCount: number
+}
+
 export type ChatModel = 'deepseek-v4-flash' | 'deepseek-v4-pro'
 
 export type MemoryCategory = 'semantic' | 'procedural' | 'episodic'

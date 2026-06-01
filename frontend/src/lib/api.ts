@@ -1,4 +1,11 @@
-import type { ChatModel, ChatThread, Memory, MemoryCategory, Message } from '../types/workspace'
+import type {
+  ChatModel,
+  ChatThread,
+  Memory,
+  MemoryCategory,
+  Message,
+  WorkspaceDocument,
+} from '../types/workspace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
@@ -21,6 +28,17 @@ type BackendChatResponse = {
   thread_id: string
   message: BackendMessage
   model: string
+}
+
+type BackendDocument = {
+  id: string
+  filename: string
+  content_type: string
+  status: WorkspaceDocument['status']
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  chunk_count: number
 }
 
 type StreamThreadPayload = {
@@ -87,6 +105,19 @@ function mapMessage(message: BackendMessage): Message {
   }
 }
 
+function mapDocument(document: BackendDocument): WorkspaceDocument {
+  return {
+    id: document.id,
+    filename: document.filename,
+    contentType: document.content_type,
+    status: document.status,
+    errorMessage: document.error_message,
+    createdAt: document.created_at,
+    updatedAt: document.updated_at,
+    chunkCount: document.chunk_count,
+  }
+}
+
 export async function listChatThreads(): Promise<ChatThread[]> {
   const threads = await request<BackendThread[]>('/chat/threads')
   return threads.map(mapThread)
@@ -95,6 +126,36 @@ export async function listChatThreads(): Promise<ChatThread[]> {
 export async function listThreadMessages(threadId: string): Promise<Message[]> {
   const messages = await request<BackendMessage[]>(`/chat/threads/${threadId}/messages`)
   return messages.map(mapMessage)
+}
+
+export async function listDocuments(): Promise<WorkspaceDocument[]> {
+  const documents = await request<BackendDocument[]>('/documents')
+  return documents.map(mapDocument)
+}
+
+export async function uploadDocument(file: File): Promise<WorkspaceDocument> {
+  const token = localStorage.getItem('token')
+  const body = new FormData()
+  body.append('file', file)
+
+  const headers = new Headers()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+    method: 'POST',
+    headers,
+    body,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const detail = typeof payload?.detail === 'string' ? payload.detail : response.statusText
+    throw new Error(detail)
+  }
+
+  return mapDocument(await response.json() as BackendDocument)
 }
 
 export async function sendChatMessage(message: string, threadId: string | null, model: ChatModel) {

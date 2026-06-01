@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { MessageSquare, Plus, X, Clock, Brain } from 'lucide-react'
+import { MessageSquare, Plus, X, Clock, Brain, FileText } from 'lucide-react'
 import type { ChatThread } from '../types/workspace'
 
 type SidebarProps = {
@@ -7,6 +7,7 @@ type SidebarProps = {
   activeThreadId: string | null
   onSelectThread: (threadId: string) => void
   onSelectMemories: () => void
+  onSelectDocuments: () => void
   onNewChat: () => void
   isOpen: boolean
   onClose: () => void
@@ -23,6 +24,7 @@ export function Sidebar({
   activeThreadId,
   onSelectThread,
   onSelectMemories,
+  onSelectDocuments,
   onNewChat,
   isOpen,
   onClose,
@@ -121,6 +123,20 @@ export function Sidebar({
             >
               <Brain size={16} />
               Memories
+            </button>
+            <button
+              onClick={() => {
+                onSelectDocuments()
+                if (window.innerWidth < 1024) onClose()
+              }}
+              className={`flex items-center gap-2 w-full px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                activeThreadId === 'documents'
+                  ? 'bg-neutral-100 text-neutral-900 border border-neutral-200 shadow-sm'
+                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 border border-transparent'
+              }`}
+            >
+              <FileText size={16} />
+              Documents
             </button>
           </div>
 

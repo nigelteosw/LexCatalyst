@@ -11,3 +11,7 @@ google-auth==2.38.0
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 alembic==1.15.1
+boto3>=1.35.0
+pgvector>=0.3.0
+pypdf>=5.0.0
+python-docx>=1.1.2

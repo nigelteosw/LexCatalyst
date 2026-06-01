@@ -4,15 +4,22 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.models import ChatMessage, ChatThread
+from app.providers.embedding_provider import EmbeddingError
 from app.providers.deepseek import DeepSeekProvider, resolve_chat_model
 from app.services.memory_service import (
     extract_memory_candidates,
     list_memories,
     save_memory_candidates,
 )
+from app.services.rag_service import (
+    DocumentSearchResult,
+    format_document_context,
+    search_documents,
+)
 
 SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Answer clearly and conservatively. If the question needs document evidence, say what evidence is missing.
+Use the provided document context when it is relevant, and cite it with bracket references like [1].
 Do not invent citations or claim to have read uploaded documents unless the context is provided."""
 
 
@@ -75,9 +82,21 @@ def get_recent_messages(db: Session, thread_id: str, limit: int = 20) -> list[Ch
 
 
 def build_provider_messages(
-    history: list[ChatMessage], user_message: str, memories: list = None
+    history: list[ChatMessage],
+    user_message: str,
+    memories: list | None = None,
+    document_results: list[DocumentSearchResult] | None = None,
 ) -> list[dict[str, str]]:
     system_content = SYSTEM_PROMPT
+    document_context = format_document_context(document_results or [])
+    if document_context:
+        system_content += (
+            "\n\nDocument Context:\n"
+            f"{document_context}\n\n"
+            "When relying on document context, cite only the bracketed sources above. "
+            "If the provided chunks do not answer the question, say what evidence is missing."
+        )
+
     if memories:
         memory_blocks = []
         categories = {"semantic": "Stable facts/preferences", "procedural": "Working style", "episodic": "Past events"}
@@ -99,6 +118,16 @@ def build_provider_messages(
     return messages
 
 
+async def safe_search_documents(
+    db: Session, *, query: str, user_id: str
+) -> list[DocumentSearchResult]:
+    try:
+        return await search_documents(db, query=query, user_id=user_id)
+    except EmbeddingError as exc:
+        print(f"Document search skipped: {exc}")
+        return []
+
+
 async def create_chat_response(
     db: Session,
     *,
@@ -111,15 +140,21 @@ async def create_chat_response(
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id)
+    document_results = await safe_search_documents(db, query=user_message, user_id=user_id)
 
-    user_msg_obj = add_message(db, thread_id=thread.id, role="user", content=user_message)
+    add_message(db, thread_id=thread.id, role="user", content=user_message)
     thread.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(thread)
 
     provider = DeepSeekProvider()
     assistant_content, usage = await provider.chat(
-        build_provider_messages(history, user_message, memories=memories),
+        build_provider_messages(
+            history,
+            user_message,
+            memories=memories,
+            document_results=document_results,
+        ),
         model=selected_model,
     )
 
@@ -145,7 +180,7 @@ async def create_chat_response(
     return thread, assistant_message
 
 
-def create_chat_request(
+async def create_chat_request(
     db: Session,
     *,
     user_message: str,
@@ -157,13 +192,23 @@ def create_chat_request(
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id)
+    document_results = await safe_search_documents(db, query=user_message, user_id=user_id)
 
     add_message(db, thread_id=thread.id, role="user", content=user_message)
     thread.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(thread)
 
-    return thread, build_provider_messages(history, user_message, memories=memories), selected_model
+    return (
+        thread,
+        build_provider_messages(
+            history,
+            user_message,
+            memories=memories,
+            document_results=document_results,
+        ),
+        selected_model,
+    )
 
 
 async def save_assistant_response(

@@ -1,10 +1,14 @@
 from datetime import datetime
 from uuid import uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import get_settings
 from app.database import Base
+
+EMBEDDING_DIMENSIONS = get_settings().openai_embedding_dimensions
 
 
 def new_uuid() -> str:
@@ -29,6 +33,10 @@ class User(Base):
         cascade="all, delete-orphan",
     )
     memories: Mapped[list["Memory"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    documents: Mapped[list["Document"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -126,3 +134,60 @@ class Memory(Base):
     user: Mapped[User] = relationship(back_populates="memories")
     source_thread: Mapped[ChatThread | None] = relationship()
     source_message: Mapped[ChatMessage | None] = relationship(back_populates="memories")
+
+
+class Document(Base):
+    __tablename__ = "documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    storage_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), index=True, nullable=False, default="uploaded")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped[User] = relationship(back_populates="documents")
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="DocumentChunk.chunk_index",
+    )
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIMENSIONS), nullable=False)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    citation_label: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    document: Mapped[Document] = relationship(back_populates="chunks")
