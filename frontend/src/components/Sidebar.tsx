@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { MessageSquare, Plus, X, Clock, Brain, FileText } from 'lucide-react'
+import { MessageSquare, Plus, X, Clock, Brain, FileText, BookOpen } from 'lucide-react'
 import { Button } from './Button'
 import type { ChatThread } from '../types/workspace'
 
@@ -9,6 +9,7 @@ type SidebarProps = {
   onSelectThread: (threadId: string) => void
   onSelectMemories: () => void
   onSelectDocuments: () => void
+  onSelectWiki: () => void
   onNewChat: () => void
   isOpen: boolean
   onClose: () => void
@@ -26,6 +27,7 @@ export function Sidebar({
   onSelectThread,
   onSelectMemories,
   onSelectDocuments,
+  onSelectWiki,
   onNewChat,
   isOpen,
   onClose,
@@ -138,6 +140,18 @@ export function Sidebar({
             >
               <FileText size={16} />
               Documents
+            </Button>
+            <Button
+              onClick={() => {
+                onSelectWiki()
+                if (window.innerWidth < 1024) onClose()
+              }}
+              className="w-full justify-start"
+              size="md"
+              variant={activeThreadId === 'wiki' ? 'selected' : 'secondary'}
+            >
+              <BookOpen size={16} />
+              Lex-Wiki
             </Button>
           </div>
 

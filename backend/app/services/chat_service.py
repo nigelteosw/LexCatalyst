@@ -16,6 +16,7 @@ from app.services.rag_service import (
     format_document_context,
     search_documents,
 )
+from app.services.wiki_service import format_wiki_context, search_wiki_pages
 
 SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Answer clearly and conservatively. If the question needs document evidence, say what evidence is missing.
@@ -86,8 +87,18 @@ def build_provider_messages(
     user_message: str,
     memories: list | None = None,
     document_results: list[DocumentSearchResult] | None = None,
+    wiki_pages: list | None = None,
 ) -> list[dict[str, str]]:
     system_content = SYSTEM_PROMPT
+    wiki_context = format_wiki_context(wiki_pages or [])
+    if wiki_context:
+        system_content += (
+            "\n\nLex-Wiki Context:\n"
+            f"{wiki_context}\n\n"
+            "Use Lex-Wiki pages as synthesized matter context. "
+            "When Lex-Wiki context and source document chunks disagree, rely on source chunks."
+        )
+
     document_context = format_document_context(document_results or [])
     if document_context:
         system_content += (
@@ -128,6 +139,14 @@ async def safe_search_documents(
         return []
 
 
+def safe_search_wiki_pages(db: Session, *, user_id: str, query: str) -> list:
+    try:
+        return search_wiki_pages(db, user_id=user_id, query=query)
+    except Exception as exc:
+        print(f"Wiki search skipped: {exc}")
+        return []
+
+
 async def create_chat_response(
     db: Session,
     *,
@@ -140,6 +159,7 @@ async def create_chat_response(
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id)
+    wiki_pages = safe_search_wiki_pages(db, user_id=user_id, query=user_message)
     document_results = await safe_search_documents(db, query=user_message, user_id=user_id)
 
     add_message(db, thread_id=thread.id, role="user", content=user_message)
@@ -154,6 +174,7 @@ async def create_chat_response(
             user_message,
             memories=memories,
             document_results=document_results,
+            wiki_pages=wiki_pages,
         ),
         model=selected_model,
     )
@@ -192,6 +213,7 @@ async def create_chat_request(
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id)
+    wiki_pages = safe_search_wiki_pages(db, user_id=user_id, query=user_message)
     document_results = await safe_search_documents(db, query=user_message, user_id=user_id)
 
     add_message(db, thread_id=thread.id, role="user", content=user_message)
@@ -206,6 +228,7 @@ async def create_chat_request(
             user_message,
             memories=memories,
             document_results=document_results,
+            wiki_pages=wiki_pages,
         ),
         selected_model,
     )

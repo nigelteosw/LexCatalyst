@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileText, RefreshCcw, UploadCloud } from 'lucide-react'
+import { BookOpen, FileText, RefreshCcw, Trash2, UploadCloud } from 'lucide-react'
 import { Button } from './Button'
-import { listDocuments, uploadDocument } from '../lib/api'
-import type { WorkspaceDocument } from '../types/workspace'
+import { deleteDocument, ingestDocumentToWiki, listDocuments, listWikiPages, uploadDocument } from '../lib/api'
+import type { ChatModel, WikiPage, WorkspaceDocument } from '../types/workspace'
 
-export function DocumentsPanel() {
+type DocumentsPanelProps = {
+  selectedModel: ChatModel
+  onOpenWikiPage: (pageId: string) => void
+}
+
+export function DocumentsPanel({ selectedModel, onOpenWikiPage }: DocumentsPanelProps) {
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([])
+  const [wikiPages, setWikiPages] = useState<WikiPage[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null)
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -16,7 +24,9 @@ export function DocumentsPanel() {
     setIsLoading(true)
     setError(null)
     try {
-      setDocuments(await listDocuments())
+      const [nextDocuments, nextWikiPages] = await Promise.all([listDocuments(), listWikiPages()])
+      setDocuments(nextDocuments)
+      setWikiPages(nextWikiPages)
     } catch (caughtError) {
       setError(getErrorMessage(caughtError))
     } finally {
@@ -40,10 +50,44 @@ export function DocumentsPanel() {
       if (inputRef.current) {
         inputRef.current.value = ''
       }
+      setWikiPages(await listWikiPages())
     } catch (caughtError) {
       setError(getErrorMessage(caughtError))
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  async function handleGenerateWikiPage(document: WorkspaceDocument) {
+    if (document.status !== 'ready' || ingestingDocumentId) return
+    setIngestingDocumentId(document.id)
+    setError(null)
+    try {
+      const page = await ingestDocumentToWiki(document.id, selectedModel)
+      setWikiPages((current) => [page, ...current.filter((item) => item.id !== page.id)])
+      onOpenWikiPage(page.id)
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError))
+    } finally {
+      setIngestingDocumentId(null)
+    }
+  }
+
+  async function handleDeleteDocument(document: WorkspaceDocument) {
+    if (deletingDocumentId) return
+    const confirmed = window.confirm(`Delete ${document.filename}? This removes the uploaded document and its searchable chunks.`)
+    if (!confirmed) return
+
+    setDeletingDocumentId(document.id)
+    setError(null)
+    try {
+      await deleteDocument(document.id)
+      setDocuments((current) => current.filter((item) => item.id !== document.id))
+      setWikiPages(await listWikiPages())
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError))
+    } finally {
+      setDeletingDocumentId(null)
     }
   }
 
@@ -104,28 +148,66 @@ export function DocumentsPanel() {
 
         <div className="space-y-2">
           {documents.length > 0 ? (
-            documents.map((document) => (
-              <article
-                key={document.id}
-                className="flex items-start gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3"
-              >
-                <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-neutral-100 text-neutral-600">
-                  <FileText size={16} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="truncate text-sm font-medium text-neutral-900">{document.filename}</h3>
-                    <StatusBadge status={document.status} />
+            documents.map((document) => {
+              const wikiPage = wikiPages.find((page) => page.sourceDocumentId === document.id)
+              const isGenerating = ingestingDocumentId === document.id
+              const isDeleting = deletingDocumentId === document.id
+              return (
+                <article
+                  key={document.id}
+                  className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 sm:flex-row sm:items-start"
+                >
+                  <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-neutral-100 text-neutral-600">
+                    <FileText size={16} />
                   </div>
-                  <div className="mt-1 text-xs text-neutral-500">
-                    {document.chunkCount} chunks · Uploaded {formatDate(document.createdAt)}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate text-sm font-medium text-neutral-900">{document.filename}</h3>
+                      <StatusBadge status={document.status} />
+                    </div>
+                    <div className="mt-1 text-xs text-neutral-500">
+                      {document.chunkCount} chunks · Uploaded {formatDate(document.createdAt)}
+                    </div>
+                    {wikiPage && (
+                      <div className="mt-1 text-xs text-neutral-500">
+                        Lex-Wiki: {wikiPage.title} ({wikiPage.status})
+                      </div>
+                    )}
+                    {document.errorMessage && (
+                      <div className="mt-2 text-xs text-red-600">{document.errorMessage}</div>
+                    )}
                   </div>
-                  {document.errorMessage && (
-                    <div className="mt-2 text-xs text-red-600">{document.errorMessage}</div>
-                  )}
-                </div>
-              </article>
-            ))
+                  <div className="flex shrink-0 gap-2 sm:justify-end">
+                    {wikiPage ? (
+                      <Button onClick={() => onOpenWikiPage(wikiPage.id)} size="sm" variant="secondary">
+                        <BookOpen size={14} />
+                        Open wiki page
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => void handleGenerateWikiPage(document)}
+                        disabled={document.status !== 'ready' || !!ingestingDocumentId}
+                        size="sm"
+                        variant="secondary"
+                        title={document.status === 'ready' ? 'Generate wiki page' : 'Document must be ready first'}
+                      >
+                        <BookOpen size={14} />
+                        {isGenerating ? 'Generating...' : 'Generate wiki page'}
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => void handleDeleteDocument(document)}
+                      disabled={isDeleting || isGenerating}
+                      size="sm"
+                      variant="danger"
+                    >
+                      <Trash2 size={14} />
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  </div>
+                </article>
+              )
+            })
           ) : (
             <div className="rounded-lg border border-neutral-200 px-4 py-8 text-center text-sm text-neutral-500">
               No documents uploaded yet.

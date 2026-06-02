@@ -14,6 +14,7 @@ from app.services.ingestion_service import (
     validate_supported_document,
 )
 from app.services.storage_service import StorageError, upload_document_file
+from app.services.storage_service import delete_document_file
 
 MAX_ERROR_LENGTH = 1000
 
@@ -124,3 +125,25 @@ def get_user_document(db: Session, user_id: str, document_id: str) -> tuple[Docu
         return None
     document, count = row
     return document, count
+
+
+def delete_user_document(db: Session, user_id: str, document_id: str) -> bool:
+    document = db.scalar(
+        select(Document).where(
+            Document.id == document_id,
+            Document.user_id == user_id,
+        )
+    )
+    if not document:
+        return False
+
+    storage_key = document.storage_key
+    db.delete(document)
+    db.commit()
+
+    try:
+        delete_document_file(storage_key)
+    except StorageError as exc:
+        print(f"Document storage delete skipped: {exc}")
+
+    return True

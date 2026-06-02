@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar'
 import { LoginPage } from './components/LoginPage'
 import { MemoriesPanel } from './components/MemoriesPanel'
 import { DocumentsPanel } from './components/DocumentsPanel'
+import { WikiPanel } from './components/WikiPanel'
 import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle, uploadDocument } from './lib/api'
 import type { ChatModel, ChatThread, Message } from './types/workspace'
 
@@ -51,6 +52,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState<ChatModel>(getSavedChatModel)
+  const [selectedWikiPageId, setSelectedWikiPageId] = useState<string | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
 
   const activeThread = useMemo(
@@ -90,9 +92,15 @@ function App() {
       !isAuthenticated ||
       !activeThreadId ||
       activeThreadId === 'memories' ||
-      activeThreadId === 'documents'
+      activeThreadId === 'documents' ||
+      activeThreadId === 'wiki'
     ) {
-      if (!activeThreadId || activeThreadId === 'memories' || activeThreadId === 'documents') {
+      if (
+        !activeThreadId ||
+        activeThreadId === 'memories' ||
+        activeThreadId === 'documents' ||
+        activeThreadId === 'wiki'
+      ) {
         setMessages([])
       }
       return
@@ -199,7 +207,7 @@ function App() {
         model: selectedModel,
         signal: controller.signal,
         threadId:
-          activeThreadId === 'memories' || activeThreadId === 'documents'
+          activeThreadId === 'memories' || activeThreadId === 'documents' || activeThreadId === 'wiki'
             ? null
             : activeThreadId,
         onThread: (threadId, title) => {
@@ -331,6 +339,15 @@ function App() {
     setActiveThreadId('documents')
   }
 
+  function selectWiki(pageId: string | null = selectedWikiPageId) {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setIsLoading(false)
+    setIsResponding(false)
+    setSelectedWikiPageId(pageId)
+    setActiveThreadId('wiki')
+  }
+
   function handleModelChange(model: ChatModel) {
     setSelectedModel(model)
     localStorage.setItem('chatModel', model)
@@ -360,6 +377,7 @@ function App() {
         onSelectThread={selectThread}
         onSelectMemories={selectMemories}
         onSelectDocuments={selectDocuments}
+        onSelectWiki={() => selectWiki()}
         threads={threads}
         userFullName={user?.full_name ?? ''}
         userInitials={userInitials}
@@ -369,7 +387,16 @@ function App() {
         {activeThreadId === 'memories' ? (
           <MemoriesPanel />
         ) : activeThreadId === 'documents' ? (
-          <DocumentsPanel />
+          <DocumentsPanel
+            selectedModel={selectedModel}
+            onOpenWikiPage={(pageId) => selectWiki(pageId)}
+          />
+        ) : activeThreadId === 'wiki' ? (
+          <WikiPanel
+            selectedPageId={selectedWikiPageId}
+            onSelectPage={setSelectedWikiPageId}
+            onBackToDocuments={selectDocuments}
+          />
         ) : (
           <>
             <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">

@@ -68,3 +68,20 @@ def upload_document_file(
         raise StorageError(f"R2 upload failed: {exc}") from exc
 
     return storage_key
+
+
+def delete_document_file(storage_key: str | None) -> None:
+    if not storage_key:
+        return
+
+    settings = get_settings()
+    if not settings.cloudflare_r2_bucket_name:
+        raise StorageError("Missing R2 configuration: CLOUDFLARE_R2_BUCKET_NAME")
+
+    try:
+        r2_client().delete_object(
+            Bucket=settings.cloudflare_r2_bucket_name,
+            Key=storage_key,
+        )
+    except (BotoCoreError, ClientError) as exc:
+        raise StorageError(f"R2 delete failed: {exc}") from exc
