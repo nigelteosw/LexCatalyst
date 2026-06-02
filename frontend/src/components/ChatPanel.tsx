@@ -1,15 +1,21 @@
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
-import { SendHorizontal, Sparkles, AlertCircle } from 'lucide-react'
+import { AlertCircle, LoaderCircle, Paperclip, SendHorizontal, Sparkles, Square } from 'lucide-react'
+import { Button } from './Button'
 import type { Message } from '../types/workspace'
 
 type ChatPanelProps = {
+  attachmentStatus?: string | null
   assistantInitials: string
   error: string | null
   inputLabel: string
   isLoading: boolean
+  isResponding: boolean
+  isUploadingFile: boolean
   messages: Message[]
+  onFileUpload: (file: File) => void
   onPromptChange: (prompt: string) => void
+  onStop: () => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   placeholder: string
   prompt: string
@@ -18,12 +24,17 @@ type ChatPanelProps = {
 }
 
 export function ChatPanel({
+  attachmentStatus,
   assistantInitials,
   error,
   inputLabel,
   isLoading,
+  isResponding,
+  isUploadingFile,
   messages,
+  onFileUpload,
   onPromptChange,
+  onStop,
   onSubmit,
   placeholder,
   prompt,
@@ -31,6 +42,8 @@ export function ChatPanel({
   userInitials,
 }: ChatPanelProps) {
   const canSubmit = prompt.trim().length > 0 && !isLoading
+  const canUpload = !isUploadingFile
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -82,7 +95,7 @@ export function ChatPanel({
         </div>
       </div>
 
-      <div className="border-t border-neutral-100 bg-white p-4 md:p-6 lg:pb-8">
+      <div className="border-t border-neutral-100 bg-white/95 p-4 md:p-6 lg:pb-8">
         <form
           className="mx-auto max-w-3xl"
           onSubmit={onSubmit}
@@ -93,43 +106,86 @@ export function ChatPanel({
               {error}
             </div>
           )}
-          <div className="relative group transition-all duration-200">
-            <textarea
-              ref={textareaRef}
-              aria-label={inputLabel}
-              rows={1}
-              className="w-full min-h-[56px] max-h-48 resize-none bg-neutral-50 text-neutral-900 text-sm md:text-base leading-relaxed rounded-2xl border border-neutral-200 pl-4 pr-14 py-4 focus:bg-white focus:border-neutral-400 focus:ring-4 focus:ring-neutral-100 outline-none transition-all placeholder:text-neutral-400"
-              disabled={isLoading}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault()
-                  // Fallback for browsers that don't support requestSubmit
-                  if (event.currentTarget.form) {
-                    if (typeof event.currentTarget.form.requestSubmit === 'function') {
-                      event.currentTarget.form.requestSubmit()
-                    } else {
-                      const submitEvent = new Event('submit', { cancelable: true, bubbles: true })
-                      event.currentTarget.form.dispatchEvent(submitEvent)
+          <div className="rounded-[1.35rem] bg-neutral-50 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(23,23,23,0.08)] transition-all duration-200 focus-within:bg-white focus-within:shadow-[inset_0_0_0_1px_rgba(23,23,23,0.18),0_12px_35px_rgba(23,23,23,0.08)]">
+            {attachmentStatus && (
+              <div className="mb-2 inline-flex max-w-full items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 shadow-[inset_0_0_0_1px_rgba(23,23,23,0.08)]">
+                <Paperclip size={13} className="shrink-0 text-neutral-500" />
+                <span className="truncate">{attachmentStatus}</span>
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <Button
+                aria-label="Upload PDF or DOCX"
+                className="mb-1 shrink-0"
+                disabled={!canUpload}
+                onClick={() => fileInputRef.current?.click()}
+                size="icon"
+                variant="ghost"
+              >
+                {isUploadingFile ? <LoaderCircle size={18} className="animate-spin" /> : <Paperclip size={18} />}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) {
+                    onFileUpload(file)
+                  }
+                  event.currentTarget.value = ''
+                }}
+              />
+              <textarea
+                ref={textareaRef}
+                aria-label={inputLabel}
+                rows={1}
+                className="min-h-[48px] max-h-48 flex-1 resize-none bg-transparent px-1 py-3 text-sm leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    if (isLoading) {
+                      return
+                    }
+                    // Fallback for browsers that don't support requestSubmit.
+                    if (event.currentTarget.form) {
+                      if (typeof event.currentTarget.form.requestSubmit === 'function') {
+                        event.currentTarget.form.requestSubmit()
+                      } else {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true })
+                        event.currentTarget.form.dispatchEvent(submitEvent)
+                      }
                     }
                   }
-                }
-              }}
-              onChange={(event) => onPromptChange(event.target.value)}
-              placeholder={placeholder}
-              value={prompt}
-            />
-            <button
-              aria-label={sendLabel}
-              className={`absolute right-2 bottom-2 h-10 w-10 flex items-center justify-center rounded-xl transition-all ${
-                canSubmit
-                  ? 'bg-neutral-900 text-white hover:bg-neutral-800 shadow-md active:scale-95'
-                  : 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-              }`}
-              disabled={!canSubmit}
-              type="submit"
-            >
-              <SendHorizontal size={18} className={isLoading ? 'animate-pulse' : ''} />
-            </button>
+                }}
+                onChange={(event) => onPromptChange(event.target.value)}
+                placeholder={placeholder}
+                value={prompt}
+              />
+              {isResponding ? (
+                <Button
+                  aria-label="Stop response"
+                  className="mb-1 shrink-0"
+                  onClick={onStop}
+                  size="icon"
+                  variant="secondary"
+                >
+                  <Square size={15} fill="currentColor" />
+                </Button>
+              ) : (
+                <Button
+                  aria-label={sendLabel}
+                  className="mb-1 shrink-0"
+                  disabled={!canSubmit}
+                  size="icon"
+                  type="submit"
+                  variant="primary"
+                >
+                  <SendHorizontal size={18} />
+                </Button>
+              )}
+            </div>
           </div>
           <p className="mt-3 text-[10px] text-center text-neutral-400">
             LexCatalyst can make mistakes. Check important info.

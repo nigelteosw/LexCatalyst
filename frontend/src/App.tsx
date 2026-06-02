@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Gauge, Menu, Sparkles } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
+import { Button } from './components/Button'
 import { Sidebar } from './components/Sidebar'
 import { LoginPage } from './components/LoginPage'
 import { MemoriesPanel } from './components/MemoriesPanel'
 import { DocumentsPanel } from './components/DocumentsPanel'
-import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle } from './lib/api'
+import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle, uploadDocument } from './lib/api'
 import type { ChatModel, ChatThread, Message } from './types/workspace'
 
 const CHAT_MODELS: Array<{
@@ -44,9 +45,13 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [prompt, setPrompt] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isResponding, setIsResponding] = useState(false)
+  const [isUploadingComposerFile, setIsUploadingComposerFile] = useState(false)
+  const [composerAttachmentStatus, setComposerAttachmentStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState<ChatModel>(getSavedChatModel)
+  const streamAbortRef = useRef<AbortController | null>(null)
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
@@ -136,6 +141,8 @@ function App() {
   }
 
   function handleLogout() {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     setIsAuthenticated(false)
@@ -144,6 +151,8 @@ function App() {
     setActiveThreadId(null)
     setMessages([])
     setIsSidebarOpen(false)
+    setIsLoading(false)
+    setIsResponding(false)
   }
 
   async function refreshThreads(nextActiveThreadId: string) {
@@ -180,11 +189,15 @@ function App() {
     setPrompt('')
     setError(null)
     setIsLoading(true)
+    setIsResponding(true)
+    const controller = new AbortController()
+    streamAbortRef.current = controller
 
     try {
       await streamChatMessage({
         message: trimmedPrompt,
         model: selectedModel,
+        signal: controller.signal,
         threadId:
           activeThreadId === 'memories' || activeThreadId === 'documents'
             ? null
@@ -217,16 +230,25 @@ function App() {
             ),
           )
         },
-        onDone: async (response) => {
+        onDone: (response) => {
           setMessages((currentMessages) =>
             currentMessages.map((message) =>
               message.id === assistantDraftId ? response.message : message,
             ),
           )
-          await refreshThreads(response.threadId)
+          void refreshThreads(response.threadId)
         },
       })
     } catch (caughtError) {
+      if (isAbortError(caughtError)) {
+        setMessages((currentMessages) =>
+          currentMessages.filter(
+            (message) => message.id !== assistantDraftId || message.body.trim().length > 0,
+          ),
+        )
+        return
+      }
+
       setMessages((currentMessages) =>
         currentMessages.filter(
           (message) => message.id !== assistantDraftId || message.body.trim().length > 0,
@@ -234,18 +256,57 @@ function App() {
       )
       setError(getErrorMessage(caughtError))
     } finally {
-      setIsLoading(false)
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null
+        setIsLoading(false)
+        setIsResponding(false)
+      }
     }
   }
 
+  async function handleComposerFileUpload(file: File) {
+    if (isUploadingComposerFile) return
+
+    setIsUploadingComposerFile(true)
+    setComposerAttachmentStatus(`Uploading ${file.name}...`)
+    setError(null)
+
+    try {
+      const uploaded = await uploadDocument(file)
+      const statusLabel = uploaded.status === 'ready'
+        ? 'ready for search'
+        : `${uploaded.status}; ingestion will continue in the background`
+      setComposerAttachmentStatus(`${uploaded.filename} uploaded (${statusLabel})`)
+    } catch (caughtError) {
+      setComposerAttachmentStatus(null)
+      setError(getErrorMessage(caughtError))
+    } finally {
+      setIsUploadingComposerFile(false)
+    }
+  }
+
+  function handleStopResponse() {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setIsLoading(false)
+    setIsResponding(false)
+  }
+
   function startNewChat() {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
     setActiveThreadId(null)
     setMessages([])
     setPrompt('')
     setError(null)
+    setIsLoading(false)
+    setIsResponding(false)
   }
 
   function selectThread(threadId: string) {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setIsResponding(false)
     setActiveThreadId(threadId || null)
     if (!threadId) {
       setMessages([])
@@ -255,10 +316,18 @@ function App() {
   }
 
   function selectMemories() {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setIsLoading(false)
+    setIsResponding(false)
     setActiveThreadId('memories')
   }
 
   function selectDocuments() {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setIsLoading(false)
+    setIsResponding(false)
     setActiveThreadId('documents')
   }
 
@@ -305,49 +374,49 @@ function App() {
           <>
             <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">
               <div className="flex items-center gap-3 min-w-0">
-                <button
+                <Button
                   onClick={() => setIsSidebarOpen(true)}
-                  className="lg:hidden p-2 -ml-2 text-neutral-500 hover:bg-neutral-100 rounded-md"
+                  className="-ml-2 lg:hidden"
                   aria-label="Open menu"
+                  size="icon"
+                  variant="ghost"
                 >
                   <Menu size={20} />
-                </button>
+                </Button>
                 <h2 className="truncate text-sm font-semibold text-neutral-900">
                   {activeThread?.title ?? 'New Chat'}
                 </h2>
               </div>
               <div className="flex items-center gap-2">
                 <div
-                  className="flex items-center rounded-lg border border-neutral-200 bg-neutral-50 p-1"
+                  className="flex items-center rounded-xl bg-neutral-100 p-1"
                   aria-label="Chat model"
                 >
                   {CHAT_MODELS.map((model) => {
                     const isSelected = selectedModel === model.id
                     return (
-                      <button
+                      <Button
                         key={model.id}
-                        type="button"
                         aria-pressed={isSelected}
                         title={model.description}
                         onClick={() => handleModelChange(model.id)}
-                        className={`flex h-8 items-center gap-1.5 rounded-md px-2 sm:px-2.5 text-xs font-medium transition-colors ${
-                          isSelected
-                            ? 'bg-white text-neutral-950 shadow-sm ring-1 ring-neutral-200'
-                            : 'text-neutral-500 hover:text-neutral-900'
-                        }`}
+                        className="sm:px-2.5"
+                        size="sm"
+                        variant={isSelected ? 'selected' : 'secondary'}
                       >
                         {model.id === 'deepseek-v4-flash' ? <Gauge size={14} /> : <Sparkles size={14} />}
                         <span className="hidden sm:inline">{model.label}</span>
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
-                <button
+                <Button
                   onClick={handleLogout}
-                  className="text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors px-3 py-1.5 rounded-md hover:bg-neutral-50"
+                  size="sm"
+                  variant="secondary"
                 >
                   Log out
-                </button>
+                </Button>
                 <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.25 rounded-full bg-emerald-50 text-[11px] font-medium text-emerald-700 border border-emerald-100">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   AI Online
@@ -357,11 +426,16 @@ function App() {
 
             <ChatPanel
               assistantInitials="LC"
+              attachmentStatus={composerAttachmentStatus}
               error={error}
               inputLabel="Ask LexCatalyst"
               isLoading={isLoading}
+              isResponding={isResponding}
+              isUploadingFile={isUploadingComposerFile}
               messages={messages}
+              onFileUpload={handleComposerFileUpload}
               onPromptChange={setPrompt}
+              onStop={handleStopResponse}
               onSubmit={handleSubmit}
               placeholder="Type your legal question or request..."
               prompt={prompt}
@@ -380,6 +454,10 @@ function getErrorMessage(error: unknown) {
     return error.message
   }
   return 'Something went wrong.'
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === 'AbortError'
 }
 
 export default App

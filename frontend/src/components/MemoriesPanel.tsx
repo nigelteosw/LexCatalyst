@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Brain, Trash2, Plus, Edit2, Check, X, Shield, Settings, Activity, AlertCircle } from 'lucide-react'
+import { Button } from './Button'
 import { listMemories, createMemory, updateMemory, deleteMemory } from '../lib/api'
 import type { Memory, MemoryCategory } from '../types/workspace'
 
@@ -97,13 +98,14 @@ export function MemoriesPanel() {
           </div>
           <h2 className="text-sm font-semibold text-neutral-900">User Memory</h2>
         </div>
-        <button
+        <Button
           onClick={() => setIsAdding(true)}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-all shadow-sm active:scale-95"
+          size="sm"
+          variant="primary"
         >
           <Plus size={14} />
           Add Memory
-        </button>
+        </Button>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
@@ -112,9 +114,15 @@ export function MemoriesPanel() {
             <div className="flex items-center gap-2 p-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl">
               <AlertCircle size={16} />
               {error}
-              <button onClick={() => setError(null)} className="ml-auto hover:text-red-800">
+              <Button
+                aria-label="Dismiss error"
+                className="ml-auto"
+                onClick={() => setError(null)}
+                size="icon"
+                variant="danger"
+              >
                 <X size={14} />
-              </button>
+              </Button>
             </div>
           )}
 
@@ -122,24 +130,26 @@ export function MemoriesPanel() {
             <div className="p-5 border border-neutral-200 rounded-2xl bg-neutral-50 shadow-sm animate-in fade-in slide-in-from-top-4 duration-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-tight">New Contextual Memory</h3>
-                <button onClick={() => setIsAdding(false)} className="text-neutral-400 hover:text-neutral-600">
+                <Button
+                  aria-label="Close memory form"
+                  onClick={() => setIsAdding(false)}
+                  size="icon"
+                  variant="ghost"
+                >
                   <X size={18} />
-                </button>
+                </Button>
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-2">
                   {categories.map((cat) => (
-                    <button
+                    <Button
                       key={cat.id}
                       onClick={() => setNewCategory(cat.id)}
-                      className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all ${
-                        newCategory === cat.id
-                          ? 'bg-white border-neutral-900 text-neutral-900 shadow-sm'
-                          : 'bg-transparent border-neutral-200 text-neutral-500 hover:border-neutral-300'
-                      }`}
+                      size="sm"
+                      variant={newCategory === cat.id ? 'selected' : 'secondary'}
                     >
                       {cat.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
                 <textarea
@@ -150,18 +160,20 @@ export function MemoriesPanel() {
                   onChange={(e) => setNewContent(e.target.value)}
                 />
                 <div className="flex justify-end gap-2">
-                  <button
+                  <Button
                     onClick={() => setIsAdding(false)}
-                    className="px-4 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-700"
+                    size="sm"
+                    variant="secondary"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleAdd}
-                    className="px-4 py-2 text-xs font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 shadow-sm"
+                    size="sm"
+                    variant="primary"
                   >
                     Save Memory
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -198,18 +210,22 @@ export function MemoriesPanel() {
                                 onChange={(e) => setEditContent(e.target.value)}
                               />
                               <div className="flex justify-end gap-2">
-                                <button
+                                <Button
+                                  aria-label="Cancel edit"
                                   onClick={() => setEditingId(null)}
-                                  className="p-1.5 text-neutral-400 hover:text-neutral-600"
+                                  size="icon"
+                                  variant="ghost"
                                 >
                                   <X size={16} />
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                  aria-label="Save edit"
                                   onClick={() => handleUpdate(memory.id)}
-                                  className="p-1.5 text-emerald-600 hover:text-emerald-700"
+                                  size="icon"
+                                  variant="primary"
                                 >
                                   <Check size={16} />
-                                </button>
+                                </Button>
                               </div>
                             </div>
                           ) : (
@@ -219,23 +235,25 @@ export function MemoriesPanel() {
                                   {memory.content}
                                 </p>
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
+                                  <Button
                                     onClick={() => {
                                       setEditingId(memory.id)
                                       setEditContent(memory.content)
                                     }}
-                                    className="p-2 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg transition-all"
+                                    size="icon"
                                     title="Edit memory"
+                                    variant="secondary"
                                   >
                                     <Edit2 size={14} />
-                                  </button>
-                                  <button
+                                  </Button>
+                                  <Button
                                     onClick={() => handleDelete(memory.id)}
-                                    className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                    size="icon"
                                     title="Delete memory"
+                                    variant="danger"
                                   >
                                     <Trash2 size={14} />
-                                  </button>
+                                  </Button>
                                 </div>
                               </div>
                               <div className="mt-3 flex items-center gap-3">

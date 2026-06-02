@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FileText, RefreshCcw, UploadCloud } from 'lucide-react'
+import { Button } from './Button'
 import { listDocuments, uploadDocument } from '../lib/api'
 import type { WorkspaceDocument } from '../types/workspace'
 
@@ -53,15 +54,15 @@ export function DocumentsPanel() {
           <h2 className="text-sm font-semibold text-neutral-900">Documents</h2>
           <p className="text-xs text-neutral-500">Upload PDF or DOCX files for semantic chat search.</p>
         </div>
-        <button
-          type="button"
+        <Button
           onClick={() => void loadDocuments()}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 px-2.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
           disabled={isLoading}
+          size="sm"
+          variant="secondary"
         >
           <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''} />
           Refresh
-        </button>
+        </Button>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 lg:px-6">
@@ -85,14 +86,14 @@ export function DocumentsPanel() {
                 onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
               />
             </label>
-            <button
-              type="button"
+            <Button
               onClick={() => void handleUpload()}
               disabled={!selectedFile || isUploading}
-              className="inline-flex h-10 items-center justify-center rounded-md bg-neutral-900 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-neutral-300"
+              size="md"
+              variant="primary"
             >
               {isUploading ? 'Processing...' : 'Upload'}
-            </button>
+            </Button>
           </div>
           {error && (
             <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

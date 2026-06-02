@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { MessageSquare, Plus, X, Clock, Brain, FileText } from 'lucide-react'
+import { Button } from './Button'
 import type { ChatThread } from '../types/workspace'
 
 type SidebarProps = {
@@ -90,54 +91,54 @@ export function Sidebar({
               <span className="w-6 h-6 bg-neutral-900 text-white rounded grid place-items-center text-[10px]">LC</span>
               LexCatalyst
             </h1>
-            <button
+            <Button
               onClick={onClose}
-              className="lg:hidden p-1.5 text-neutral-500 hover:bg-neutral-100 rounded-md"
               aria-label="Close sidebar"
+              className="lg:hidden"
+              size="icon"
+              variant="ghost"
             >
               <X size={18} />
-            </button>
+            </Button>
           </div>
 
           <div className="p-3 space-y-2">
-            <button
+            <Button
               onClick={() => {
                 onNewChat()
                 if (window.innerWidth < 1024) onClose()
               }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 hover:border-neutral-300 transition-all shadow-sm"
+              className="w-full justify-start"
+              size="md"
+              variant="secondary"
             >
               <Plus size={16} />
               New chat
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => {
                 onSelectMemories()
                 if (window.innerWidth < 1024) onClose()
               }}
-              className={`flex items-center gap-2 w-full px-3 py-2 text-sm font-medium rounded-lg transition-all ${
-                activeThreadId === 'memories'
-                  ? 'bg-neutral-100 text-neutral-900 border border-neutral-200 shadow-sm'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 border border-transparent'
-              }`}
+              className="w-full justify-start"
+              size="md"
+              variant={activeThreadId === 'memories' ? 'selected' : 'secondary'}
             >
               <Brain size={16} />
               Memories
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => {
                 onSelectDocuments()
                 if (window.innerWidth < 1024) onClose()
               }}
-              className={`flex items-center gap-2 w-full px-3 py-2 text-sm font-medium rounded-lg transition-all ${
-                activeThreadId === 'documents'
-                  ? 'bg-neutral-100 text-neutral-900 border border-neutral-200 shadow-sm'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 border border-transparent'
-              }`}
+              className="w-full justify-start"
+              size="md"
+              variant={activeThreadId === 'documents' ? 'selected' : 'secondary'}
             >
               <FileText size={16} />
               Documents
-            </button>
+            </Button>
           </div>
 
           {/* Past Chats List */}
@@ -151,29 +152,27 @@ export function Sidebar({
                 {threads.map((thread) => {
                   const isActive = thread.id === activeThreadId
                   return (
-                    <button
+                    <Button
                       key={thread.id}
                       onClick={() => {
                         onSelectThread(thread.id)
                         if (window.innerWidth < 1024) onClose()
                       }}
-                      className={`group flex items-center gap-3 w-full px-3 py-2.5 text-left rounded-lg transition-all ${
-                        isActive
-                          ? 'bg-neutral-100 text-neutral-900 shadow-sm'
-                          : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-                      }`}
+                      className="group w-full justify-start text-left"
+                      size="lg"
+                      variant={isActive ? 'selected' : 'ghost'}
                     >
                       <MessageSquare
                         size={16}
-                        className={isActive ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-600'}
+                        className={isActive ? 'text-neutral-950' : 'text-neutral-500 group-hover:text-neutral-950'}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{thread.title}</div>
-                        <div className="text-[10px] text-neutral-400 mt-0.5">
+                        <div className={`mt-0.5 text-[10px] ${isActive ? 'text-neutral-600' : 'text-neutral-500'}`}>
                           {formatThreadDate(thread.updatedAt)}
                         </div>
                       </div>
-                    </button>
+                    </Button>
                   )
                 })}
               </div>

@@ -37,10 +37,6 @@ textarea {
   font-family: inherit;
 }
 
-button {
-  color: inherit;
-}
-
 #root {
   height: 100vh;
   display: flex;

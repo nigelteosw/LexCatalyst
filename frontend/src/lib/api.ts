@@ -60,6 +60,7 @@ type StreamChatOptions = {
   message: string
   model: ChatModel
   threadId: string | null
+  signal?: AbortSignal
   onThread: (threadId: string, title: string) => void
   onToken: (content: string) => void
   onDone: (payload: { threadId: string; message: Message; model: string }) => void
@@ -178,6 +179,7 @@ export async function sendChatMessage(message: string, threadId: string | null, 
 export async function streamChatMessage({
   message,
   model,
+  signal,
   threadId,
   onThread,
   onToken,
@@ -199,6 +201,7 @@ export async function streamChatMessage({
       thread_id: threadId,
       model,
     }),
+    signal,
   })
 
   if (!response.ok || !response.body) {
