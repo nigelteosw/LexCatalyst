@@ -54,6 +54,7 @@ function App() {
   const [selectedModel, setSelectedModel] = useState<ChatModel>(getSavedChatModel)
   const [selectedWikiPageId, setSelectedWikiPageId] = useState<string | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
+  const hasAutoSelectedThreadRef = useRef(false)
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
@@ -71,8 +72,8 @@ function App() {
         const nextThreads = await listChatThreads()
         if (!isMounted) return
         setThreads(nextThreads)
-        // Only set active thread if we don't have one and we just loaded threads
-        if (nextThreads.length > 0 && activeThreadId === null) {
+        if (!hasAutoSelectedThreadRef.current && nextThreads.length > 0) {
+          hasAutoSelectedThreadRef.current = true
           setActiveThreadId(nextThreads[0].id)
         }
       } catch (caughtError) {
@@ -84,7 +85,7 @@ function App() {
 
     void loadThreads()
     return () => { isMounted = false }
-  }, [isAuthenticated, activeThreadId]) // Added activeThreadId to deps
+  }, [isAuthenticated])
 
   // Load messages when active thread changes
   useEffect(() => {
