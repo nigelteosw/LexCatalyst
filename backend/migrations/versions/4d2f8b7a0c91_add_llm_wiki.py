@@ -7,6 +7,7 @@ Create Date: 2026-06-02 00:00:00.000000
 """
 from typing import Sequence, Union
 
+import pgvector.sqlalchemy
 import sqlalchemy as sa
 from alembic import op
 
@@ -18,6 +19,67 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Defensive: ensure tables from 9ad7d2c4a6b1 (document ingestion) exist before
+    # creating wiki tables that FK-reference them. This handles deployments where
+    # that revision was recorded in alembic_version without the DDL actually running
+    # (e.g. after a database reset that preserves the version table).
+    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    bind = op.get_bind()
+    existing = set(sa.inspect(bind).get_table_names())
+
+    if "documents" not in existing:
+        op.create_table(
+            "documents",
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("user_id", sa.String(length=36), nullable=False),
+            sa.Column("filename", sa.String(length=255), nullable=False),
+            sa.Column("content_type", sa.String(length=120), nullable=False),
+            sa.Column("storage_key", sa.String(length=1024), nullable=True),
+            sa.Column("status", sa.String(length=24), nullable=False),
+            sa.Column("error_message", sa.Text(), nullable=True),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(op.f("ix_documents_status"), "documents", ["status"])
+        op.create_index(op.f("ix_documents_user_id"), "documents", ["user_id"])
+
+    if "document_chunks" not in existing:
+        op.create_table(
+            "document_chunks",
+            sa.Column("id", sa.String(length=36), nullable=False),
+            sa.Column("document_id", sa.String(length=36), nullable=False),
+            sa.Column("chunk_index", sa.Integer(), nullable=False),
+            sa.Column("text", sa.Text(), nullable=False),
+            sa.Column("embedding", pgvector.sqlalchemy.Vector(dim=1536), nullable=False),
+            sa.Column("page_number", sa.Integer(), nullable=True),
+            sa.Column("citation_label", sa.String(length=512), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+            sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(
+            op.f("ix_document_chunks_document_id"),
+            "document_chunks",
+            ["document_id"],
+        )
+
     op.create_table(
         "wiki_pages",
         sa.Column("id", sa.String(length=36), nullable=False),
