@@ -32,6 +32,7 @@ type BackendMessage = {
   role: 'assistant' | 'user'
   content: string
   model: string | null
+  tool_steps: Array<{ tool: string; args: Record<string, unknown>; summary: string | null; status: 'running' | 'done' }> | null
   created_at: string
 }
 
@@ -226,6 +227,7 @@ function mapMessage(message: BackendMessage): Message {
     role: message.role,
     body: message.content,
     meta: message.model ? `Model: ${message.model}` : undefined,
+    steps: message.tool_steps ?? undefined,
   }
 }
 

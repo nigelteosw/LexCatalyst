@@ -102,7 +102,7 @@ class DeepSeekProvider:
         """
         Async generator yielding:
           ("token", str)          — a streamed content chunk
-          ("tool_calls", list)    — complete tool calls when finish_reason == "tool_calls"
+          ("tool_calls", dict)    — complete tool-call turn data
         """
         if not self.client:
             raise DeepSeekError("DEEPSEEK_API_KEY is not configured")
@@ -127,6 +127,8 @@ class DeepSeekProvider:
 
         # key: tool-call index → accumulated call dict
         accumulated: dict[int, dict] = {}
+        reasoning_chunks: list[str] = []
+        content_chunks: list[str] = []
 
         try:
             async for chunk in stream:
@@ -138,7 +140,12 @@ class DeepSeekProvider:
                 finish_reason = choice.finish_reason
 
                 if delta.content:
+                    content_chunks.append(delta.content)
                     yield ("token", delta.content)
+
+                reasoning_content = getattr(delta, "reasoning_content", None)
+                if reasoning_content:
+                    reasoning_chunks.append(reasoning_content)
 
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
@@ -159,7 +166,14 @@ class DeepSeekProvider:
 
                 if finish_reason == "tool_calls":
                     tool_calls = [accumulated[i] for i in sorted(accumulated.keys())]
-                    yield ("tool_calls", tool_calls)
+                    yield (
+                        "tool_calls",
+                        {
+                            "tool_calls": tool_calls,
+                            "reasoning_content": "".join(reasoning_chunks),
+                            "content": "".join(content_chunks) or None,
+                        },
+                    )
                     accumulated = {}
 
         except APIError as exc:

@@ -537,6 +537,7 @@ async def chat_stream(
             yield event("thread", {"thread_id": thread.id, "title": thread.title})
 
             chunks: list[str] = []
+            tool_steps: list[dict] = []
             active_matter_id = request.matter_id or thread.matter_id
 
             async for event_type, event_data in run_agent_loop(
@@ -548,6 +549,19 @@ async def chat_stream(
             ):
                 if event_type == "token":
                     chunks.append(event_data["content"])
+                elif event_type == "tool_call":
+                    tool_steps.append({
+                        "tool": event_data["tool"],
+                        "args": event_data["args"],
+                        "summary": None,
+                        "status": "running",
+                    })
+                elif event_type == "tool_result":
+                    for step in reversed(tool_steps):
+                        if step["tool"] == event_data["tool"] and step["status"] == "running":
+                            step["summary"] = event_data["summary"]
+                            step["status"] = "done"
+                            break
                 yield event(event_type, event_data)
 
             assistant_content = "".join(chunks).strip()
@@ -562,6 +576,7 @@ async def chat_stream(
                 content=assistant_content,
                 user_message=request.message,
                 model=selected_model,
+                tool_steps=tool_steps if tool_steps else None,
             )
             yield event(
                 "done",

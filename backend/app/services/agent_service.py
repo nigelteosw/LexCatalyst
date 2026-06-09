@@ -196,6 +196,8 @@ async def run_agent_loop(
             })
 
         accumulated_tool_calls: list[dict] = []
+        assistant_reasoning = ""
+        assistant_content: str | None = None
 
         async for event_type, event_data in provider.stream_with_tools(
             current_messages, tools, model=model
@@ -203,7 +205,9 @@ async def run_agent_loop(
             if event_type == "token":
                 yield ("token", {"content": event_data})
             elif event_type == "tool_calls":
-                accumulated_tool_calls = event_data
+                accumulated_tool_calls = event_data["tool_calls"]
+                assistant_reasoning = event_data["reasoning_content"]
+                assistant_content = event_data["content"]
 
         if not accumulated_tool_calls:
             # LLM gave a final answer — loop is done
@@ -212,7 +216,10 @@ async def run_agent_loop(
         # Add assistant's tool-call decision to conversation history
         current_messages.append({
             "role": "assistant",
-            "content": None,
+            "content": assistant_content,
+            # DeepSeek V4 thinking-mode tool calls require this field on
+            # every subsequent request in the same agent turn.
+            "reasoning_content": assistant_reasoning,
             "tool_calls": accumulated_tool_calls,
         })
 

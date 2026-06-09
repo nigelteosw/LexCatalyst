@@ -59,11 +59,12 @@ def add_message(
     role: str,
     content: str,
     model: str | None = None,
+    tool_steps: list | None = None,
     prompt_tokens: int | None = None,
     completion_tokens: int | None = None,
     total_tokens: int | None = None,
 ) -> ChatMessage:
-    message = ChatMessage(
+    fields: dict = dict(
         thread_id=thread_id,
         role=role,
         content=content,
@@ -72,6 +73,9 @@ def add_message(
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
     )
+    if tool_steps is not None:
+        fields["tool_steps"] = tool_steps
+    message = ChatMessage(**fields)
     db.add(message)
     db.flush()
     return message
@@ -432,6 +436,7 @@ async def save_assistant_response(
     content: str,
     user_message: str | None = None,
     model: str | None = None,
+    tool_steps: list | None = None,
 ) -> ChatMessage:
     selected_model = resolve_chat_model(model)
     assistant_message = add_message(
@@ -440,6 +445,7 @@ async def save_assistant_response(
         role="assistant",
         content=content,
         model=selected_model,
+        tool_steps=tool_steps or None,
     )
     thread.updated_at = datetime.now(UTC)
     db.commit()
