@@ -257,7 +257,15 @@ function ChatMessage({ message, userInitials }: ChatMessageProps) {
               {message.meta}
             </p>
           )}
-          <div className="whitespace-pre-wrap">{message.body}</div>
+          {!isUser && !message.body && !message.steps?.length ? (
+            <span className="flex items-center gap-1 py-0.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 animate-bounce [animation-delay:0ms]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 animate-bounce [animation-delay:150ms]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 animate-bounce [animation-delay:300ms]" />
+            </span>
+          ) : (
+            <div className="whitespace-pre-wrap">{message.body}</div>
+          )}
         </div>
       </div>
     </article>
