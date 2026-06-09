@@ -1,94 +1,81 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { BookOpen, FileText, RefreshCcw, Trash2, UploadCloud } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from './Button'
 import { deleteDocument, ingestDocumentToWiki, listDocuments, listWikiPages, uploadDocument } from '../lib/api'
-import type { ChatModel, WikiPage, WorkspaceDocument } from '../types/workspace'
+import type { ChatModel, WorkspaceDocument } from '../types/workspace'
+import { useViewStore } from '../store/viewStore'
 
 type DocumentsPanelProps = {
   selectedModel: ChatModel
-  onOpenWikiPage: (pageId: string) => void
 }
 
-export function DocumentsPanel({ selectedModel, onOpenWikiPage }: DocumentsPanelProps) {
-  const [documents, setDocuments] = useState<WorkspaceDocument[]>([])
-  const [wikiPages, setWikiPages] = useState<WikiPage[]>([])
+export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
+  const { selectWiki } = useViewStore()
+  const queryClient = useQueryClient()
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
   const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null)
-  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  async function loadDocuments() {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const [nextDocuments, nextWikiPages] = await Promise.all([listDocuments(), listWikiPages()])
-      setDocuments(nextDocuments)
-      setWikiPages(nextWikiPages)
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError))
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const documentsQuery = useQuery({ queryKey: ['documents'], queryFn: listDocuments })
+  const wikiPagesQuery = useQuery({ queryKey: ['wikiPages'], queryFn: listWikiPages })
 
-  useEffect(() => {
-    void loadDocuments()
-  }, [])
+  const documents = documentsQuery.data ?? []
+  const wikiPages = wikiPagesQuery.data ?? []
+  const isLoading = documentsQuery.isFetching || wikiPagesQuery.isFetching
+  const error = mutationError ?? documentsQuery.error?.message ?? null
 
-  async function handleUpload() {
-    if (!selectedFile || isUploading) return
-
-    setIsUploading(true)
-    setError(null)
-    try {
-      const uploaded = await uploadDocument(selectedFile)
-      setDocuments((current) => [uploaded, ...current.filter((doc) => doc.id !== uploaded.id)])
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => uploadDocument(file),
+    onSuccess: () => {
       setSelectedFile(null)
-      if (inputRef.current) {
-        inputRef.current.value = ''
-      }
-      setWikiPages(await listWikiPages())
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError))
-    } finally {
-      setIsUploading(false)
-    }
-  }
+      setMutationError(null)
+      if (inputRef.current) inputRef.current.value = ''
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
+    },
+    onError: (err) => setMutationError(getErrorMessage(err)),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteDocument(id),
+    onSuccess: () => {
+      setMutationError(null)
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
+    },
+    onError: (err) => setMutationError(getErrorMessage(err)),
+  })
 
   async function handleGenerateWikiPage(document: WorkspaceDocument) {
     if (document.status !== 'ready' || ingestingDocumentId) return
     setIngestingDocumentId(document.id)
-    setError(null)
+    setMutationError(null)
     try {
       const page = await ingestDocumentToWiki(document.id, selectedModel)
-      setWikiPages((current) => [page, ...current.filter((item) => item.id !== page.id)])
-      onOpenWikiPage(page.id)
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError))
+      queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
+      selectWiki(page.id)
+    } catch (err) {
+      setMutationError(getErrorMessage(err))
     } finally {
       setIngestingDocumentId(null)
     }
   }
 
   async function handleDeleteDocument(document: WorkspaceDocument) {
-    if (deletingDocumentId) return
-    const confirmed = window.confirm(`Delete ${document.filename}? This removes the uploaded document and its searchable chunks.`)
+    if (deleteMutation.isPending) return
+    const confirmed = window.confirm(
+      `Delete ${document.filename}? This removes the uploaded document and its searchable chunks.`,
+    )
     if (!confirmed) return
+    deleteMutation.mutate(document.id)
+  }
 
-    setDeletingDocumentId(document.id)
-    setError(null)
-    try {
-      await deleteDocument(document.id)
-      setDocuments((current) => current.filter((item) => item.id !== document.id))
-      setWikiPages(await listWikiPages())
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError))
-    } finally {
-      setDeletingDocumentId(null)
-    }
+  function handleRefresh() {
+    queryClient.invalidateQueries({ queryKey: ['documents'] })
+    queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
   }
 
   return (
@@ -98,12 +85,7 @@ export function DocumentsPanel({ selectedModel, onOpenWikiPage }: DocumentsPanel
           <h2 className="text-sm font-semibold text-neutral-900">Documents</h2>
           <p className="text-xs text-neutral-500">Upload PDF or DOCX files for semantic chat search.</p>
         </div>
-        <Button
-          onClick={() => void loadDocuments()}
-          disabled={isLoading}
-          size="sm"
-          variant="secondary"
-        >
+        <Button onClick={handleRefresh} disabled={isLoading} size="sm" variant="secondary">
           <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''} />
           Refresh
         </Button>
@@ -131,12 +113,12 @@ export function DocumentsPanel({ selectedModel, onOpenWikiPage }: DocumentsPanel
               />
             </label>
             <Button
-              onClick={() => void handleUpload()}
-              disabled={!selectedFile || isUploading}
+              onClick={() => selectedFile && uploadMutation.mutate(selectedFile)}
+              disabled={!selectedFile || uploadMutation.isPending}
               size="md"
               variant="primary"
             >
-              {isUploading ? 'Processing...' : 'Upload'}
+              {uploadMutation.isPending ? 'Processing...' : 'Upload'}
             </Button>
           </div>
           {error && (
@@ -151,7 +133,7 @@ export function DocumentsPanel({ selectedModel, onOpenWikiPage }: DocumentsPanel
             documents.map((document) => {
               const wikiPage = wikiPages.find((page) => page.sourceDocumentId === document.id)
               const isGenerating = ingestingDocumentId === document.id
-              const isDeleting = deletingDocumentId === document.id
+              const isDeleting = deleteMutation.isPending && deleteMutation.variables === document.id
               return (
                 <article
                   key={document.id}
@@ -162,7 +144,9 @@ export function DocumentsPanel({ selectedModel, onOpenWikiPage }: DocumentsPanel
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate text-sm font-medium text-neutral-900">{document.filename}</h3>
+                      <h3 className="truncate text-sm font-medium text-neutral-900">
+                        {document.filename}
+                      </h3>
                       <StatusBadge status={document.status} />
                     </div>
                     <div className="mt-1 text-xs text-neutral-500">
@@ -179,7 +163,7 @@ export function DocumentsPanel({ selectedModel, onOpenWikiPage }: DocumentsPanel
                   </div>
                   <div className="flex shrink-0 gap-2 sm:justify-end">
                     {wikiPage ? (
-                      <Button onClick={() => onOpenWikiPage(wikiPage.id)} size="sm" variant="secondary">
+                      <Button onClick={() => selectWiki(wikiPage.id)} size="sm" variant="secondary">
                         <BookOpen size={14} />
                         Open wiki page
                       </Button>
@@ -189,7 +173,11 @@ export function DocumentsPanel({ selectedModel, onOpenWikiPage }: DocumentsPanel
                         disabled={document.status !== 'ready' || !!ingestingDocumentId}
                         size="sm"
                         variant="secondary"
-                        title={document.status === 'ready' ? 'Generate wiki page' : 'Document must be ready first'}
+                        title={
+                          document.status === 'ready'
+                            ? 'Generate wiki page'
+                            : 'Document must be ready first'
+                        }
                       >
                         <BookOpen size={14} />
                         {isGenerating ? 'Generating...' : 'Generate wiki page'}
@@ -236,9 +224,7 @@ function StatusBadge({ status }: { status: WorkspaceDocument['status'] }) {
 
 function formatDate(value: string) {
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return 'recently'
-  }
+  if (Number.isNaN(date.getTime())) return 'recently'
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',

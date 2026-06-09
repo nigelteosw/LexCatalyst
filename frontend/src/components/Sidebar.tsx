@@ -2,17 +2,13 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { MessageSquare, Plus, X, Clock, Brain, FileText, BookOpen } from 'lucide-react'
 import { Button } from './Button'
 import type { ChatThread } from '../types/workspace'
+import { useViewStore } from '../store/viewStore'
 
 type SidebarProps = {
   threads: ChatThread[]
-  activeThreadId: string | null
-  onSelectThread: (threadId: string) => void
-  onSelectMemories: () => void
-  onSelectDocuments: () => void
-  onSelectWiki: () => void
-  onNewChat: () => void
   isOpen: boolean
   onClose: () => void
+  onLogout: () => void
   userFullName: string
   userInitials: string
 }
@@ -23,17 +19,15 @@ const DEFAULT_WIDTH = 260
 
 export function Sidebar({
   threads,
-  activeThreadId,
-  onSelectThread,
-  onSelectMemories,
-  onSelectDocuments,
-  onSelectWiki,
-  onNewChat,
   isOpen,
   onClose,
+  onLogout,
   userFullName,
   userInitials,
 }: SidebarProps) {
+  const { current, startNewChat, selectThread, selectMemories, selectDocuments, selectWiki } =
+    useViewStore()
+
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -68,6 +62,10 @@ export function Sidebar({
     }
   }, [resize, stopResizing])
 
+  function closeMobile() {
+    if (window.innerWidth < 1024) onClose()
+  }
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -90,7 +88,9 @@ export function Sidebar({
           {/* Sidebar Header */}
           <div className="flex items-center justify-between p-4 border-b border-neutral-100">
             <h1 className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
-              <span className="w-6 h-6 bg-neutral-900 text-white rounded grid place-items-center text-[10px]">LC</span>
+              <span className="w-6 h-6 bg-neutral-900 text-white rounded grid place-items-center text-[10px]">
+                LC
+              </span>
               LexCatalyst
             </h1>
             <Button
@@ -107,8 +107,8 @@ export function Sidebar({
           <div className="p-3 space-y-2">
             <Button
               onClick={() => {
-                onNewChat()
-                if (window.innerWidth < 1024) onClose()
+                startNewChat()
+                closeMobile()
               }}
               className="w-full justify-start"
               size="md"
@@ -119,36 +119,36 @@ export function Sidebar({
             </Button>
             <Button
               onClick={() => {
-                onSelectMemories()
-                if (window.innerWidth < 1024) onClose()
+                selectMemories()
+                closeMobile()
               }}
               className="w-full justify-start"
               size="md"
-              variant={activeThreadId === 'memories' ? 'selected' : 'secondary'}
+              variant={current.view === 'memories' ? 'selected' : 'secondary'}
             >
               <Brain size={16} />
               Memories
             </Button>
             <Button
               onClick={() => {
-                onSelectDocuments()
-                if (window.innerWidth < 1024) onClose()
+                selectDocuments()
+                closeMobile()
               }}
               className="w-full justify-start"
               size="md"
-              variant={activeThreadId === 'documents' ? 'selected' : 'secondary'}
+              variant={current.view === 'documents' ? 'selected' : 'secondary'}
             >
               <FileText size={16} />
               Documents
             </Button>
             <Button
               onClick={() => {
-                onSelectWiki()
-                if (window.innerWidth < 1024) onClose()
+                selectWiki()
+                closeMobile()
               }}
               className="w-full justify-start"
               size="md"
-              variant={activeThreadId === 'wiki' ? 'selected' : 'secondary'}
+              variant={current.view === 'wiki' ? 'selected' : 'secondary'}
             >
               <BookOpen size={16} />
               Lex-Wiki
@@ -164,13 +164,14 @@ export function Sidebar({
             {threads.length > 0 ? (
               <div className="space-y-0.5">
                 {threads.map((thread) => {
-                  const isActive = thread.id === activeThreadId
+                  const isActive =
+                    current.view === 'chat' && thread.id === current.threadId
                   return (
                     <Button
                       key={thread.id}
                       onClick={() => {
-                        onSelectThread(thread.id)
-                        if (window.innerWidth < 1024) onClose()
+                        selectThread(thread.id)
+                        closeMobile()
                       }}
                       className="group w-full justify-start text-left"
                       size="lg"
@@ -178,11 +179,17 @@ export function Sidebar({
                     >
                       <MessageSquare
                         size={16}
-                        className={isActive ? 'text-neutral-950' : 'text-neutral-500 group-hover:text-neutral-950'}
+                        className={
+                          isActive
+                            ? 'text-neutral-950'
+                            : 'text-neutral-500 group-hover:text-neutral-950'
+                        }
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{thread.title}</div>
-                        <div className={`mt-0.5 text-[10px] ${isActive ? 'text-neutral-600' : 'text-neutral-500'}`}>
+                        <div
+                          className={`mt-0.5 text-[10px] ${isActive ? 'text-neutral-600' : 'text-neutral-500'}`}
+                        >
                           {formatThreadDate(thread.updatedAt)}
                         </div>
                       </div>
@@ -191,25 +198,26 @@ export function Sidebar({
                 })}
               </div>
             ) : (
-              <div className="px-3 py-4 text-sm text-neutral-400 italic">
-                No recent chats
-              </div>
+              <div className="px-3 py-4 text-sm text-neutral-400 italic">No recent chats</div>
             )}
           </nav>
 
           {/* Sidebar Footer */}
           <div className="p-4 border-t border-neutral-100">
-             <div className="flex items-center gap-3 px-1">
-                <div className="w-8 h-8 rounded-full bg-neutral-900 grid place-items-center text-[10px] font-semibold text-white shadow-sm uppercase">
-                  {userInitials}
+            <div className="flex items-center gap-3 px-1">
+              <div className="w-8 h-8 rounded-full bg-neutral-900 grid place-items-center text-[10px] font-semibold text-white shadow-sm uppercase">
+                {userInitials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-neutral-900 truncate uppercase tracking-tight">
+                  {userFullName}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-neutral-900 truncate uppercase tracking-tight">
-                    {userFullName}
-                  </div>
-                  <div className="text-[10px] text-neutral-500 truncate">Professional Plan</div>
-                </div>
-             </div>
+                <div className="text-[10px] text-neutral-500 truncate">Professional Plan</div>
+              </div>
+              <Button onClick={onLogout} size="sm" variant="secondary">
+                Log out
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -227,27 +235,16 @@ export function Sidebar({
 
 function formatThreadDate(value: string) {
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return 'Saved'
-  }
+  if (Number.isNaN(date.getTime())) return 'Saved'
 
   const now = new Date()
   const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 3600 * 24))
 
   if (diffInDays === 0) {
-    return new Intl.DateTimeFormat(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(date)
+    return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)
   }
   if (diffInDays < 7) {
-    return new Intl.DateTimeFormat(undefined, {
-      weekday: 'short',
-    }).format(date)
+    return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date)
   }
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-  }).format(date)
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)
 }

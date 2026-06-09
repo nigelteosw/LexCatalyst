@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models import ChatMessage, ChatThread
@@ -22,6 +22,10 @@ SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior la
 Answer clearly and conservatively. If the question needs document evidence, say what evidence is missing.
 Use the provided document context when it is relevant, and cite it with bracket references like [1].
 Do not invent citations or claim to have read uploaded documents unless the context is provided."""
+
+# Summarise older messages once the thread exceeds this count, keeping the most recent window verbatim.
+_RECENT_LIMIT = 20
+_SUMMARISE_THRESHOLD = _RECENT_LIMIT  # start summarising once we exceed the recent window
 
 
 def make_thread_title(message: str) -> str:
@@ -71,7 +75,7 @@ def add_message(
     return message
 
 
-def get_recent_messages(db: Session, thread_id: str, limit: int = 20) -> list[ChatMessage]:
+def get_recent_messages(db: Session, thread_id: str, limit: int = _RECENT_LIMIT) -> list[ChatMessage]:
     stmt = (
         select(ChatMessage)
         .where(ChatMessage.thread_id == thread_id)
@@ -82,14 +86,89 @@ def get_recent_messages(db: Session, thread_id: str, limit: int = 20) -> list[Ch
     return list(reversed(messages))
 
 
+def _get_all_messages(db: Session, thread_id: str) -> list[ChatMessage]:
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.thread_id == thread_id)
+        .order_by(ChatMessage.created_at)
+    )
+    return list(db.scalars(stmt))
+
+
+def _count_messages(db: Session, thread_id: str) -> int:
+    stmt = select(func.count()).where(ChatMessage.thread_id == thread_id)
+    return db.scalar(stmt) or 0
+
+
+async def _generate_summary(older_messages: list[ChatMessage]) -> str | None:
+    """Ask the LLM to summarise a list of messages that fall outside the recent window."""
+    if not older_messages:
+        return None
+
+    lines = []
+    for m in older_messages:
+        if m.role not in ("user", "assistant"):
+            continue
+        label = "User" if m.role == "user" else "Assistant"
+        lines.append(f"{label}: {m.content}")
+
+    if not lines:
+        return None
+
+    prompt_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You summarise legal conversation history for a legal AI assistant. "
+                "Produce 2-3 concise paragraphs covering key facts, decisions, and context "
+                "that would help the assistant understand the ongoing matter. "
+                "Be factual and concise."
+            ),
+        },
+        {"role": "user", "content": "Conversation history to summarise:\n\n" + "\n".join(lines)},
+    ]
+
+    provider = DeepSeekProvider()
+    try:
+        summary, _ = await provider.chat(prompt_messages, model="deepseek-v4-flash")
+        return summary
+    except Exception as exc:
+        print(f"Thread summarisation skipped: {exc}")
+        return None
+
+
+async def _maybe_refresh_summary(db: Session, thread: ChatThread) -> None:
+    """Regenerate and persist the thread summary when the history exceeds the recent window."""
+    total = _count_messages(db, thread.id)
+    if total <= _SUMMARISE_THRESHOLD:
+        return
+
+    all_messages = _get_all_messages(db, thread.id)
+    older = all_messages[:-_RECENT_LIMIT]
+    summary = await _generate_summary(older)
+    if summary:
+        thread.summary = summary
+        db.commit()
+
+
 def build_provider_messages(
     history: list[ChatMessage],
     user_message: str,
     memories: list | None = None,
     document_results: list[DocumentSearchResult] | None = None,
     wiki_pages: list | None = None,
+    thread_summary: str | None = None,
 ) -> list[dict[str, str]]:
     system_content = SYSTEM_PROMPT
+
+    if thread_summary:
+        system_content += (
+            "\n\nEarlier Conversation Summary:\n"
+            f"{thread_summary}\n\n"
+            "The summary above covers the portion of the conversation not shown in the recent "
+            "message history below. Use it to maintain context across a long session."
+        )
+
     wiki_context = format_wiki_context(wiki_pages or [])
     if wiki_context:
         system_content += (
@@ -115,7 +194,7 @@ def build_provider_messages(
             cat_memories = [m.content for m in memories if m.category == cat]
             if cat_memories:
                 memory_blocks.append(f"{label}:\n- " + "\n- ".join(cat_memories))
-        
+
         if memory_blocks:
             system_content += "\n\nUser Context (Long-term Memory):\n" + "\n\n".join(memory_blocks)
 
@@ -175,6 +254,7 @@ async def create_chat_response(
             memories=memories,
             document_results=document_results,
             wiki_pages=wiki_pages,
+            thread_summary=thread.summary,
         ),
         model=selected_model,
     )
@@ -194,9 +274,10 @@ async def create_chat_response(
     db.refresh(assistant_message)
     db.refresh(thread)
 
-    # Extract memories
     candidates = await extract_memory_candidates(user_message, assistant_content)
     save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
+
+    await _maybe_refresh_summary(db, thread)
 
     return thread, assistant_message
 
@@ -229,6 +310,7 @@ async def create_chat_request(
             memories=memories,
             document_results=document_results,
             wiki_pages=wiki_pages,
+            thread_summary=thread.summary,
         ),
         selected_model,
     )
@@ -260,6 +342,8 @@ async def save_assistant_response(
         candidates = await extract_memory_candidates(user_message, content)
         save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
 
+    await _maybe_refresh_summary(db, thread)
+
     return assistant_message
 
 
@@ -273,7 +357,6 @@ def list_threads(db: Session, user_id: str) -> list[ChatThread]:
 
 
 def list_thread_messages(db: Session, thread_id: str, user_id: str) -> list[ChatMessage]:
-    # Verify the thread belongs to the user
     thread_stmt = select(ChatThread).where(
         ChatThread.id == thread_id, ChatThread.user_id == user_id
     )

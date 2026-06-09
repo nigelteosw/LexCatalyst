@@ -45,14 +45,34 @@ export function ChatPanel({
   const canUpload = !isUploadingFile
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const isNearBottomRef = useRef(true)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  const handleScroll = () => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    isNearBottomRef.current = distanceFromBottom < 100
+  }
+
   useEffect(() => {
-    scrollToBottom()
+    if (isNearBottomRef.current) scrollToBottom()
+  }, [messages])
+
+  // When a new message is submitted, always scroll to bottom
+  const prevMessageCountRef = useRef(messages.length)
+  useEffect(() => {
+    const prevCount = prevMessageCountRef.current
+    prevMessageCountRef.current = messages.length
+    if (messages.length > prevCount && messages[messages.length - 1]?.role === 'user') {
+      isNearBottomRef.current = true
+      scrollToBottom()
+    }
   }, [messages])
 
   // Auto-resize textarea
@@ -65,7 +85,7 @@ export function ChatPanel({
 
   return (
     <section aria-label="Chat" className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-6">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-6">
         <div className="mx-auto w-full max-w-3xl px-4 md:px-6">
           {messages.length > 0 ? (
             <div className="space-y-8 pb-12">

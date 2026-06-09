@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { FileText, GitBranch, RefreshCcw, Save, Trash2, UploadCloud } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from './Button'
 import { WikiGraphCanvas } from './WikiGraphCanvas'
 import {
@@ -11,131 +12,103 @@ import {
   publishWikiPage,
   updateWikiPage,
 } from '../lib/api'
-import type { WikiGraph, WikiPage, WikiPageSource } from '../types/workspace'
+import type { WikiPage } from '../types/workspace'
+import { useViewStore } from '../store/viewStore'
 
-type WikiPanelProps = {
-  selectedPageId: string | null
-  onSelectPage: (pageId: string | null) => void
-  onBackToDocuments: () => void
-}
+export function WikiPanel() {
+  const { current, setWikiPageId, selectDocuments } = useViewStore()
+  const pageId = current.view === 'wiki' ? current.pageId : null
 
-export function WikiPanel({
-  selectedPageId,
-  onSelectPage,
-  onBackToDocuments,
-}: WikiPanelProps) {
-  const [pages, setPages] = useState<WikiPage[]>([])
-  const [activePage, setActivePage] = useState<WikiPage | null>(null)
-  const [sources, setSources] = useState<WikiPageSource[]>([])
-  const [graph, setGraph] = useState<WikiGraph>({ nodes: [], edges: [] })
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const queryClient = useQueryClient()
+
   const [isEditing, setIsEditing] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
   const [draftBody, setDraftBody] = useState('')
   const [filter, setFilter] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
 
-  async function loadWiki(nextPageId = selectedPageId) {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const [nextPages, nextGraph] = await Promise.all([listWikiPages(), getWikiGraph()])
-      setPages(nextPages)
-      setGraph(nextGraph)
-      const pageId = nextPageId ?? nextPages[0]?.id ?? null
-      if (pageId) {
-        const [page, nextSources] = await Promise.all([
-          getWikiPage(pageId),
-          listWikiPageSources(pageId),
-        ])
-        setActivePage(page)
-        setSources(nextSources)
-        setDraftTitle(page.title)
-        setDraftBody(page.bodyMarkdown)
-        // Skip syncing back to parent when auto-selecting (nextPageId was null) to
-        // prevent a second useEffect trigger and duplicate API round-trip on mount.
-        if (nextPageId !== null) {
-          onSelectPage(page.id)
-        }
-      } else {
-        setActivePage(null)
-        setSources([])
-        if (nextPageId !== null) {
-          onSelectPage(null)
-        }
-      }
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError))
-    } finally {
-      setIsLoading(false)
+  // Queries
+  const pagesQuery = useQuery({ queryKey: ['wikiPages'], queryFn: listWikiPages })
+  const graphQuery = useQuery({ queryKey: ['wikiGraph'], queryFn: getWikiGraph })
+  const pageQuery = useQuery({
+    queryKey: ['wikiPage', pageId],
+    queryFn: () => getWikiPage(pageId!),
+    enabled: !!pageId,
+  })
+  const sourcesQuery = useQuery({
+    queryKey: ['wikiPageSources', pageId],
+    queryFn: () => listWikiPageSources(pageId!),
+    enabled: !!pageId,
+  })
+
+  const pages = pagesQuery.data ?? []
+  const graph = graphQuery.data ?? { nodes: [], edges: [] }
+  const activePage = pageQuery.data ?? null
+  const sources = sourcesQuery.data ?? []
+  const isLoading = pagesQuery.isFetching || graphQuery.isFetching
+
+  // Auto-select first page when none is selected
+  useEffect(() => {
+    if (!pageId && pages.length > 0) {
+      setWikiPageId(pages[0].id)
+    }
+  }, [pageId, pages, setWikiPageId])
+
+  // Initialise drafts when opening editor
+  function handleStartEdit() {
+    if (!activePage) return
+    setDraftTitle(activePage.title)
+    setDraftBody(activePage.bodyMarkdown)
+    setIsEditing(true)
+  }
+
+  function invalidateWiki(id?: string) {
+    queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
+    queryClient.invalidateQueries({ queryKey: ['wikiGraph'] })
+    if (id) {
+      queryClient.invalidateQueries({ queryKey: ['wikiPage', id] })
+      queryClient.invalidateQueries({ queryKey: ['wikiPageSources', id] })
     }
   }
 
-  useEffect(() => {
-    void loadWiki(selectedPageId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPageId])
-
-  async function handleSelectPage(pageId: string) {
-    setIsEditing(false)
-    onSelectPage(pageId)
-  }
-
-  async function handleSave() {
-    if (!activePage || isSaving) return
-    setIsSaving(true)
-    setError(null)
-    try {
-      const updated = await updateWikiPage(activePage.id, {
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      updateWikiPage(pageId!, {
         title: draftTitle,
         bodyMarkdown: draftBody,
         changeSummary: 'Updated from Lex-Wiki',
-      })
-      setActivePage(updated)
+      }),
+    onSuccess: (updated) => {
       setIsEditing(false)
-      await loadWiki(updated.id)
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError))
-    } finally {
-      setIsSaving(false)
-    }
-  }
+      setMutationError(null)
+      invalidateWiki(updated.id)
+    },
+    onError: (err) => setMutationError(getErrorMessage(err)),
+  })
 
-  async function handleDelete() {
-    if (!activePage || isDeleting) return
-    const confirmed = window.confirm(`Delete "${activePage.title}"? This cannot be undone.`)
-    if (!confirmed) return
-    setIsDeleting(true)
-    setError(null)
-    try {
-      await deleteWikiPage(activePage.id)
-      setActivePage(null)
-      setSources([])
-      onSelectPage(null)
-      await loadWiki(null)
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError))
-    } finally {
-      setIsDeleting(false)
-    }
-  }
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteWikiPage(pageId!),
+    onSuccess: () => {
+      setMutationError(null)
+      setWikiPageId(null)
+      invalidateWiki()
+    },
+    onError: (err) => setMutationError(getErrorMessage(err)),
+  })
 
-  async function handlePublish() {
-    if (!activePage || isSaving) return
-    setIsSaving(true)
-    setError(null)
-    try {
-      const updated = await publishWikiPage(activePage.id)
-      setActivePage(updated)
-      await loadWiki(updated.id)
-    } catch (caughtError) {
-      setError(getErrorMessage(caughtError))
-    } finally {
-      setIsSaving(false)
-    }
-  }
+  const publishMutation = useMutation({
+    mutationFn: () => publishWikiPage(pageId!),
+    onSuccess: (updated) => {
+      setMutationError(null)
+      invalidateWiki(updated.id)
+    },
+    onError: (err) => setMutationError(getErrorMessage(err)),
+  })
+
+  const isSaving = saveMutation.isPending || publishMutation.isPending
+  const isDeleting = deleteMutation.isPending
+
+  const error = mutationError ?? pagesQuery.error?.message ?? pageQuery.error?.message ?? null
 
   const filteredPages = useMemo(() => {
     const query = filter.trim().toLowerCase()
@@ -145,20 +118,37 @@ export function WikiPanel({
     )
   }, [filter, pages])
 
+  function handleSelectPage(id: string) {
+    setIsEditing(false)
+    setWikiPageId(id)
+  }
+
+  async function handleDelete() {
+    if (!activePage || isDeleting) return
+    if (!window.confirm(`Delete "${activePage.title}"? This cannot be undone.`)) return
+    deleteMutation.mutate()
+  }
+
+  function handleRefresh() {
+    invalidateWiki(pageId ?? undefined)
+  }
+
   return (
     <section className="flex h-full flex-col bg-white">
       <header className="flex h-14 items-center justify-between border-b border-neutral-100 px-4 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-neutral-900">Lex-Wiki</h2>
-            <p className="text-xs text-neutral-500">Draft, publish, and browse generated matter knowledge.</p>
+            <p className="text-xs text-neutral-500">
+              Draft, publish, and browse generated matter knowledge.
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={onBackToDocuments} size="sm" variant="secondary">
+          <Button onClick={selectDocuments} size="sm" variant="secondary">
             Documents
           </Button>
-          <Button onClick={() => void loadWiki(selectedPageId)} disabled={isLoading} size="sm" variant="secondary">
+          <Button onClick={handleRefresh} disabled={isLoading} size="sm" variant="secondary">
             <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''} />
             Refresh
           </Button>
@@ -181,9 +171,11 @@ export function WikiPanel({
                 {filteredPages.map((page) => (
                   <button
                     key={page.id}
-                    onClick={() => void handleSelectPage(page.id)}
+                    onClick={() => handleSelectPage(page.id)}
                     className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50 ${
-                      activePage?.id === page.id ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-700'
+                      activePage?.id === page.id
+                        ? 'bg-neutral-100 text-neutral-950'
+                        : 'text-neutral-700'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -223,12 +215,17 @@ export function WikiPanel({
                       className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-xl font-semibold outline-none focus:border-neutral-400"
                     />
                   ) : (
-                    <h1 className="text-2xl font-semibold tracking-tight text-neutral-950">{activePage.title}</h1>
+                    <h1 className="text-2xl font-semibold tracking-tight text-neutral-950">
+                      {activePage.title}
+                    </h1>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
                     <StatusBadge status={activePage.status} />
                     <span>{labelPageType(activePage.pageType)}</span>
-                    <span>Author: {activePage.author?.fullName || activePage.author?.email || 'Unknown'}</span>
+                    <span>
+                      Author:{' '}
+                      {activePage.author?.fullName || activePage.author?.email || 'Unknown'}
+                    </span>
                     <span>Added {formatDateTime(activePage.createdAt)}</span>
                     <span>Latest edit {formatDateTime(activePage.updatedAt)}</span>
                   </div>
@@ -236,10 +233,20 @@ export function WikiPanel({
                 <div className="flex items-center gap-2">
                   {isEditing ? (
                     <>
-                      <Button onClick={() => setIsEditing(false)} disabled={isSaving} size="sm" variant="secondary">
+                      <Button
+                        onClick={() => setIsEditing(false)}
+                        disabled={isSaving}
+                        size="sm"
+                        variant="secondary"
+                      >
                         Cancel
                       </Button>
-                      <Button onClick={() => void handleSave()} disabled={isSaving} size="sm" variant="primary">
+                      <Button
+                        onClick={() => saveMutation.mutate()}
+                        disabled={isSaving}
+                        size="sm"
+                        variant="primary"
+                      >
                         <Save size={14} />
                         Save
                       </Button>
@@ -247,12 +254,17 @@ export function WikiPanel({
                   ) : (
                     <>
                       {activePage.status === 'draft' && (
-                        <Button onClick={() => void handlePublish()} disabled={isSaving} size="sm" variant="primary">
+                        <Button
+                          onClick={() => publishMutation.mutate()}
+                          disabled={isSaving}
+                          size="sm"
+                          variant="primary"
+                        >
                           <UploadCloud size={14} />
                           Publish
                         </Button>
                       )}
-                      <Button onClick={() => setIsEditing(true)} size="sm" variant="secondary">
+                      <Button onClick={handleStartEdit} size="sm" variant="secondary">
                         Edit
                       </Button>
                       <Button
@@ -298,10 +310,10 @@ export function WikiPanel({
                 Graph
               </div>
               <WikiGraphCanvas
-                  graph={graph}
-                  activePageId={activePage?.id ?? null}
-                  onSelectPage={(id) => void handleSelectPage(id)}
-                />
+                graph={graph}
+                activePageId={activePage?.id ?? null}
+                onSelectPage={handleSelectPage}
+              />
             </section>
 
             <section>
@@ -312,7 +324,9 @@ export function WikiPanel({
                 <div className="space-y-2">
                   {sources.map((source) => (
                     <div key={source.id} className="rounded-lg border border-neutral-200 bg-white p-3">
-                      <div className="text-xs font-semibold text-neutral-800">{source.citationLabel}</div>
+                      <div className="text-xs font-semibold text-neutral-800">
+                        {source.citationLabel}
+                      </div>
                       {source.relevanceNote && (
                         <div className="mt-1 text-xs text-neutral-500">{source.relevanceNote}</div>
                       )}
@@ -344,7 +358,11 @@ function StatusBadge({ status }: { status: WikiPage['status'] }) {
       : status === 'archived'
         ? 'border-neutral-200 bg-neutral-100 text-neutral-500'
         : 'border-amber-100 bg-amber-50 text-amber-700'
-  return <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${className}`}>{status}</span>
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${className}`}>
+      {status}
+    </span>
+  )
 }
 
 function renderInline(text: string): React.ReactNode {
@@ -357,7 +375,11 @@ function renderInline(text: string): React.ReactNode {
       return <em key={i}>{part.slice(1, -1)}</em>
     }
     if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={i} className="rounded bg-neutral-100 px-1 font-mono text-[0.875em]">{part.slice(1, -1)}</code>
+      return (
+        <code key={i} className="rounded bg-neutral-100 px-1 font-mono text-[0.875em]">
+          {part.slice(1, -1)}
+        </code>
+      )
     }
     return part
   })
@@ -370,19 +392,26 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
       {blocks.map((block, index) => {
         const trimmed = block.trim()
         if (!trimmed) return null
-        if (trimmed === '---') {
-          return <hr key={index} className="border-neutral-200" />
-        }
-        if (trimmed.startsWith('### ')) {
-          return <h3 key={index} className="pt-1 text-base font-semibold text-neutral-950">{renderInline(trimmed.slice(4))}</h3>
-        }
-        if (trimmed.startsWith('## ')) {
-          return <h2 key={index} className="pt-2 text-lg font-semibold text-neutral-950">{renderInline(trimmed.slice(3))}</h2>
-        }
-        if (trimmed.startsWith('# ')) {
-          return <h1 key={index} className="text-xl font-semibold text-neutral-950">{renderInline(trimmed.slice(2))}</h1>
-        }
-        if (trimmed.split('\n').every((line) => line.trim().startsWith('- '))) {
+        if (trimmed === '---') return <hr key={index} className="border-neutral-200" />
+        if (trimmed.startsWith('### '))
+          return (
+            <h3 key={index} className="pt-1 text-base font-semibold text-neutral-950">
+              {renderInline(trimmed.slice(4))}
+            </h3>
+          )
+        if (trimmed.startsWith('## '))
+          return (
+            <h2 key={index} className="pt-2 text-lg font-semibold text-neutral-950">
+              {renderInline(trimmed.slice(3))}
+            </h2>
+          )
+        if (trimmed.startsWith('# '))
+          return (
+            <h1 key={index} className="text-xl font-semibold text-neutral-950">
+              {renderInline(trimmed.slice(2))}
+            </h1>
+          )
+        if (trimmed.split('\n').every((line) => line.trim().startsWith('- ')))
           return (
             <ul key={index} className="list-disc space-y-1 pl-5">
               {trimmed.split('\n').map((line, lineIndex) => (
@@ -390,13 +419,15 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
               ))}
             </ul>
           )
-        }
-        return <p key={index} className="whitespace-pre-wrap">{renderInline(trimmed)}</p>
+        return (
+          <p key={index} className="whitespace-pre-wrap">
+            {renderInline(trimmed)}
+          </p>
+        )
       })}
     </div>
   )
 }
-
 
 function labelPageType(value: string) {
   return value.replace(/_/g, ' ')

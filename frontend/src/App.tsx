@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Gauge, Menu, Sparkles } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from './components/ChatPanel'
 import { Button } from './components/Button'
 import { Sidebar } from './components/Sidebar'
@@ -10,6 +11,7 @@ import { DocumentsPanel } from './components/DocumentsPanel'
 import { WikiPanel } from './components/WikiPanel'
 import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle, uploadDocument } from './lib/api'
 import type { ChatModel, ChatThread, Message } from './types/workspace'
+import { useViewStore } from './store/viewStore'
 
 const CHAT_MODELS: Array<{
   id: ChatModel
@@ -41,100 +43,77 @@ function App() {
     const saved = localStorage.getItem('user')
     return saved ? JSON.parse(saved) : null
   })
-  const [threads, setThreads] = useState<ChatThread[]>([])
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null) // null means new chat; special panels use string keys
+
+  const queryClient = useQueryClient()
+  const { current, startNewChat, selectThread, selectWiki, selectDocuments, selectMemories } = useViewStore()
+
+  const threadId = current.view === 'chat' ? current.threadId : null
+
+  // Server state — threads and messages via TanStack Query
+  const { data: threads = [] } = useQuery({
+    queryKey: ['threads'],
+    queryFn: listChatThreads,
+    enabled: isAuthenticated,
+  })
+
+  const { data: serverMessages = [], isFetching: isFetchingMessages } = useQuery({
+    queryKey: ['messages', threadId],
+    queryFn: () => listThreadMessages(threadId!),
+    enabled: !!threadId && isAuthenticated,
+  })
+
+  // Local UI state
   const [messages, setMessages] = useState<Message[]>([])
   const [prompt, setPrompt] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const [isResponding, setIsResponding] = useState(false)
   const [isUploadingComposerFile, setIsUploadingComposerFile] = useState(false)
   const [composerAttachmentStatus, setComposerAttachmentStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState<ChatModel>(getSavedChatModel)
-  const [selectedWikiPageId, setSelectedWikiPageId] = useState<string | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
-  const hasAutoSelectedThreadRef = useRef(false)
+  const hasAutoSelectedRef = useRef(false)
 
-  const activeThread = useMemo(
-    () => threads.find((thread) => thread.id === activeThreadId) ?? null,
-    [activeThreadId, threads],
-  )
-
-  // Initial load
+  // Auto-select first thread on initial load
   useEffect(() => {
-    if (!isAuthenticated) return
-
-    let isMounted = true
-
-    async function loadThreads() {
-      try {
-        const nextThreads = await listChatThreads()
-        if (!isMounted) return
-        setThreads(nextThreads)
-        if (!hasAutoSelectedThreadRef.current && nextThreads.length > 0) {
-          hasAutoSelectedThreadRef.current = true
-          setActiveThreadId(nextThreads[0].id)
-        }
-      } catch (caughtError) {
-        if (isMounted) {
-          setError(getErrorMessage(caughtError))
-        }
-      }
+    if (!hasAutoSelectedRef.current && threads.length > 0) {
+      hasAutoSelectedRef.current = true
+      selectThread(threads[0].id)
     }
+  }, [threads, selectThread])
 
-    void loadThreads()
-    return () => { isMounted = false }
-  }, [isAuthenticated])
-
-  // Load messages when active thread changes
+  // Abort any active stream when the view changes (prevents snap-back and stale streams)
   useEffect(() => {
-    if (
-      !isAuthenticated ||
-      !activeThreadId ||
-      activeThreadId === 'memories' ||
-      activeThreadId === 'documents' ||
-      activeThreadId === 'wiki'
-    ) {
-      if (
-        !activeThreadId ||
-        activeThreadId === 'memories' ||
-        activeThreadId === 'documents' ||
-        activeThreadId === 'wiki'
-      ) {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    // isResponding is reset in the stream's finally block once the abort propagates
+  }, [current])
+
+  // Sync server messages to local state whenever not actively streaming
+  useEffect(() => {
+    if (!isResponding) {
+      setMessages(serverMessages)
+    }
+  }, [serverMessages, isResponding])
+
+  // Clear local messages when not in a chat thread
+  useEffect(() => {
+    if (current.view !== 'chat' || current.threadId === null) {
+      if (!isResponding) {
         setMessages([])
       }
-      return
     }
+  }, [current, isResponding])
 
-    let isMounted = true
+  const activeThread = useMemo(
+    () => threads.find((t) => t.id === threadId) ?? null,
+    [threadId, threads],
+  )
 
-    async function loadMessages(threadId: string) {
-      setIsLoading(true)
-      setError(null)
-
-      try {
-        const nextMessages = await listThreadMessages(threadId)
-        if (isMounted) {
-          setMessages(nextMessages)
-        }
-      } catch (caughtError) {
-        if (isMounted) {
-          setError(getErrorMessage(caughtError))
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    void loadMessages(activeThreadId)
-    return () => { isMounted = false }
-  }, [activeThreadId, isAuthenticated])
+  // isLoading blocks re-submission; isFetchingMessages prevents submitting before thread history loads
+  const isLoading = isFetchingMessages || isResponding
 
   async function handleLoginSuccess(credential: string) {
-    setIsLoading(true)
     setError(null)
     try {
       const response = await loginWithGoogle(credential)
@@ -144,8 +123,6 @@ function App() {
       setIsAuthenticated(true)
     } catch (caughtError) {
       setError(getErrorMessage(caughtError))
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -156,31 +133,17 @@ function App() {
     localStorage.removeItem('user')
     setIsAuthenticated(false)
     setUser(null)
-    setThreads([])
-    setActiveThreadId(null)
-    setMessages([])
+    queryClient.clear()
+    startNewChat()
     setIsSidebarOpen(false)
-    setIsLoading(false)
     setIsResponding(false)
-  }
-
-  async function refreshThreads(nextActiveThreadId: string) {
-    try {
-      const nextThreads = await listChatThreads()
-      setThreads(nextThreads)
-      setActiveThreadId(nextActiveThreadId)
-    } catch (err) {
-      setError(getErrorMessage(err))
-    }
+    hasAutoSelectedRef.current = false
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmedPrompt = prompt.trim()
-
-    if (!trimmedPrompt || isLoading) {
-      return
-    }
+    if (!trimmedPrompt || isLoading) return
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -194,10 +157,9 @@ function App() {
       body: '',
     }
 
-    setMessages((currentMessages) => [...currentMessages, userMessage, assistantDraft])
+    setMessages((curr) => [...curr, userMessage, assistantDraft])
     setPrompt('')
     setError(null)
-    setIsLoading(true)
     setIsResponding(true)
     const controller = new AbortController()
     streamAbortRef.current = controller
@@ -207,67 +169,50 @@ function App() {
         message: trimmedPrompt,
         model: selectedModel,
         signal: controller.signal,
-        threadId:
-          activeThreadId === 'memories' || activeThreadId === 'documents' || activeThreadId === 'wiki'
-            ? null
-            : activeThreadId,
-        onThread: (threadId, title) => {
-          setThreads((currentThreads) => {
-            if (currentThreads.some((thread) => thread.id === threadId)) {
-              return currentThreads
-            }
-
+        threadId,
+        onThread: (tid, title) => {
+          // Optimistically add the new thread so the sidebar updates immediately
+          queryClient.setQueryData(['threads'], (old: ChatThread[] = []) => {
+            if (old.some((t) => t.id === tid)) return old
             return [
-              {
-                id: threadId,
-                title,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              },
-              ...currentThreads,
+              { id: tid, title, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+              ...old,
             ]
           })
-          // If this was a new thread, we might want to set it active
-          // but we'll wait for onDone to do a full refresh to be safe
         },
         onToken: (content) => {
-          setMessages((currentMessages) =>
-            currentMessages.map((message) =>
-              message.id === assistantDraftId
-                ? { ...message, body: `${message.body}${content}` }
-                : message,
+          setMessages((curr) =>
+            curr.map((m) =>
+              m.id === assistantDraftId ? { ...m, body: `${m.body}${content}` } : m,
             ),
           )
         },
         onDone: (response) => {
-          setMessages((currentMessages) =>
-            currentMessages.map((message) =>
-              message.id === assistantDraftId ? response.message : message,
-            ),
+          setMessages((curr) =>
+            curr.map((m) => (m.id === assistantDraftId ? response.message : m)),
           )
-          void refreshThreads(response.threadId)
+          queryClient.invalidateQueries({ queryKey: ['threads'] })
+          queryClient.invalidateQueries({ queryKey: ['messages', response.threadId] })
+          // Only navigate if the user hasn't moved to a different panel mid-stream
+          if (useViewStore.getState().current.view === 'chat') {
+            selectThread(response.threadId)
+          }
         },
       })
     } catch (caughtError) {
       if (isAbortError(caughtError)) {
-        setMessages((currentMessages) =>
-          currentMessages.filter(
-            (message) => message.id !== assistantDraftId || message.body.trim().length > 0,
-          ),
+        setMessages((curr) =>
+          curr.filter((m) => m.id !== assistantDraftId || m.body.trim().length > 0),
         )
         return
       }
-
-      setMessages((currentMessages) =>
-        currentMessages.filter(
-          (message) => message.id !== assistantDraftId || message.body.trim().length > 0,
-        ),
+      setMessages((curr) =>
+        curr.filter((m) => m.id !== assistantDraftId || m.body.trim().length > 0),
       )
       setError(getErrorMessage(caughtError))
     } finally {
       if (streamAbortRef.current === controller) {
         streamAbortRef.current = null
-        setIsLoading(false)
         setIsResponding(false)
       }
     }
@@ -282,9 +227,10 @@ function App() {
 
     try {
       const uploaded = await uploadDocument(file)
-      const statusLabel = uploaded.status === 'ready'
-        ? 'ready for search'
-        : `${uploaded.status}; ingestion will continue in the background`
+      const statusLabel =
+        uploaded.status === 'ready'
+          ? 'ready for search'
+          : `${uploaded.status}; ingestion will continue in the background`
       setComposerAttachmentStatus(`${uploaded.filename} uploaded (${statusLabel})`)
     } catch (caughtError) {
       setComposerAttachmentStatus(null)
@@ -297,56 +243,7 @@ function App() {
   function handleStopResponse() {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
-    setIsLoading(false)
     setIsResponding(false)
-  }
-
-  function startNewChat() {
-    streamAbortRef.current?.abort()
-    streamAbortRef.current = null
-    setActiveThreadId(null)
-    setMessages([])
-    setPrompt('')
-    setError(null)
-    setIsLoading(false)
-    setIsResponding(false)
-  }
-
-  function selectThread(threadId: string) {
-    streamAbortRef.current?.abort()
-    streamAbortRef.current = null
-    setIsResponding(false)
-    setActiveThreadId(threadId || null)
-    if (!threadId) {
-      setMessages([])
-      setPrompt('')
-      setError(null)
-    }
-  }
-
-  function selectMemories() {
-    streamAbortRef.current?.abort()
-    streamAbortRef.current = null
-    setIsLoading(false)
-    setIsResponding(false)
-    setActiveThreadId('memories')
-  }
-
-  function selectDocuments() {
-    streamAbortRef.current?.abort()
-    streamAbortRef.current = null
-    setIsLoading(false)
-    setIsResponding(false)
-    setActiveThreadId('documents')
-  }
-
-  function selectWiki(pageId: string | null = selectedWikiPageId) {
-    streamAbortRef.current?.abort()
-    streamAbortRef.current = null
-    setIsLoading(false)
-    setIsResponding(false)
-    setSelectedWikiPageId(pageId)
-    setActiveThreadId('wiki')
   }
 
   function handleModelChange(model: ChatModel) {
@@ -371,33 +268,21 @@ function App() {
   return (
     <div className="flex h-screen bg-[#fcfcfb] text-neutral-900 overflow-hidden">
       <Sidebar
-        activeThreadId={activeThreadId}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
-        onNewChat={startNewChat}
-        onSelectThread={selectThread}
-        onSelectMemories={selectMemories}
-        onSelectDocuments={selectDocuments}
-        onSelectWiki={() => selectWiki()}
         threads={threads}
         userFullName={user?.full_name ?? ''}
         userInitials={userInitials}
+        onLogout={handleLogout}
       />
 
       <main className="flex-1 flex flex-col min-w-0 bg-white lg:rounded-tl-2xl lg:border-t lg:border-l lg:border-neutral-200 lg:shadow-sm lg:my-2 lg:mr-2">
-        {activeThreadId === 'memories' ? (
+        {current.view === 'memories' ? (
           <MemoriesPanel />
-        ) : activeThreadId === 'documents' ? (
-          <DocumentsPanel
-            selectedModel={selectedModel}
-            onOpenWikiPage={(pageId) => selectWiki(pageId)}
-          />
-        ) : activeThreadId === 'wiki' ? (
-          <WikiPanel
-            selectedPageId={selectedWikiPageId}
-            onSelectPage={setSelectedWikiPageId}
-            onBackToDocuments={selectDocuments}
-          />
+        ) : current.view === 'documents' ? (
+          <DocumentsPanel selectedModel={selectedModel} />
+        ) : current.view === 'wiki' ? (
+          <WikiPanel />
         ) : (
           <>
             <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">
@@ -432,17 +317,17 @@ function App() {
                         size="sm"
                         variant={isSelected ? 'selected' : 'secondary'}
                       >
-                        {model.id === 'deepseek-v4-flash' ? <Gauge size={14} /> : <Sparkles size={14} />}
+                        {model.id === 'deepseek-v4-flash' ? (
+                          <Gauge size={14} />
+                        ) : (
+                          <Sparkles size={14} />
+                        )}
                         <span className="hidden sm:inline">{model.label}</span>
                       </Button>
                     )
                   })}
                 </div>
-                <Button
-                  onClick={handleLogout}
-                  size="sm"
-                  variant="secondary"
-                >
+                <Button onClick={handleLogout} size="sm" variant="secondary">
                   Log out
                 </Button>
                 <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.25 rounded-full bg-emerald-50 text-[11px] font-medium text-emerald-700 border border-emerald-100">
@@ -478,9 +363,7 @@ function App() {
 }
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message
-  }
+  if (error instanceof Error) return error.message
   return 'Something went wrong.'
 }
 
