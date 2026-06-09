@@ -46,6 +46,10 @@ frontend/
 
 The current frontend is a static prototype. The current backend exposes health/config endpoints plus DeepSeek-backed chat routes persisted to Postgres.
 
+The Knowledge Bank implementation adds authenticated `/teams`, `/matters`, `/kb/*`, and
+`/audit-log` routes. It currently follows the RFC's single-firm mock super-user mode: scopes and
+roles are stored, but target RBAC is not yet enforced.
+
 ## Local Commands
 
 Backend:

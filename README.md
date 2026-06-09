@@ -12,7 +12,7 @@ The MVP should prove this flow:
 2. The user uploads a PDF or DOCX for a matter.
 3. The backend extracts text, chunks it, embeds it, and marks the document ready.
 4. The user asks a matter-specific legal review question.
-5. The chat endpoint retrieves relevant document chunks and memories.
+5. The chat endpoint retrieves relevant document chunks, memories, and scoped Knowledge Bank entries.
 6. The answer includes document references or citations.
 7. The system suggests a useful personal or matter memory.
 8. The admin view shows one aggregated insight, such as repeated junior questions.
@@ -44,6 +44,7 @@ Suggested routes:
 - `/workspace`
 - `/chat`
 - `/documents`
+- `/knowledge-bank`
 - `/memories`
 - `/admin`
 
@@ -77,8 +78,14 @@ Core tables to add:
 - `workspaces`
 - `workspace_members`
 - `matters`
+- `teams`
+- `team_members`
+- `matter_members`
 - `documents`
 - `document_chunks`
+- `kb_entries`
+- `kb_access_log`
+- `pii_redactions`
 - `memories`
 - `chat_threads`
 - `chat_messages`
@@ -222,6 +229,27 @@ POST /documents/upload
 GET  /documents
 GET  /documents/{document_id}
 
+GET  /teams
+GET  /matters
+POST /matters
+GET  /matters/{matter_id}
+PATCH /matters/{matter_id}
+GET  /matters/{matter_id}/members
+POST /matters/{matter_id}/members
+DELETE /matters/{matter_id}/members/{user_id}
+
+GET    /kb/entries
+POST   /kb/entries
+POST   /kb/ingest/document/{document_id}
+GET    /kb/entries/{entry_id}
+GET    /kb/entries/{entry_id}/sources
+PATCH  /kb/entries/{entry_id}
+DELETE /kb/entries/{entry_id}
+POST   /kb/entries/{entry_id}/promote
+GET    /kb/entries/{entry_id}/redaction
+POST   /kb/entries/{entry_id}/approve-redaction
+GET    /audit-log
+
 POST /chat
 POST /chat/stream
 GET  /chat/threads
@@ -241,7 +269,18 @@ deepseek-v4-pro
 deepseek-v4-flash
 ```
 
-Every document, memory, and chat lookup must be scoped to the current user, workspace, and matter.
+`POST /chat` and `POST /chat/stream` also accept an optional `matter_id`. When provided,
+document retrieval and Knowledge Bank context are restricted to the active matter plus applicable
+team, firm-wide, and private entries.
+
+All `/teams`, `/matters`, `/kb/*`, and `/audit-log` routes require the authenticated bearer token.
+The current hackathon build follows `docs/rfc-knowledge-bank.md` super-user mode: role and scope
+metadata are persisted, but all authenticated users can operate across the single demo firm.
+Production RBAC enforcement must be enabled before confidential client data is used.
+
+Matter client names and retained original content in redaction records are encrypted at rest using
+an application key derived from `JWT_SECRET_KEY`. Changing that secret makes existing encrypted
+values unreadable, so production deployments must keep it stable and managed securely.
 
 ## Backend Service Plan
 

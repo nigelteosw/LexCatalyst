@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import User
+from app.services.organization_service import ensure_default_team
 
 
 def verify_google_token(token: str) -> dict[str, Any]:
@@ -66,5 +67,6 @@ def get_or_create_user(db: Session, google_info: dict[str, Any]) -> User:
         db.add(user)
         db.commit()
         db.refresh(user)
-    
+
+    ensure_default_team(db, user)
     return user

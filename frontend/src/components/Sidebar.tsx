@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
-  BookOpen,
+  BookMarked,
   Brain,
+  BriefcaseBusiness,
   Clock,
   FileText,
   HeartPulse,
@@ -9,11 +10,14 @@ import {
   Plus,
   X,
 } from 'lucide-react'
-import type { ChatThread } from '../types/workspace'
+import type { ChatThread, Matter } from '../types/workspace'
 import { useViewStore } from '../store/viewStore'
 
 type SidebarProps = {
   threads: ChatThread[]
+  matters: Matter[]
+  selectedMatterId: string | null
+  onMatterChange: (matterId: string | null) => void
   isOpen: boolean
   onClose: () => void
   onLogout: () => void
@@ -35,6 +39,9 @@ const sidebarNavActiveClass = 'bg-white/10 text-white'
 
 export function Sidebar({
   threads,
+  matters,
+  selectedMatterId,
+  onMatterChange,
   isOpen,
   onClose,
   onLogout,
@@ -47,7 +54,7 @@ export function Sidebar({
     selectThread,
     selectMemories,
     selectDocuments,
-    selectWiki,
+    selectKnowledgeBank,
     selectWellbeing,
   } = useViewStore()
 
@@ -148,6 +155,19 @@ export function Sidebar({
           >
             <button
               onClick={() => {
+                selectKnowledgeBank()
+                closeMobile()
+              }}
+              className={`${sidebarActionClass} ${
+                current.view === 'knowledge_bank' ? sidebarNavActiveClass : sidebarNavClass
+              }`}
+              type="button"
+            >
+              <BookMarked size={14} />
+              Knowledge Bank
+            </button>
+            <button
+              onClick={() => {
                 selectMemories()
                 closeMobile()
               }}
@@ -174,19 +194,6 @@ export function Sidebar({
             </button>
             <button
               onClick={() => {
-                selectWiki()
-                closeMobile()
-              }}
-              className={`${sidebarActionClass} ${
-                current.view === 'wiki' ? sidebarNavActiveClass : sidebarNavClass
-              }`}
-              type="button"
-            >
-              <BookOpen size={14} />
-              Lex-Wiki
-            </button>
-            <button
-              onClick={() => {
                 selectWellbeing()
                 closeMobile()
               }}
@@ -205,6 +212,40 @@ export function Sidebar({
             aria-label="Recent chats"
             className="lex-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-2"
           >
+            {matters.length > 0 && (
+              <>
+                <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.09em] text-white/30">
+                  <BriefcaseBusiness size={11} />
+                  Recent matters
+                </div>
+                <div className="mb-3 space-y-0.5">
+                  {matters.slice(0, 4).map((matter) => (
+                    <button
+                      key={matter.id}
+                      className={`${sidebarActionClass} py-1.5 ${
+                        selectedMatterId === matter.id ? sidebarNavActiveClass : sidebarNavClass
+                      }`}
+                      onClick={() => {
+                        onMatterChange(matter.id)
+                        selectKnowledgeBank()
+                        closeMobile()
+                      }}
+                      type="button"
+                    >
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[11.5px] font-normal">
+                          {matter.title}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[9.5px] text-white/25">
+                          {matter.caseNumber}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.09em] text-white/30">
               <Clock size={11} />
               Recent chats

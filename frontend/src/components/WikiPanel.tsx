@@ -28,7 +28,7 @@ export function WikiPanel() {
   const [mutationError, setMutationError] = useState<string | null>(null)
 
   // Queries
-  const pagesQuery = useQuery({ queryKey: ['wikiPages'], queryFn: listWikiPages })
+  const pagesQuery = useQuery({ queryKey: ['wikiPages'], queryFn: () => listWikiPages() })
   const graphQuery = useQuery({ queryKey: ['wikiGraph'], queryFn: getWikiGraph })
   const pageQuery = useQuery({
     queryKey: ['wikiPage', pageId],

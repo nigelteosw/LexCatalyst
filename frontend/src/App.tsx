@@ -10,7 +10,15 @@ import { MemoriesPanel } from './components/MemoriesPanel'
 import { DocumentsPanel } from './components/DocumentsPanel'
 import { WikiPanel } from './components/WikiPanel'
 import { WellbeingPanel } from './components/WellbeingPanel'
-import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle, uploadDocument } from './lib/api'
+import { KnowledgeBankPanel } from './components/KnowledgeBankPanel'
+import {
+  listChatThreads,
+  listMatters,
+  listThreadMessages,
+  streamChatMessage,
+  loginWithGoogle,
+  uploadDocument,
+} from './lib/api'
 import type { ChatModel, ChatThread, Message } from './types/workspace'
 import { useViewStore } from './store/viewStore'
 
@@ -56,6 +64,11 @@ function App() {
     queryFn: listChatThreads,
     enabled: isAuthenticated,
   })
+  const { data: matters = [] } = useQuery({
+    queryKey: ['matters'],
+    queryFn: () => listMatters('active'),
+    enabled: isAuthenticated,
+  })
 
   const { data: serverMessages = [], isFetching: isFetchingMessages } = useQuery({
     queryKey: ['messages', threadId],
@@ -72,6 +85,9 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState<ChatModel>(getSavedChatModel)
+  const [selectedMatterId, setSelectedMatterId] = useState<string | null>(
+    () => localStorage.getItem('selectedMatterId'),
+  )
   const streamAbortRef = useRef<AbortController | null>(null)
   const hasAutoSelectedRef = useRef(false)
 
@@ -173,6 +189,7 @@ function App() {
       await streamChatMessage({
         message: trimmedPrompt,
         model: selectedModel,
+        matterId: selectedMatterId,
         signal: controller.signal,
         threadId,
         onThread: (tid, title) => {
@@ -235,7 +252,7 @@ function App() {
     setError(null)
 
     try {
-      const uploaded = await uploadDocument(file)
+      const uploaded = await uploadDocument(file, selectedMatterId)
       const statusLabel =
         uploaded.status === 'ready'
           ? 'ready for search'
@@ -260,6 +277,15 @@ function App() {
     localStorage.setItem('chatModel', model)
   }
 
+  function handleMatterChange(matterId: string | null) {
+    setSelectedMatterId(matterId)
+    if (matterId) {
+      localStorage.setItem('selectedMatterId', matterId)
+    } else {
+      localStorage.removeItem('selectedMatterId')
+    }
+  }
+
   const userInitials = useMemo(() => {
     if (!user?.full_name) return 'LC'
     return user.full_name
@@ -278,8 +304,11 @@ function App() {
     <div className="flex h-screen bg-[#fcfcfb] text-neutral-900 overflow-hidden">
       <Sidebar
         isOpen={isSidebarOpen}
+        matters={matters}
         onClose={() => setIsSidebarOpen(false)}
+        onMatterChange={handleMatterChange}
         threads={threads}
+        selectedMatterId={selectedMatterId}
         userFullName={user?.full_name ?? ''}
         userInitials={userInitials}
         onLogout={handleLogout}
@@ -289,11 +318,20 @@ function App() {
         {current.view === 'memories' ? (
           <MemoriesPanel />
         ) : current.view === 'documents' ? (
-          <DocumentsPanel selectedModel={selectedModel} />
+          <DocumentsPanel
+            selectedModel={selectedModel}
+            selectedMatterId={selectedMatterId}
+          />
         ) : current.view === 'wiki' ? (
           <WikiPanel />
         ) : current.view === 'wellbeing' ? (
           <WellbeingPanel />
+        ) : current.view === 'knowledge_bank' ? (
+          <KnowledgeBankPanel
+            matters={matters}
+            selectedMatterId={selectedMatterId}
+            onMatterChange={handleMatterChange}
+          />
         ) : (
           <>
             <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">
@@ -312,6 +350,19 @@ function App() {
                 </h2>
               </div>
               <div className="flex items-center gap-2">
+                <select
+                  aria-label="Active matter"
+                  className="hidden h-8 max-w-56 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs text-neutral-600 outline-none focus:border-neutral-400 md:block"
+                  onChange={(event) => handleMatterChange(event.target.value || null)}
+                  value={selectedMatterId ?? ''}
+                >
+                  <option value="">No matter selected</option>
+                  {matters.map((matter) => (
+                    <option key={matter.id} value={matter.id}>
+                      {matter.caseNumber} · {matter.title}
+                    </option>
+                  ))}
+                </select>
                 <div
                   className="flex items-center rounded-xl bg-neutral-100 p-1"
                   aria-label="Chat model"

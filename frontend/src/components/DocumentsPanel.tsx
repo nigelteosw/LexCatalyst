@@ -2,16 +2,23 @@ import { useRef, useState } from 'react'
 import { BookOpen, FileText, RefreshCcw, Trash2, UploadCloud } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from './Button'
-import { deleteDocument, ingestDocumentToWiki, listDocuments, listWikiPages, uploadDocument } from '../lib/api'
+import {
+  deleteDocument,
+  ingestDocumentToKnowledgeBank,
+  listDocuments,
+  listKnowledgeBankEntries,
+  uploadDocument,
+} from '../lib/api'
 import type { ChatModel, WorkspaceDocument } from '../types/workspace'
 import { useViewStore } from '../store/viewStore'
 
 type DocumentsPanelProps = {
   selectedModel: ChatModel
+  selectedMatterId: string | null
 }
 
-export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
-  const { selectWiki } = useViewStore()
+export function DocumentsPanel({ selectedModel, selectedMatterId }: DocumentsPanelProps) {
+  const { selectKnowledgeBank } = useViewStore()
   const queryClient = useQueryClient()
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -20,21 +27,28 @@ export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const documentsQuery = useQuery({ queryKey: ['documents'], queryFn: listDocuments })
-  const wikiPagesQuery = useQuery({ queryKey: ['wikiPages'], queryFn: listWikiPages })
+  const knowledgeEntriesQuery = useQuery({
+    queryKey: ['kbEntries'],
+    queryFn: () => listKnowledgeBankEntries(),
+  })
 
   const documents = documentsQuery.data ?? []
-  const wikiPages = wikiPagesQuery.data ?? []
-  const isLoading = documentsQuery.isFetching || wikiPagesQuery.isFetching
-  const error = mutationError ?? documentsQuery.error?.message ?? null
+  const knowledgeEntries = knowledgeEntriesQuery.data ?? []
+  const isLoading = documentsQuery.isFetching || knowledgeEntriesQuery.isFetching
+  const error =
+    mutationError ??
+    documentsQuery.error?.message ??
+    knowledgeEntriesQuery.error?.message ??
+    null
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadDocument(file),
+    mutationFn: (file: File) => uploadDocument(file, selectedMatterId),
     onSuccess: () => {
       setSelectedFile(null)
       setMutationError(null)
       if (inputRef.current) inputRef.current.value = ''
       queryClient.invalidateQueries({ queryKey: ['documents'] })
-      queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
+      queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
     },
     onError: (err) => setMutationError(getErrorMessage(err)),
   })
@@ -44,19 +58,19 @@ export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
     onSuccess: () => {
       setMutationError(null)
       queryClient.invalidateQueries({ queryKey: ['documents'] })
-      queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
+      queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
     },
     onError: (err) => setMutationError(getErrorMessage(err)),
   })
 
-  async function handleGenerateWikiPage(document: WorkspaceDocument) {
+  async function handleAddToKnowledgeBank(document: WorkspaceDocument) {
     if (document.status !== 'ready' || ingestingDocumentId) return
     setIngestingDocumentId(document.id)
     setMutationError(null)
     try {
-      const page = await ingestDocumentToWiki(document.id, selectedModel)
-      queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
-      selectWiki(page.id)
+      const entry = await ingestDocumentToKnowledgeBank(document.id, selectedModel)
+      queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
+      selectKnowledgeBank(entry.id)
     } catch (err) {
       setMutationError(getErrorMessage(err))
     } finally {
@@ -75,7 +89,7 @@ export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
 
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ['documents'] })
-    queryClient.invalidateQueries({ queryKey: ['wikiPages'] })
+    queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
   }
 
   return (
@@ -101,7 +115,8 @@ export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
                   {selectedFile ? selectedFile.name : 'Choose a PDF or DOCX'}
                 </div>
                 <div className="text-xs text-neutral-500">
-                  Files are stored in R2, extracted, chunked, and embedded.
+                  Files are stored in R2, extracted, chunked, and embedded
+                  {selectedMatterId ? ' in the active matter.' : '.'}
                 </div>
               </div>
               <input
@@ -131,7 +146,9 @@ export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
         <div className="space-y-2">
           {documents.length > 0 ? (
             documents.map((document) => {
-              const wikiPage = wikiPages.find((page) => page.sourceDocumentId === document.id)
+              const knowledgeEntry = knowledgeEntries.find(
+                (entry) => entry.sourceDocumentId === document.id,
+              )
               const isGenerating = ingestingDocumentId === document.id
               const isDeleting = deleteMutation.isPending && deleteMutation.variables === document.id
               return (
@@ -152,9 +169,9 @@ export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
                     <div className="mt-1 text-xs text-neutral-500">
                       {document.chunkCount} chunks · Uploaded {formatDate(document.createdAt)}
                     </div>
-                    {wikiPage && (
+                    {knowledgeEntry && (
                       <div className="mt-1 text-xs text-neutral-500">
-                        Lex-Wiki: {wikiPage.title} ({wikiPage.status})
+                        Knowledge Bank: {knowledgeEntry.title} ({knowledgeEntry.scope.replace('_', ' ')})
                       </div>
                     )}
                     {document.errorMessage && (
@@ -162,25 +179,29 @@ export function DocumentsPanel({ selectedModel }: DocumentsPanelProps) {
                     )}
                   </div>
                   <div className="flex shrink-0 gap-2 sm:justify-end">
-                    {wikiPage ? (
-                      <Button onClick={() => selectWiki(wikiPage.id)} size="sm" variant="secondary">
+                    {knowledgeEntry ? (
+                      <Button
+                        onClick={() => selectKnowledgeBank(knowledgeEntry.id)}
+                        size="sm"
+                        variant="secondary"
+                      >
                         <BookOpen size={14} />
-                        Open wiki page
+                        Open Knowledge Bank
                       </Button>
                     ) : (
                       <Button
-                        onClick={() => void handleGenerateWikiPage(document)}
+                        onClick={() => void handleAddToKnowledgeBank(document)}
                         disabled={document.status !== 'ready' || !!ingestingDocumentId}
                         size="sm"
                         variant="secondary"
                         title={
                           document.status === 'ready'
-                            ? 'Generate wiki page'
+                            ? 'Generate a private Knowledge Bank summary'
                             : 'Document must be ready first'
                         }
                       >
                         <BookOpen size={14} />
-                        {isGenerating ? 'Generating...' : 'Generate wiki page'}
+                        {isGenerating ? 'Adding...' : 'Add to Knowledge Bank'}
                       </Button>
                     )}
                     <Button

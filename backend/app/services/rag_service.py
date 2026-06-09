@@ -32,6 +32,7 @@ async def search_documents(
     *,
     query: str,
     user_id: str,
+    matter_id: str | None = None,
     limit: int = 6,
 ) -> list[DocumentSearchResult]:
     if not query.strip() or not has_ready_documents(db, user_id):
@@ -43,9 +44,10 @@ async def search_documents(
         select(DocumentChunk, Document, distance)
         .join(Document, DocumentChunk.document_id == Document.id)
         .where(Document.user_id == user_id, Document.status == "ready")
-        .order_by(distance)
-        .limit(limit)
     )
+    if matter_id:
+        stmt = stmt.where(Document.matter_id == matter_id)
+    stmt = stmt.order_by(distance).limit(limit)
 
     results: list[DocumentSearchResult] = []
     for chunk, document, raw_distance in db.execute(stmt).all():

@@ -5,6 +5,19 @@ from pydantic import BaseModel, Field
 
 ChatModel = Literal["deepseek-v4-flash", "deepseek-v4-pro"]
 DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
+FirmRole = Literal["partner", "associate", "trainee"]
+MatterStatus = Literal["active", "closed", "archived"]
+KnowledgeBankScope = Literal["firm_wide", "team", "matter", "private"]
+KnowledgeBankEntryType = Literal[
+    "precedent",
+    "playbook",
+    "matter_note",
+    "partner_pref",
+    "style_guide",
+    "entity",
+    "clause",
+]
+PiiStatus = Literal["clean", "flagged", "pending_review", "redacted"]
 WikiPageStatus = Literal["draft", "published", "archived"]
 WikiPageType = Literal[
     "source_summary",
@@ -22,6 +35,7 @@ WikiPageType = Literal[
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     thread_id: str | None = None
+    matter_id: str | None = None
     model: ChatModel | None = None
 
 
@@ -56,6 +70,8 @@ class DocumentResponse(BaseModel):
     content_type: str
     status: DocumentStatus | str
     error_message: str | None = None
+    matter_id: str | None = None
+    team_id: str | None = None
     created_at: datetime
     updated_at: datetime
     chunk_count: int = 0
@@ -162,6 +178,9 @@ class MemoryResponse(BaseModel):
     category: str
     content: str
     confidence: float
+    scope: str = "personal"
+    matter_id: str | None = None
+    team_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -176,3 +195,130 @@ class MemoryExtractionCandidate(BaseModel):
 
 class MemoryExtractionResult(BaseModel):
     memories: list[MemoryExtractionCandidate]
+
+
+class TeamResponse(BaseModel):
+    id: str
+    name: str
+    practice_area: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MatterCreate(BaseModel):
+    team_id: str | None = None
+    title: str = Field(min_length=1, max_length=200)
+    case_number: str = Field(min_length=1, max_length=120)
+    client_name: str | None = Field(default=None, max_length=255)
+
+
+class MatterUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    case_number: str | None = Field(default=None, min_length=1, max_length=120)
+    client_name: str | None = Field(default=None, max_length=255)
+    status: MatterStatus | None = None
+
+
+class MatterResponse(BaseModel):
+    id: str
+    team_id: str
+    title: str
+    case_number: str
+    client_name: str | None = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    team: TeamResponse | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class MatterMemberCreate(BaseModel):
+    user_id: str
+    role: FirmRole = "associate"
+
+
+class MatterMemberResponse(BaseModel):
+    id: str
+    matter_id: str
+    user_id: str
+    role: str
+    granted_by: str | None = None
+    granted_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class KnowledgeBankEntryCreate(BaseModel):
+    team_id: str | None = None
+    matter_id: str | None = None
+    scope: KnowledgeBankScope
+    entry_type: KnowledgeBankEntryType
+    title: str = Field(min_length=1, max_length=200)
+    body_markdown: str = Field(min_length=1, max_length=80_000)
+    tags: list[str] = Field(default_factory=list, max_length=30)
+    pii_status: PiiStatus = "clean"
+
+
+class KnowledgeBankEntryUpdate(BaseModel):
+    team_id: str | None = None
+    matter_id: str | None = None
+    scope: KnowledgeBankScope | None = None
+    entry_type: KnowledgeBankEntryType | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    body_markdown: str | None = Field(default=None, min_length=1, max_length=80_000)
+    tags: list[str] | None = Field(default=None, max_length=30)
+    pii_status: PiiStatus | None = None
+
+
+class KnowledgeBankEntryResponse(BaseModel):
+    id: str
+    team_id: str | None = None
+    matter_id: str | None = None
+    source_entry_id: str | None = None
+    source_document_id: str | None = None
+    scope: str
+    entry_type: str
+    title: str
+    body_markdown: str
+    tags: list[str]
+    pii_status: str
+    created_by: str
+    created_by_role: str
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    team: TeamResponse | None = None
+    matter: MatterResponse | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class KnowledgeBankPromoteRequest(BaseModel):
+    target_scope: Literal["team", "firm_wide"]
+
+
+class RedactionApprovalRequest(BaseModel):
+    redacted_content: str | None = Field(default=None, min_length=1, max_length=80_000)
+    redacted_fields: dict[str, str] | None = None
+
+
+class RedactionProposalResponse(BaseModel):
+    entry: KnowledgeBankEntryResponse
+    redacted_fields: dict[str, str]
+    original_content: str
+    redacted_content: str
+
+
+class KnowledgeBankAccessLogResponse(BaseModel):
+    id: str
+    kb_entry_id: str | None = None
+    user_id: str
+    action: str
+    context_matter_id: str | None = None
+    context_thread_id: str | None = None
+    ip_address: str | None = None
+    timestamp: datetime
+
+    model_config = {"from_attributes": True}

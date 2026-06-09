@@ -20,6 +20,8 @@ export type WorkspaceDocument = {
   contentType: string
   status: DocumentStatus
   errorMessage?: string | null
+  matterId?: string | null
+  teamId?: string | null
   createdAt: string
   updatedAt: string
   chunkCount: number
@@ -109,4 +111,75 @@ export type WikiGraphEdge = {
 export type WikiGraph = {
   nodes: WikiGraphNode[]
   edges: WikiGraphEdge[]
+}
+
+export type Team = {
+  id: string
+  name: string
+  practiceArea?: string | null
+  createdAt: string
+}
+
+export type MatterStatus = 'active' | 'closed' | 'archived'
+
+export type Matter = {
+  id: string
+  teamId: string
+  title: string
+  caseNumber: string
+  clientName?: string | null
+  status: MatterStatus
+  createdAt: string
+  updatedAt: string
+  team?: Team | null
+}
+
+export type KnowledgeBankScope = 'firm_wide' | 'team' | 'matter' | 'private'
+export type KnowledgeBankEntryType =
+  | 'precedent'
+  | 'playbook'
+  | 'matter_note'
+  | 'partner_pref'
+  | 'style_guide'
+  | 'entity'
+  | 'clause'
+export type PiiStatus = 'clean' | 'flagged' | 'pending_review' | 'redacted'
+
+export type KnowledgeBankEntry = {
+  id: string
+  teamId?: string | null
+  matterId?: string | null
+  sourceEntryId?: string | null
+  sourceDocumentId?: string | null
+  scope: KnowledgeBankScope
+  entryType: KnowledgeBankEntryType
+  title: string
+  bodyMarkdown: string
+  tags: string[]
+  piiStatus: PiiStatus
+  createdBy: string
+  createdByRole: string
+  version: number
+  createdAt: string
+  updatedAt: string
+  team?: Team | null
+  matter?: Matter | null
+}
+
+export type RedactionProposal = {
+  entry: KnowledgeBankEntry
+  redactedFields: Record<string, string>
+  originalContent: string
+  redactedContent: string
+}
+
+export type KnowledgeBankAccessLog = {
+  id: string
+  entryId?: string | null
+  userId: string
+  action: 'read' | 'write' | 'share' | 'redact_applied' | string
+  contextMatterId?: string | null
+  contextThreadId?: string | null
+  ipAddress?: string | null
+  timestamp: string
 }

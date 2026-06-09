@@ -16,6 +16,7 @@ from app.services.rag_service import (
     format_document_context,
     search_documents,
 )
+from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
 from app.services.wiki_service import format_wiki_context, search_wiki_pages
 
 SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
@@ -157,6 +158,7 @@ def build_provider_messages(
     memories: list | None = None,
     document_results: list[DocumentSearchResult] | None = None,
     wiki_pages: list | None = None,
+    kb_entries: list | None = None,
     thread_summary: str | None = None,
 ) -> list[dict[str, str]]:
     system_content = SYSTEM_PROMPT
@@ -176,6 +178,16 @@ def build_provider_messages(
             f"{wiki_context}\n\n"
             "Use Lex-Wiki pages as synthesized matter context. "
             "When Lex-Wiki context and source document chunks disagree, rely on source chunks."
+        )
+
+    kb_context = format_kb_context(kb_entries or [])
+    if kb_context:
+        system_content += (
+            "\n\nKnowledge Bank Context:\n"
+            f"{kb_context}\n\n"
+            "Use applicable firm, team, and matter knowledge when relevant. "
+            "Treat style_guide and partner_pref entries as drafting instructions. "
+            "Flag meaningful deviations from them instead of silently changing quoted source text."
         )
 
     document_context = format_document_context(document_results or [])
@@ -211,10 +223,15 @@ def build_provider_messages(
 
 
 async def safe_search_documents(
-    db: Session, *, query: str, user_id: str
+    db: Session, *, query: str, user_id: str, matter_id: str | None = None
 ) -> list[DocumentSearchResult]:
     try:
-        return await search_documents(db, query=query, user_id=user_id)
+        return await search_documents(
+            db,
+            query=query,
+            user_id=user_id,
+            matter_id=matter_id,
+        )
     except EmbeddingError as exc:
         print(f"Document search skipped: {exc}")
         return []
@@ -234,14 +251,21 @@ async def create_chat_response(
     user_message: str,
     user_id: str,
     thread_id: str | None = None,
+    matter_id: str | None = None,
     model: str | None = None,
 ) -> tuple[ChatThread, ChatMessage]:
     selected_model = resolve_chat_model(model)
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
+    if matter_id is not None:
+        thread.matter_id = matter_id
+    active_matter_id = matter_id if matter_id is not None else thread.matter_id
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id)
     wiki_pages = safe_search_wiki_pages(db, user_id=user_id, query=user_message)
-    document_results = await safe_search_documents(db, query=user_message, user_id=user_id)
+    kb_entries, document_results = await asyncio.gather(
+        search_kb_for_chat(db, user_id=user_id, query=user_message, matter_id=active_matter_id),
+        safe_search_documents(db, query=user_message, user_id=user_id, matter_id=active_matter_id),
+    )
 
     add_message(db, thread_id=thread.id, role="user", content=user_message)
     thread.updated_at = datetime.now(UTC)
@@ -256,6 +280,7 @@ async def create_chat_response(
             memories=memories,
             document_results=document_results,
             wiki_pages=wiki_pages,
+            kb_entries=kb_entries,
             thread_summary=thread.summary,
         ),
         model=selected_model,
@@ -290,14 +315,21 @@ async def create_chat_request(
     user_message: str,
     user_id: str,
     thread_id: str | None = None,
+    matter_id: str | None = None,
     model: str | None = None,
 ) -> tuple[ChatThread, list[dict[str, str]], str]:
     selected_model = resolve_chat_model(model)
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
+    if matter_id is not None:
+        thread.matter_id = matter_id
+    active_matter_id = matter_id if matter_id is not None else thread.matter_id
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id)
     wiki_pages = safe_search_wiki_pages(db, user_id=user_id, query=user_message)
-    document_results = await safe_search_documents(db, query=user_message, user_id=user_id)
+    kb_entries, document_results = await asyncio.gather(
+        search_kb_for_chat(db, user_id=user_id, query=user_message, matter_id=active_matter_id),
+        safe_search_documents(db, query=user_message, user_id=user_id, matter_id=active_matter_id),
+    )
 
     add_message(db, thread_id=thread.id, role="user", content=user_message)
     thread.updated_at = datetime.now(UTC)
@@ -312,6 +344,7 @@ async def create_chat_request(
             memories=memories,
             document_results=document_results,
             wiki_pages=wiki_pages,
+            kb_entries=kb_entries,
             thread_summary=thread.summary,
         ),
         selected_model,

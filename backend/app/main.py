@@ -1,6 +1,6 @@
 import json
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -20,9 +20,22 @@ from app.schemas import (
     ChatResponse,
     ChatThreadResponse,
     DocumentResponse,
+    KnowledgeBankAccessLogResponse,
+    KnowledgeBankEntryCreate,
+    KnowledgeBankEntryResponse,
+    KnowledgeBankEntryUpdate,
+    KnowledgeBankPromoteRequest,
+    MatterCreate,
+    MatterMemberCreate,
+    MatterMemberResponse,
+    MatterResponse,
+    MatterUpdate,
     MemoryCreate,
     MemoryResponse,
     MemoryUpdate,
+    RedactionApprovalRequest,
+    RedactionProposalResponse,
+    TeamResponse,
     WikiGraphEdge,
     WikiGraphNode,
     WikiGraphResponse,
@@ -52,6 +65,31 @@ from app.services.memory_service import (
     delete_memory,
     list_memories,
     update_memory,
+)
+from app.services.knowledge_bank_service import (
+    KnowledgeBankError,
+    add_document_to_kb,
+    approve_redaction,
+    build_kb_graph,
+    create_kb_entry,
+    delete_kb_entry,
+    get_kb_entry,
+    get_redaction_proposal,
+    list_audit_log,
+    list_kb_entries,
+    log_kb_access,
+    promote_kb_entry,
+    update_kb_entry,
+)
+from app.services.organization_service import (
+    add_matter_member,
+    create_matter,
+    get_matter,
+    list_matter_members,
+    list_matters,
+    list_teams,
+    remove_matter_member,
+    update_matter,
 )
 from app.services.wiki_service import (
     WikiForbiddenError,
@@ -148,6 +186,8 @@ def build_document_response(
         content_type=document.content_type,
         status=document.status,
         error_message=document.error_message,
+        matter_id=document.matter_id,
+        team_id=document.team_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
         chunk_count=chunk_count,
@@ -208,6 +248,7 @@ def build_wiki_source_response(source) -> WikiPageSourceResponse:
 )
 async def upload_document(
     file: UploadFile = File(...),
+    matter_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DocumentResponse:
@@ -228,6 +269,14 @@ async def upload_document(
             content_type=content_type,
             file_bytes=file_bytes,
         )
+        if matter_id:
+            matter = get_matter(db, matter_id)
+            if not matter:
+                raise HTTPException(status_code=404, detail="Matter not found")
+            document.matter_id = matter.id
+            document.team_id = matter.team_id
+            db.commit()
+            db.refresh(document)
         document_with_count = get_user_document(db, current_user.id, document.id)
         chunk_count = document_with_count[1] if document_with_count else 0
         return build_document_response(document, chunk_count)
@@ -448,6 +497,7 @@ async def chat(
             user_id=current_user.id,
             thread_id=request.thread_id,
             model=request.model,
+            matter_id=request.matter_id,
         )
     except DeepSeekError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -480,6 +530,7 @@ async def chat_stream(
                 user_id=current_user.id,
                 thread_id=request.thread_id,
                 model=request.model,
+                matter_id=request.matter_id,
             )
             yield event("thread", {"thread_id": thread.id, "title": thread.title})
 
@@ -573,6 +624,384 @@ def get_memories(
         return [MemoryResponse.model_validate(m) for m in memories]
     except SQLAlchemyError:
         raise HTTPException(status_code=503, detail="Database is unavailable")
+
+
+@app.get("/teams", response_model=list[TeamResponse])
+def teams(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[TeamResponse]:
+    try:
+        return [TeamResponse.model_validate(team) for team in list_teams(db, current_user)]
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Team database is unavailable") from exc
+
+
+@app.get("/matters", response_model=list[MatterResponse])
+def matters(
+    matter_status: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[MatterResponse]:
+    try:
+        return [
+            MatterResponse.model_validate(matter)
+            for matter in list_matters(db, current_user, status=matter_status)
+        ]
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Matter database is unavailable") from exc
+
+
+@app.post("/matters", response_model=MatterResponse, status_code=status.HTTP_201_CREATED)
+def post_matter(
+    schema: MatterCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MatterResponse:
+    try:
+        return MatterResponse.model_validate(create_matter(db, current_user, schema))
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Matter database is unavailable") from exc
+
+
+@app.get("/matters/{matter_id}", response_model=MatterResponse)
+def matter_detail(
+    matter_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MatterResponse:
+    try:
+        matter = get_matter(db, matter_id)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Matter database is unavailable") from exc
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    return MatterResponse.model_validate(matter)
+
+
+@app.patch("/matters/{matter_id}", response_model=MatterResponse)
+def patch_matter(
+    matter_id: str,
+    schema: MatterUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MatterResponse:
+    try:
+        matter = update_matter(db, matter_id, schema)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Matter database is unavailable") from exc
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    return MatterResponse.model_validate(matter)
+
+
+@app.get("/matters/{matter_id}/members", response_model=list[MatterMemberResponse])
+def matter_members(
+    matter_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[MatterMemberResponse]:
+    if not get_matter(db, matter_id):
+        raise HTTPException(status_code=404, detail="Matter not found")
+    return [
+        MatterMemberResponse.model_validate(member)
+        for member in list_matter_members(db, matter_id)
+    ]
+
+
+@app.post(
+    "/matters/{matter_id}/members",
+    response_model=MatterMemberResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_matter_member(
+    matter_id: str,
+    schema: MatterMemberCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MatterMemberResponse:
+    if not get_matter(db, matter_id):
+        raise HTTPException(status_code=404, detail="Matter not found")
+    return MatterMemberResponse.model_validate(
+        add_matter_member(
+            db,
+            matter_id=matter_id,
+            granted_by=current_user.id,
+            schema=schema,
+        )
+    )
+
+
+@app.delete("/matters/{matter_id}/members/{user_id}")
+def delete_matter_member(
+    matter_id: str,
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    if not remove_matter_member(db, matter_id, user_id):
+        raise HTTPException(status_code=404, detail="Matter membership not found")
+    return {"status": "ok"}
+
+
+@app.get("/kb/graph", response_model=WikiGraphResponse)
+def kb_graph(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> WikiGraphResponse:
+    graph = build_kb_graph(db)
+    return WikiGraphResponse(
+        nodes=[WikiGraphNode(**node) for node in graph["nodes"]],
+        edges=[WikiGraphEdge(**edge) for edge in graph["edges"]],
+    )
+
+
+@app.get("/kb/entries", response_model=list[KnowledgeBankEntryResponse])
+def kb_entries(
+    scope: str | None = None,
+    entry_type: str | None = None,
+    matter_id: str | None = None,
+    team_id: str | None = None,
+    pii_status: str | None = None,
+    query: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[KnowledgeBankEntryResponse]:
+    try:
+        entries = list_kb_entries(
+            db,
+            scope=scope,
+            entry_type=entry_type,
+            matter_id=matter_id,
+            team_id=team_id,
+            pii_status=pii_status,
+            query=query,
+        )
+        return [KnowledgeBankEntryResponse.model_validate(entry) for entry in entries]
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+
+
+@app.post(
+    "/kb/entries",
+    response_model=KnowledgeBankEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_kb_entry(
+    schema: KnowledgeBankEntryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> KnowledgeBankEntryResponse:
+    try:
+        entry = await create_kb_entry(db, user=current_user, schema=schema)
+        return KnowledgeBankEntryResponse.model_validate(entry)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+
+
+@app.post(
+    "/kb/ingest/document/{document_id}",
+    response_model=KnowledgeBankEntryResponse,
+)
+async def ingest_document_kb_entry(
+    document_id: str,
+    request: WikiIngestRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> KnowledgeBankEntryResponse:
+    try:
+        page = await ingest_document_to_wiki(
+            db,
+            user=current_user,
+            document_id=document_id,
+            request=request,
+        )
+        entry = await add_document_to_kb(db, user=current_user, page=page)
+        return KnowledgeBankEntryResponse.model_validate(entry)
+    except (WikiIngestionError, KnowledgeBankError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DeepSeekError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+
+
+@app.get("/kb/entries/{entry_id}", response_model=KnowledgeBankEntryResponse)
+def kb_entry_detail(
+    entry_id: str,
+    request: Request,
+    context_matter_id: str | None = None,
+    context_thread_id: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> KnowledgeBankEntryResponse:
+    try:
+        entry = get_kb_entry(db, entry_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+        log_kb_access(
+            db,
+            user_id=current_user.id,
+            action="read",
+            entry_id=entry.id,
+            matter_id=context_matter_id,
+            thread_id=context_thread_id,
+            ip_address=request.client.host if request.client else None,
+        )
+        return KnowledgeBankEntryResponse.model_validate(entry)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+
+
+@app.get(
+    "/kb/entries/{entry_id}/sources",
+    response_model=list[WikiPageSourceResponse],
+)
+def kb_entry_sources(
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[WikiPageSourceResponse]:
+    entry = get_kb_entry(db, entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+    return [
+        build_wiki_source_response(source)
+        for source in list_wiki_page_sources(
+            db,
+            user_id=current_user.id,
+            page_id=entry.id,
+        )
+    ]
+
+
+@app.patch("/kb/entries/{entry_id}", response_model=KnowledgeBankEntryResponse)
+async def patch_kb_entry(
+    entry_id: str,
+    schema: KnowledgeBankEntryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> KnowledgeBankEntryResponse:
+    try:
+        entry = await update_kb_entry(
+            db,
+            user=current_user,
+            entry_id=entry_id,
+            schema=schema,
+        )
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+    if not entry:
+        raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+    return KnowledgeBankEntryResponse.model_validate(entry)
+
+
+@app.delete("/kb/entries/{entry_id}")
+def delete_kb_entry_endpoint(
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    try:
+        success = delete_kb_entry(db, user=current_user, entry_id=entry_id)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+    if not success:
+        raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+    return {"status": "ok"}
+
+
+@app.post(
+    "/kb/entries/{entry_id}/promote",
+    response_model=RedactionProposalResponse,
+)
+async def promote_kb_entry_endpoint(
+    entry_id: str,
+    schema: KnowledgeBankPromoteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RedactionProposalResponse:
+    try:
+        entry, redaction = await promote_kb_entry(
+            db,
+            user=current_user,
+            entry_id=entry_id,
+            target_scope=schema.target_scope,
+        )
+        return RedactionProposalResponse(
+            entry=KnowledgeBankEntryResponse.model_validate(entry),
+            redacted_fields=redaction.redacted_fields,
+            original_content=redaction.original_content,
+            redacted_content=redaction.redacted_content,
+        )
+    except KnowledgeBankError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+
+
+@app.get(
+    "/kb/entries/{entry_id}/redaction",
+    response_model=RedactionProposalResponse,
+)
+def kb_redaction_detail(
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RedactionProposalResponse:
+    entry = get_kb_entry(db, entry_id)
+    redaction = get_redaction_proposal(db, entry_id)
+    if not entry or not redaction:
+        raise HTTPException(status_code=404, detail="Redaction proposal not found")
+    return RedactionProposalResponse(
+        entry=KnowledgeBankEntryResponse.model_validate(entry),
+        redacted_fields=redaction.redacted_fields,
+        original_content=redaction.original_content,
+        redacted_content=redaction.redacted_content,
+    )
+
+
+@app.post(
+    "/kb/entries/{entry_id}/approve-redaction",
+    response_model=KnowledgeBankEntryResponse,
+)
+def approve_kb_redaction(
+    entry_id: str,
+    schema: RedactionApprovalRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> KnowledgeBankEntryResponse:
+    try:
+        entry = approve_redaction(
+            db,
+            user=current_user,
+            entry_id=entry_id,
+            schema=schema,
+        )
+    except KnowledgeBankError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+    if not entry:
+        raise HTTPException(status_code=404, detail="Pending redaction not found")
+    return KnowledgeBankEntryResponse.model_validate(entry)
+
+
+@app.get("/audit-log", response_model=list[KnowledgeBankAccessLogResponse])
+def audit_log(
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[KnowledgeBankAccessLogResponse]:
+    try:
+        return [
+            KnowledgeBankAccessLogResponse.model_validate(item)
+            for item in list_audit_log(db, limit=min(max(limit, 1), 500))
+        ]
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Audit log is unavailable") from exc
 
 
 @app.post("/memories", response_model=MemoryResponse)

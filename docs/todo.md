@@ -12,6 +12,15 @@
   - Replace with `useQuery` / `useMutation` hooks so components fetch their own data; use `queryClient.invalidateQueries` for post-mutation refresh instead of explicit `refreshThreads` calls.
   - Eliminates the manual guard checks in `handleSubmit` for `'wiki'` / `'documents'` thread IDs and removes the double-load pattern in `WikiPanel`.
 
+## ReAct Agent Loop
+
+- [ ] Implement ReAct (Reasoning + Acting) loop for the LLM. See `docs/rfc-react-agent-loop.md` for the full plan.
+  - Replace single-shot RAG with a tool-calling loop (max 5 rounds).
+  - Tools: `search_documents`, `search_knowledge_bank`, `search_memories`, `get_kb_entry`.
+  - Stream `tool_call` and `tool_result` SSE events to the frontend.
+  - Show tool steps inline above the final answer in the chat UI.
+  - Build order: `deepseek.py` stream_with_tools → `agent_service.py` → `chat_service.py` → `main.py` → frontend types → `api.ts` → `App.tsx` → `ChatPanel.tsx`.
+
 ## Chat Context
 
 - [x] Add thread summarization for long-running chats.

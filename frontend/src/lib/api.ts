@@ -1,9 +1,16 @@
 import type {
   ChatModel,
   ChatThread,
+  KnowledgeBankAccessLog,
+  KnowledgeBankEntry,
+  KnowledgeBankEntryType,
+  KnowledgeBankScope,
+  Matter,
   Memory,
   MemoryCategory,
   Message,
+  RedactionProposal,
+  Team,
   WikiGraph,
   WikiPage,
   WikiPageSource,
@@ -40,6 +47,8 @@ type BackendDocument = {
   content_type: string
   status: WorkspaceDocument['status']
   error_message: string | null
+  matter_id: string | null
+  team_id: string | null
   created_at: string
   updated_at: string
   chunk_count: number
@@ -104,10 +113,78 @@ type StreamChatOptions = {
   message: string
   model: ChatModel
   threadId: string | null
+  matterId?: string | null
   signal?: AbortSignal
   onThread: (threadId: string, title: string) => void
   onToken: (content: string) => void
   onDone: (payload: { threadId: string; message: Message; model: string }) => void
+}
+
+type BackendTeam = {
+  id: string
+  name: string
+  practice_area: string | null
+  created_at: string
+}
+
+type BackendMatter = {
+  id: string
+  team_id: string
+  title: string
+  case_number: string
+  client_name: string | null
+  status: Matter['status']
+  created_at: string
+  updated_at: string
+  team: BackendTeam | null
+}
+
+type BackendKnowledgeBankEntry = {
+  id: string
+  team_id: string | null
+  matter_id: string | null
+  source_entry_id: string | null
+  source_document_id: string | null
+  scope: KnowledgeBankEntry['scope']
+  entry_type: KnowledgeBankEntry['entryType']
+  title: string
+  body_markdown: string
+  tags: string[]
+  pii_status: KnowledgeBankEntry['piiStatus']
+  created_by: string
+  created_by_role: string
+  version: number
+  created_at: string
+  updated_at: string
+  team: BackendTeam | null
+  matter: BackendMatter | null
+}
+
+type BackendRedactionProposal = {
+  entry: BackendKnowledgeBankEntry
+  redacted_fields: Record<string, string>
+  original_content: string
+  redacted_content: string
+}
+
+type BackendKnowledgeBankAccessLog = {
+  id: string
+  kb_entry_id: string | null
+  user_id: string
+  action: string
+  context_matter_id: string | null
+  context_thread_id: string | null
+  ip_address: string | null
+  timestamp: string
+}
+
+type BackendMemory = {
+  id: string
+  category: MemoryCategory
+  content: string
+  confidence: number
+  created_at: string
+  updated_at: string
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -157,9 +234,77 @@ function mapDocument(document: BackendDocument): WorkspaceDocument {
     contentType: document.content_type,
     status: document.status,
     errorMessage: document.error_message,
+    matterId: document.matter_id,
+    teamId: document.team_id,
     createdAt: document.created_at,
     updatedAt: document.updated_at,
     chunkCount: document.chunk_count,
+  }
+}
+
+function mapTeam(team: BackendTeam): Team {
+  return {
+    id: team.id,
+    name: team.name,
+    practiceArea: team.practice_area,
+    createdAt: team.created_at,
+  }
+}
+
+function mapMatter(matter: BackendMatter): Matter {
+  return {
+    id: matter.id,
+    teamId: matter.team_id,
+    title: matter.title,
+    caseNumber: matter.case_number,
+    clientName: matter.client_name,
+    status: matter.status,
+    createdAt: matter.created_at,
+    updatedAt: matter.updated_at,
+    team: matter.team ? mapTeam(matter.team) : null,
+  }
+}
+
+function mapKnowledgeBankEntry(entry: BackendKnowledgeBankEntry): KnowledgeBankEntry {
+  return {
+    id: entry.id,
+    teamId: entry.team_id,
+    matterId: entry.matter_id,
+    sourceEntryId: entry.source_entry_id,
+    sourceDocumentId: entry.source_document_id,
+    scope: entry.scope,
+    entryType: entry.entry_type,
+    title: entry.title,
+    bodyMarkdown: entry.body_markdown,
+    tags: entry.tags,
+    piiStatus: entry.pii_status,
+    createdBy: entry.created_by,
+    createdByRole: entry.created_by_role,
+    version: entry.version,
+    createdAt: entry.created_at,
+    updatedAt: entry.updated_at,
+    team: entry.team ? mapTeam(entry.team) : null,
+    matter: entry.matter ? mapMatter(entry.matter) : null,
+  }
+}
+
+function mapRedactionProposal(proposal: BackendRedactionProposal): RedactionProposal {
+  return {
+    entry: mapKnowledgeBankEntry(proposal.entry),
+    redactedFields: proposal.redacted_fields,
+    originalContent: proposal.original_content,
+    redactedContent: proposal.redacted_content,
+  }
+}
+
+function mapMemory(memory: BackendMemory): Memory {
+  return {
+    id: memory.id,
+    category: memory.category,
+    content: memory.content,
+    confidence: memory.confidence,
+    createdAt: memory.created_at,
+    updatedAt: memory.updated_at,
   }
 }
 
@@ -225,7 +370,10 @@ export async function listDocuments(): Promise<WorkspaceDocument[]> {
   return documents.map(mapDocument)
 }
 
-export async function uploadDocument(file: File): Promise<WorkspaceDocument> {
+export async function uploadDocument(
+  file: File,
+  matterId?: string | null,
+): Promise<WorkspaceDocument> {
   const token = localStorage.getItem('token')
   const body = new FormData()
   body.append('file', file)
@@ -235,7 +383,8 @@ export async function uploadDocument(file: File): Promise<WorkspaceDocument> {
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+  const matterQuery = matterId ? `?matter_id=${encodeURIComponent(matterId)}` : ''
+  const response = await fetch(`${API_BASE_URL}/documents/upload${matterQuery}`, {
     method: 'POST',
     headers,
     body,
@@ -344,6 +493,10 @@ export async function getWikiGraph(): Promise<WikiGraph> {
   return request<WikiGraph>('/wiki/graph')
 }
 
+export async function getKbGraph(): Promise<WikiGraph> {
+  return request<WikiGraph>('/kb/graph')
+}
+
 export async function sendChatMessage(message: string, threadId: string | null, model: ChatModel) {
   const response = await request<BackendChatResponse>('/chat', {
     method: 'POST',
@@ -366,6 +519,7 @@ export async function streamChatMessage({
   model,
   signal,
   threadId,
+  matterId,
   onThread,
   onToken,
   onDone,
@@ -384,6 +538,7 @@ export async function streamChatMessage({
     body: JSON.stringify({
       message,
       thread_id: threadId,
+      matter_id: matterId,
       model,
     }),
     signal,
@@ -417,6 +572,192 @@ export async function streamChatMessage({
   if (buffer.trim()) {
     handleStreamEvent(buffer, { onThread, onToken, onDone })
   }
+}
+
+export async function listTeams(): Promise<Team[]> {
+  const teams = await request<BackendTeam[]>('/teams')
+  return teams.map(mapTeam)
+}
+
+export async function listMatters(status?: Matter['status']): Promise<Matter[]> {
+  const query = status ? `?matter_status=${status}` : ''
+  const matters = await request<BackendMatter[]>(`/matters${query}`)
+  return matters.map(mapMatter)
+}
+
+export async function createMatter(payload: {
+  title: string
+  caseNumber: string
+  clientName?: string
+  teamId?: string
+}): Promise<Matter> {
+  const matter = await request<BackendMatter>('/matters', {
+    method: 'POST',
+    body: JSON.stringify({
+      title: payload.title,
+      case_number: payload.caseNumber,
+      client_name: payload.clientName,
+      team_id: payload.teamId,
+    }),
+  })
+  return mapMatter(matter)
+}
+
+export async function listKnowledgeBankEntries(params?: {
+  scope?: KnowledgeBankScope
+  entryType?: KnowledgeBankEntryType
+  matterId?: string
+  teamId?: string
+  piiStatus?: KnowledgeBankEntry['piiStatus']
+  query?: string
+}): Promise<KnowledgeBankEntry[]> {
+  const search = new URLSearchParams()
+  if (params?.scope) search.set('scope', params.scope)
+  if (params?.entryType) search.set('entry_type', params.entryType)
+  if (params?.matterId) search.set('matter_id', params.matterId)
+  if (params?.teamId) search.set('team_id', params.teamId)
+  if (params?.piiStatus) search.set('pii_status', params.piiStatus)
+  if (params?.query) search.set('query', params.query)
+  const suffix = search.toString() ? `?${search}` : ''
+  const entries = await request<BackendKnowledgeBankEntry[]>(`/kb/entries${suffix}`)
+  return entries.map(mapKnowledgeBankEntry)
+}
+
+export async function getKnowledgeBankEntry(id: string): Promise<KnowledgeBankEntry> {
+  return mapKnowledgeBankEntry(
+    await request<BackendKnowledgeBankEntry>(`/kb/entries/${id}`),
+  )
+}
+
+export async function createKnowledgeBankEntry(payload: {
+  title: string
+  bodyMarkdown: string
+  scope: KnowledgeBankScope
+  entryType: KnowledgeBankEntryType
+  tags: string[]
+  matterId?: string | null
+  teamId?: string | null
+}): Promise<KnowledgeBankEntry> {
+  return mapKnowledgeBankEntry(
+    await request<BackendKnowledgeBankEntry>('/kb/entries', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: payload.title,
+        body_markdown: payload.bodyMarkdown,
+        scope: payload.scope,
+        entry_type: payload.entryType,
+        tags: payload.tags,
+        matter_id: payload.matterId,
+        team_id: payload.teamId,
+      }),
+    }),
+  )
+}
+
+export async function ingestDocumentToKnowledgeBank(
+  documentId: string,
+  model: ChatModel,
+): Promise<KnowledgeBankEntry> {
+  return mapKnowledgeBankEntry(
+    await request<BackendKnowledgeBankEntry>(`/kb/ingest/document/${documentId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        page_types: ['source_summary'],
+        model,
+      }),
+    }),
+  )
+}
+
+export async function listKnowledgeBankEntrySources(
+  entryId: string,
+): Promise<WikiPageSource[]> {
+  const sources = await request<BackendWikiPageSource[]>(
+    `/kb/entries/${entryId}/sources`,
+  )
+  return sources.map(mapWikiPageSource)
+}
+
+export async function updateKnowledgeBankEntry(
+  id: string,
+  payload: Partial<{
+    title: string
+    bodyMarkdown: string
+    scope: KnowledgeBankScope
+    entryType: KnowledgeBankEntryType
+    tags: string[]
+    matterId: string | null
+    teamId: string | null
+  }>,
+): Promise<KnowledgeBankEntry> {
+  return mapKnowledgeBankEntry(
+    await request<BackendKnowledgeBankEntry>(`/kb/entries/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: payload.title,
+        body_markdown: payload.bodyMarkdown,
+        scope: payload.scope,
+        entry_type: payload.entryType,
+        tags: payload.tags,
+        matter_id: payload.matterId,
+        team_id: payload.teamId,
+      }),
+    }),
+  )
+}
+
+export async function deleteKnowledgeBankEntry(id: string): Promise<void> {
+  await request(`/kb/entries/${id}`, { method: 'DELETE' })
+}
+
+export async function promoteKnowledgeBankEntry(
+  id: string,
+  targetScope: 'team' | 'firm_wide',
+): Promise<RedactionProposal> {
+  return mapRedactionProposal(
+    await request<BackendRedactionProposal>(`/kb/entries/${id}/promote`, {
+      method: 'POST',
+      body: JSON.stringify({ target_scope: targetScope }),
+    }),
+  )
+}
+
+export async function getRedactionProposal(id: string): Promise<RedactionProposal> {
+  return mapRedactionProposal(
+    await request<BackendRedactionProposal>(`/kb/entries/${id}/redaction`),
+  )
+}
+
+export async function approveKnowledgeBankRedaction(
+  id: string,
+  payload: {
+    redactedContent: string
+    redactedFields?: Record<string, string>
+  },
+): Promise<KnowledgeBankEntry> {
+  return mapKnowledgeBankEntry(
+    await request<BackendKnowledgeBankEntry>(`/kb/entries/${id}/approve-redaction`, {
+      method: 'POST',
+      body: JSON.stringify({
+        redacted_content: payload.redactedContent,
+        redacted_fields: payload.redactedFields,
+      }),
+    }),
+  )
+}
+
+export async function listKnowledgeBankAuditLog(): Promise<KnowledgeBankAccessLog[]> {
+  const rows = await request<BackendKnowledgeBankAccessLog[]>('/audit-log')
+  return rows.map((row) => ({
+    id: row.id,
+    entryId: row.kb_entry_id,
+    userId: row.user_id,
+    action: row.action,
+    contextMatterId: row.context_matter_id,
+    contextThreadId: row.context_thread_id,
+    ipAddress: row.ip_address,
+    timestamp: row.timestamp,
+  }))
 }
 
 function handleStreamEvent(
@@ -479,15 +820,8 @@ export async function loginWithGoogle(credential: string) {
 
 export async function listMemories(category?: MemoryCategory): Promise<Memory[]> {
   const params = category ? `?category=${category}` : ''
-  const response = await request<any[]>(`/memories${params}`)
-  return response.map((m) => ({
-    id: m.id,
-    category: m.category as MemoryCategory,
-    content: m.content,
-    confidence: m.confidence,
-    createdAt: m.created_at,
-    updatedAt: m.updated_at,
-  }))
+  const response = await request<BackendMemory[]>(`/memories${params}`)
+  return response.map(mapMemory)
 }
 
 export async function createMemory(payload: {
@@ -496,7 +830,7 @@ export async function createMemory(payload: {
   sourceThreadId?: string
   sourceMessageId?: string
 }): Promise<Memory> {
-  const m = await request<any>('/memories', {
+  const memory = await request<BackendMemory>('/memories', {
     method: 'POST',
     body: JSON.stringify({
       category: payload.category,
@@ -505,32 +839,18 @@ export async function createMemory(payload: {
       source_message_id: payload.sourceMessageId,
     }),
   })
-  return {
-    id: m.id,
-    category: m.category as MemoryCategory,
-    content: m.content,
-    confidence: m.confidence,
-    createdAt: m.created_at,
-    updatedAt: m.updated_at,
-  }
+  return mapMemory(memory)
 }
 
 export async function updateMemory(
   id: string,
   payload: { category?: MemoryCategory; content?: string },
 ): Promise<Memory> {
-  const m = await request<any>(`/memories/${id}`, {
+  const memory = await request<BackendMemory>(`/memories/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   })
-  return {
-    id: m.id,
-    category: m.category as MemoryCategory,
-    content: m.content,
-    confidence: m.confidence,
-    createdAt: m.created_at,
-    updatedAt: m.updated_at,
-  }
+  return mapMemory(memory)
 }
 
 export async function deleteMemory(id: string): Promise<void> {
