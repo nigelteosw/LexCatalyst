@@ -193,7 +193,6 @@ function App() {
         signal: controller.signal,
         threadId,
         onThread: (tid, title) => {
-          // Optimistically add the new thread so the sidebar updates immediately
           queryClient.setQueryData(['threads'], (old: ChatThread[] = []) => {
             if (old.some((t) => t.id === tid)) return old
             return [
@@ -201,6 +200,28 @@ function App() {
               ...old,
             ]
           })
+        },
+        onToolCall: (tool, args) => {
+          setMessages((curr) =>
+            curr.map((m) =>
+              m.id === assistantDraftId
+                ? { ...m, steps: [...(m.steps ?? []), { tool, args, summary: null, status: 'running' as const }] }
+                : m,
+            ),
+          )
+        },
+        onToolResult: (tool, summary) => {
+          setMessages((curr) =>
+            curr.map((m) => {
+              if (m.id !== assistantDraftId) return m
+              const steps = (m.steps ?? []).map((s) =>
+                s.tool === tool && s.status === 'running'
+                  ? { ...s, summary, status: 'done' as const }
+                  : s,
+              )
+              return { ...m, steps }
+            }),
+          )
         },
         onToken: (content) => {
           setMessages((curr) =>
@@ -211,7 +232,11 @@ function App() {
         },
         onDone: (response) => {
           setMessages((curr) =>
-            curr.map((m) => (m.id === assistantDraftId ? response.message : m)),
+            curr.map((m) => {
+              if (m.id !== assistantDraftId) return m
+              // Preserve tool steps collected during streaming
+              return { ...response.message, steps: m.steps }
+            }),
           )
           // Pre-seed the cache so navigating to a newly-created thread never shows a blank screen
           if (!threadId) {

@@ -91,3 +91,78 @@ class DeepSeekProvider:
             raise DeepSeekError(f"DeepSeek API error: {exc.message}") from exc
         except OpenAIError as exc:
             raise DeepSeekError(f"DeepSeek client error: {exc}") from exc
+
+    async def stream_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        model: str | None = None,
+    ):
+        """
+        Async generator yielding:
+          ("token", str)          — a streamed content chunk
+          ("tool_calls", list)    — complete tool calls when finish_reason == "tool_calls"
+        """
+        if not self.client:
+            raise DeepSeekError("DEEPSEEK_API_KEY is not configured")
+
+        selected_model = resolve_chat_model(model)
+        kwargs: dict = {
+            "model": selected_model,
+            "messages": messages,
+            "temperature": self.settings.deepseek_temperature,
+            "stream": True,
+        }
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+
+        try:
+            stream = await self.client.chat.completions.create(**kwargs)
+        except APIError as exc:
+            raise DeepSeekError(f"DeepSeek API error: {exc.message}") from exc
+        except OpenAIError as exc:
+            raise DeepSeekError(f"DeepSeek client error: {exc}") from exc
+
+        # key: tool-call index → accumulated call dict
+        accumulated: dict[int, dict] = {}
+
+        try:
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+
+                choice = chunk.choices[0]
+                delta = choice.delta
+                finish_reason = choice.finish_reason
+
+                if delta.content:
+                    yield ("token", delta.content)
+
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in accumulated:
+                            accumulated[idx] = {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            }
+                        if tc.id:
+                            accumulated[idx]["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                accumulated[idx]["function"]["name"] += tc.function.name
+                            if tc.function.arguments:
+                                accumulated[idx]["function"]["arguments"] += tc.function.arguments
+
+                if finish_reason == "tool_calls":
+                    tool_calls = [accumulated[i] for i in sorted(accumulated.keys())]
+                    yield ("tool_calls", tool_calls)
+                    accumulated = {}
+
+        except APIError as exc:
+            raise DeepSeekError(f"DeepSeek API error: {exc.message}") from exc
+        except OpenAIError as exc:
+            raise DeepSeekError(f"DeepSeek client error: {exc}") from exc

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 
 from sqlalchemy import desc, func, select
@@ -349,6 +350,78 @@ async def create_chat_request(
         ),
         selected_model,
     )
+
+
+AGENT_SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
+Use your tools to search for relevant documents, knowledge bank entries, and memories before answering.
+Answer clearly and conservatively.
+When your answer draws on tool results, end your response with a **Sources** section listing the source names — one per line. Do not use bracket numbers like [1].
+Do not invent citations or claim to have read documents unless you have searched for them with a tool."""
+
+
+async def prepare_agent_context(
+    db: Session,
+    *,
+    user_message: str,
+    user_id: str,
+    thread_id: str | None = None,
+    model: str | None = None,
+    matter_id: str | None = None,
+) -> tuple[ChatThread, list[dict], str]:
+    """Build initial messages for the ReAct agent loop.
+
+    Memories are pre-loaded (always relevant, cheap). Documents and KB are
+    left for the agent to search via tools.
+    """
+    selected_model = resolve_chat_model(model)
+    thread = get_or_create_thread(db, thread_id, user_message, user_id)
+    if matter_id is not None:
+        thread.matter_id = matter_id
+    active_matter_id = matter_id if matter_id is not None else thread.matter_id
+
+    history = get_recent_messages(db, thread.id)
+    memories = list_memories(db, user_id=user_id)
+
+    add_message(db, thread_id=thread.id, role="user", content=user_message)
+    thread.updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(thread)
+
+    system_content = AGENT_SYSTEM_PROMPT
+
+    if thread.summary:
+        system_content += (
+            "\n\nEarlier Conversation Summary:\n"
+            f"{thread.summary}\n\n"
+            "The summary above covers older parts of this conversation not shown in the message history below."
+        )
+
+    if memories:
+        memory_blocks = []
+        categories = {
+            "semantic": "Stable facts/preferences",
+            "procedural": "Working style",
+            "episodic": "Past events",
+        }
+        for cat, label in categories.items():
+            cat_memories = [m.content for m in memories if m.category == cat]
+            if cat_memories:
+                memory_blocks.append(f"{label}:\n- " + "\n- ".join(cat_memories))
+        if memory_blocks:
+            system_content += "\n\nUser Context (Long-term Memory):\n" + "\n\n".join(memory_blocks)
+
+    if active_matter_id:
+        system_content += f"\n\nActive matter ID: {active_matter_id}. Prefer sources scoped to this matter."
+
+    messages: list[dict] = [{"role": "system", "content": system_content}]
+    messages.extend(
+        {"role": m.role, "content": m.content}
+        for m in history
+        if m.role in {"user", "assistant"}
+    )
+    messages.append({"role": "user", "content": user_message})
+
+    return thread, messages, selected_model
 
 
 async def save_assistant_response(

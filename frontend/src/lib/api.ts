@@ -116,6 +116,8 @@ type StreamChatOptions = {
   matterId?: string | null
   signal?: AbortSignal
   onThread: (threadId: string, title: string) => void
+  onToolCall: (tool: string, args: Record<string, unknown>) => void
+  onToolResult: (tool: string, summary: string) => void
   onToken: (content: string) => void
   onDone: (payload: { threadId: string; message: Message; model: string }) => void
 }
@@ -521,6 +523,8 @@ export async function streamChatMessage({
   threadId,
   matterId,
   onThread,
+  onToolCall,
+  onToolResult,
   onToken,
   onDone,
 }: StreamChatOptions) {
@@ -565,12 +569,12 @@ export async function streamChatMessage({
     buffer = events.pop() ?? ''
 
     for (const rawEvent of events) {
-      handleStreamEvent(rawEvent, { onThread, onToken, onDone })
+      handleStreamEvent(rawEvent, { onThread, onToolCall, onToolResult, onToken, onDone })
     }
   }
 
   if (buffer.trim()) {
-    handleStreamEvent(buffer, { onThread, onToken, onDone })
+    handleStreamEvent(buffer, { onThread, onToolCall, onToolResult, onToken, onDone })
   }
 }
 
@@ -762,7 +766,7 @@ export async function listKnowledgeBankAuditLog(): Promise<KnowledgeBankAccessLo
 
 function handleStreamEvent(
   rawEvent: string,
-  callbacks: Pick<StreamChatOptions, 'onThread' | 'onToken' | 'onDone'>,
+  callbacks: Pick<StreamChatOptions, 'onThread' | 'onToolCall' | 'onToolResult' | 'onToken' | 'onDone'>,
 ) {
   const eventName = rawEvent
     .split('\n')
@@ -782,6 +786,18 @@ function handleStreamEvent(
   if (eventName === 'thread') {
     const thread = payload as StreamThreadPayload
     callbacks.onThread(thread.thread_id, thread.title)
+    return
+  }
+
+  if (eventName === 'tool_call') {
+    const { tool, args } = payload as { tool: string; args: Record<string, unknown> }
+    callbacks.onToolCall(tool, args)
+    return
+  }
+
+  if (eventName === 'tool_result') {
+    const { tool, summary } = payload as { tool: string; summary: string }
+    callbacks.onToolResult(tool, summary)
     return
   }
 

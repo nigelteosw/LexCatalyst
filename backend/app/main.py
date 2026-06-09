@@ -46,11 +46,13 @@ from app.schemas import (
     WikiPageUpdate,
     WikiUserResponse,
 )
+from app.services.agent_service import run_agent_loop
 from app.services.chat_service import (
     create_chat_request,
     create_chat_response,
     list_thread_messages,
     list_threads,
+    prepare_agent_context,
     save_assistant_response,
 )
 from app.services.document_service import (
@@ -524,7 +526,7 @@ async def chat_stream(
 
     async def stream():
         try:
-            thread, provider_messages, selected_model = await create_chat_request(
+            thread, initial_messages, selected_model = await prepare_agent_context(
                 db,
                 user_message=request.message,
                 user_id=current_user.id,
@@ -534,11 +536,19 @@ async def chat_stream(
             )
             yield event("thread", {"thread_id": thread.id, "title": thread.title})
 
-            provider = DeepSeekProvider()
             chunks: list[str] = []
-            async for chunk in provider.stream_chat(provider_messages, model=selected_model):
-                chunks.append(chunk)
-                yield event("token", {"content": chunk})
+            active_matter_id = request.matter_id or thread.matter_id
+
+            async for event_type, event_data in run_agent_loop(
+                initial_messages,
+                db,
+                user_id=current_user.id,
+                matter_id=active_matter_id,
+                model=selected_model,
+            ):
+                if event_type == "token":
+                    chunks.append(event_data["content"])
+                yield event(event_type, event_data)
 
             assistant_content = "".join(chunks).strip()
             if not assistant_content:
@@ -569,6 +579,9 @@ async def chat_stream(
             yield event("error", {"detail": f"Document search is unavailable: {exc}"})
         except SQLAlchemyError:
             yield event("error", {"detail": "Chat database is unavailable"})
+        except Exception as exc:
+            print(f"Unexpected chat stream error: {exc!r}")
+            yield event("error", {"detail": "An unexpected error occurred"})
 
     return StreamingResponse(
         stream(),

@@ -1,8 +1,16 @@
+export type ToolStep = {
+  tool: string
+  args: Record<string, unknown>
+  summary: string | null
+  status: 'running' | 'done'
+}
+
 export type Message = {
   id?: string
   role: 'assistant' | 'user'
   body: string
   meta?: string
+  steps?: ToolStep[]
 }
 
 export type ChatThread = {

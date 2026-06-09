@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
-import { AlertCircle, LoaderCircle, Paperclip, SendHorizontal, Sparkles, Square } from 'lucide-react'
+import { AlertCircle, BookMarked, Brain, FileText, LoaderCircle, Paperclip, SendHorizontal, Sparkles, Square } from 'lucide-react'
 import { Button } from './Button'
-import type { Message } from '../types/workspace'
+import type { Message, ToolStep } from '../types/workspace'
 
 type ChatPanelProps = {
   attachmentStatus?: string | null
@@ -238,6 +238,13 @@ function ChatMessage({ message, userInitials }: ChatMessageProps) {
         {isUser ? userInitials : <Sparkles size={18} className="text-neutral-900" />}
       </div>
       <div className={`flex flex-col max-w-[85%] md:max-w-[80%] ${isUser ? 'items-end' : 'items-start'}`}>
+        {!isUser && message.steps && message.steps.length > 0 && (
+          <div className="mb-2 flex flex-col gap-1 w-full">
+            {message.steps.map((step, i) => (
+              <ToolStepRow key={i} step={step} />
+            ))}
+          </div>
+        )}
         <div
           className={`relative px-4 py-3 text-sm md:text-base leading-relaxed shadow-sm ${
             isUser
@@ -254,5 +261,40 @@ function ChatMessage({ message, userInitials }: ChatMessageProps) {
         </div>
       </div>
     </article>
+  )
+}
+
+function ToolStepRow({ step }: { step: ToolStep }) {
+  const icons: Record<string, React.ReactNode> = {
+    search_documents: <FileText size={12} />,
+    search_knowledge_bank: <BookMarked size={12} />,
+    search_memories: <Brain size={12} />,
+    get_kb_entry: <BookMarked size={12} />,
+  }
+  const labels: Record<string, string> = {
+    search_documents: 'Searching documents',
+    search_knowledge_bank: 'Searching knowledge bank',
+    search_memories: 'Searching memories',
+    get_kb_entry: 'Reading KB entry',
+  }
+  const query = typeof step.args.query === 'string' ? step.args.query
+    : typeof step.args.entry_id === 'string' ? step.args.entry_id
+    : ''
+
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 pl-1">
+      <span className="text-neutral-400">{icons[step.tool] ?? <Sparkles size={12} />}</span>
+      <span>{labels[step.tool] ?? step.tool}</span>
+      {query && <span className="text-neutral-300">·</span>}
+      {query && <span className="italic truncate max-w-[200px]">"{query}"</span>}
+      {step.status === 'running' ? (
+        <LoaderCircle size={11} className="ml-1 animate-spin text-neutral-300" />
+      ) : (
+        <>
+          <span className="text-neutral-300">·</span>
+          <span className="text-neutral-400">{step.summary}</span>
+        </>
+      )}
+    </div>
   )
 }
