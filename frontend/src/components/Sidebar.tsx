@@ -1,6 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { MessageSquare, Plus, X, Clock, Brain, FileText, BookOpen } from 'lucide-react'
-import { Button } from './Button'
+import {
+  BookOpen,
+  Brain,
+  Clock,
+  FileText,
+  HeartPulse,
+  LogOut,
+  Plus,
+  X,
+} from 'lucide-react'
 import type { ChatThread } from '../types/workspace'
 import { useViewStore } from '../store/viewStore'
 
@@ -15,7 +23,15 @@ type SidebarProps = {
 
 const MIN_WIDTH = 200
 const MAX_WIDTH = 480
-const DEFAULT_WIDTH = 260
+const DEFAULT_WIDTH = 236
+
+const sidebarActionClass =
+  'flex w-full items-center gap-2 rounded-[9px] px-3 py-2 text-left text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0f0f]'
+
+const sidebarNavClass =
+  'text-white/50 hover:bg-white/[0.07] hover:text-white/85'
+
+const sidebarNavActiveClass = 'bg-white/10 text-white'
 
 export function Sidebar({
   threads,
@@ -25,8 +41,15 @@ export function Sidebar({
   userFullName,
   userInitials,
 }: SidebarProps) {
-  const { current, startNewChat, selectThread, selectMemories, selectDocuments, selectWiki } =
-    useViewStore()
+  const {
+    current,
+    startNewChat,
+    selectThread,
+    selectMemories,
+    selectDocuments,
+    selectWiki,
+    selectWellbeing,
+  } = useViewStore()
 
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
@@ -79,158 +102,193 @@ export function Sidebar({
       {/* Sidebar Container */}
       <aside
         ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white transition-transform duration-300 lg:relative lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-[#0f0f0f] text-[#fafaf8] transition-transform duration-300 lg:relative lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        } border-r border-neutral-200`}
+        }`}
         style={{ width: isOpen || window.innerWidth >= 1024 ? `${width}px` : 'auto' }}
       >
-        <div className="flex flex-col h-full min-h-0">
+        <div className="flex h-full min-h-0 flex-col">
           {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b border-neutral-100">
-            <h1 className="text-sm font-semibold text-neutral-900 flex items-center gap-2">
-              <span className="w-6 h-6 bg-neutral-900 text-white rounded grid place-items-center text-[10px]">
-                LC
-              </span>
-              LexCatalyst
-            </h1>
-            <Button
-              onClick={onClose}
-              aria-label="Close sidebar"
-              className="lg:hidden"
-              size="icon"
-              variant="ghost"
-            >
-              <X size={18} />
-            </Button>
-          </div>
+          <div className="border-b border-white/[0.08] px-3.5 pb-3.5 pt-[18px]">
+            <div className="mb-4 flex items-center justify-between">
+              <h1 className="flex items-center gap-2.5 text-white">
+                <span className="grid h-[30px] w-[30px] place-items-center rounded-lg border border-white/[0.18] font-serif text-[15px] italic">
+                  L
+                </span>
+                <span className="font-serif text-base italic tracking-[-0.01em]">
+                  LexCatalyst
+                </span>
+              </h1>
+              <button
+                onClick={onClose}
+                aria-label="Close sidebar"
+                className="grid h-8 w-8 place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 lg:hidden"
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
-          <div className="p-3 space-y-2">
-            <Button
+            <button
               onClick={() => {
                 startNewChat()
                 closeMobile()
               }}
-              className="w-full justify-start"
-              size="md"
-              variant="secondary"
+              className="flex w-full items-center justify-center gap-1.5 rounded-[9px] border border-white/10 bg-white/[0.07] px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.13] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              type="button"
             >
-              <Plus size={16} />
+              <Plus size={13} strokeWidth={2.25} />
               New chat
-            </Button>
-            <Button
+            </button>
+          </div>
+
+          <nav
+            aria-label="Workspace"
+            className="flex flex-col gap-0.5 border-b border-white/[0.08] px-1.5 py-2"
+          >
+            <button
               onClick={() => {
                 selectMemories()
                 closeMobile()
               }}
-              className="w-full justify-start"
-              size="md"
-              variant={current.view === 'memories' ? 'selected' : 'secondary'}
+              className={`${sidebarActionClass} ${
+                current.view === 'memories' ? sidebarNavActiveClass : sidebarNavClass
+              }`}
+              type="button"
             >
-              <Brain size={16} />
+              <Brain size={14} />
               Memories
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={() => {
                 selectDocuments()
                 closeMobile()
               }}
-              className="w-full justify-start"
-              size="md"
-              variant={current.view === 'documents' ? 'selected' : 'secondary'}
+              className={`${sidebarActionClass} ${
+                current.view === 'documents' ? sidebarNavActiveClass : sidebarNavClass
+              }`}
+              type="button"
             >
-              <FileText size={16} />
+              <FileText size={14} />
               Documents
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={() => {
                 selectWiki()
                 closeMobile()
               }}
-              className="w-full justify-start"
-              size="md"
-              variant={current.view === 'wiki' ? 'selected' : 'secondary'}
+              className={`${sidebarActionClass} ${
+                current.view === 'wiki' ? sidebarNavActiveClass : sidebarNavClass
+              }`}
+              type="button"
             >
-              <BookOpen size={16} />
+              <BookOpen size={14} />
               Lex-Wiki
-            </Button>
-          </div>
+            </button>
+            <button
+              onClick={() => {
+                selectWellbeing()
+                closeMobile()
+              }}
+              className={`${sidebarActionClass} ${
+                current.view === 'wellbeing' ? sidebarNavActiveClass : sidebarNavClass
+              }`}
+              type="button"
+            >
+              <HeartPulse size={14} />
+              Wellbeing
+            </button>
+          </nav>
 
           {/* Past Chats List */}
-          <nav className="flex-1 overflow-y-auto px-2 py-2">
-            <div className="px-3 mb-2 flex items-center gap-2 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
-              <Clock size={12} />
-              Recent History
+          <nav
+            aria-label="Recent chats"
+            className="lex-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-2"
+          >
+            <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.09em] text-white/30">
+              <Clock size={11} />
+              Recent chats
             </div>
             {threads.length > 0 ? (
               <div className="space-y-0.5">
-                {threads.map((thread) => {
+                {threads.map((thread, index) => {
                   const isActive =
                     current.view === 'chat' && thread.id === current.threadId
                   return (
-                    <Button
+                    <button
                       key={thread.id}
                       onClick={() => {
                         selectThread(thread.id)
                         closeMobile()
                       }}
-                      className="group w-full justify-start text-left"
-                      size="lg"
-                      variant={isActive ? 'selected' : 'ghost'}
+                      className={`${sidebarActionClass} group py-1.5 ${
+                        isActive ? sidebarNavActiveClass : sidebarNavClass
+                      }`}
+                      type="button"
                     >
-                      <MessageSquare
-                        size={16}
-                        className={
-                          isActive
-                            ? 'text-neutral-950'
-                            : 'text-neutral-500 group-hover:text-neutral-950'
-                        }
+                      <span
+                        aria-hidden="true"
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${threadDotClass(index)}`}
                       />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{thread.title}</div>
-                        <div
-                          className={`mt-0.5 text-[10px] ${isActive ? 'text-neutral-600' : 'text-neutral-500'}`}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[11.5px] font-normal">
+                          {thread.title}
+                        </span>
+                        <span
+                          className={`mt-0.5 block text-[9.5px] ${
+                            isActive ? 'text-white/45' : 'text-white/25 group-hover:text-white/40'
+                          }`}
                         >
                           {formatThreadDate(thread.updatedAt)}
-                        </div>
-                      </div>
-                    </Button>
+                        </span>
+                      </span>
+                    </button>
                   )
                 })}
               </div>
             ) : (
-              <div className="px-3 py-4 text-sm text-neutral-400 italic">No recent chats</div>
+              <div className="px-2.5 py-3 text-[11px] text-white/30">No recent chats</div>
             )}
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="p-4 border-t border-neutral-100">
-            <div className="flex items-center gap-3 px-1">
-              <div className="w-8 h-8 rounded-full bg-neutral-900 grid place-items-center text-[10px] font-semibold text-white shadow-sm uppercase">
-                {userInitials}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-neutral-900 truncate uppercase tracking-tight">
-                  {userFullName}
-                </div>
-                <div className="text-[10px] text-neutral-500 truncate">Professional Plan</div>
-              </div>
-              <Button onClick={onLogout} size="sm" variant="secondary">
-                Log out
-              </Button>
+          <div className="flex items-center gap-2 border-t border-white/[0.08] px-2.5 py-2.5">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-[9px] font-semibold uppercase text-white">
+              {userInitials}
             </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[11.5px] font-medium text-white/80">
+                {userFullName}
+              </div>
+              <div className="truncate text-[9.5px] text-white/30">Professional plan</div>
+            </div>
+            <button
+              onClick={onLogout}
+              aria-label="Log out"
+              title="Log out"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/35 transition-colors hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              type="button"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
         </div>
 
         {/* Resize Handle */}
         <div
           onMouseDown={startResizing}
-          className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-neutral-300 transition-colors hidden lg:block ${
-            isResizing ? 'bg-neutral-400 w-1.5' : 'bg-transparent'
+          className={`absolute bottom-0 right-0 top-0 hidden w-1 cursor-col-resize transition-colors hover:bg-white/15 lg:block ${
+            isResizing ? 'w-1.5 bg-white/20' : 'bg-transparent'
           }`}
         />
       </aside>
     </>
   )
+}
+
+function threadDotClass(index: number) {
+  const colors = ['bg-emerald-300', 'bg-violet-300', 'bg-amber-300', 'bg-sky-300']
+  return colors[index % colors.length]
 }
 
 function formatThreadDate(value: string) {

@@ -9,6 +9,7 @@ import { LoginPage } from './components/LoginPage'
 import { MemoriesPanel } from './components/MemoriesPanel'
 import { DocumentsPanel } from './components/DocumentsPanel'
 import { WikiPanel } from './components/WikiPanel'
+import { WellbeingPanel } from './components/WellbeingPanel'
 import { listChatThreads, listThreadMessages, streamChatMessage, loginWithGoogle, uploadDocument } from './lib/api'
 import type { ChatModel, ChatThread, Message } from './types/workspace'
 import { useViewStore } from './store/viewStore'
@@ -45,7 +46,7 @@ function App() {
   })
 
   const queryClient = useQueryClient()
-  const { current, startNewChat, selectThread, selectWiki, selectDocuments, selectMemories } = useViewStore()
+  const { current, startNewChat, selectThread } = useViewStore()
 
   const threadId = current.view === 'chat' ? current.threadId : null
 
@@ -145,6 +146,10 @@ function App() {
     const trimmedPrompt = prompt.trim()
     if (!trimmedPrompt || isLoading) return
 
+    // Prevent the auto-select effect from firing when onThread adds the new thread to the cache
+    // mid-stream, which would abort the active stream.
+    hasAutoSelectedRef.current = true
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -191,6 +196,10 @@ function App() {
           setMessages((curr) =>
             curr.map((m) => (m.id === assistantDraftId ? response.message : m)),
           )
+          // Pre-seed the cache so navigating to a newly-created thread never shows a blank screen
+          if (!threadId) {
+            queryClient.setQueryData(['messages', response.threadId], [userMessage, response.message])
+          }
           queryClient.invalidateQueries({ queryKey: ['threads'] })
           queryClient.invalidateQueries({ queryKey: ['messages', response.threadId] })
           // Only navigate if the user hasn't moved to a different panel mid-stream
@@ -213,8 +222,8 @@ function App() {
     } finally {
       if (streamAbortRef.current === controller) {
         streamAbortRef.current = null
-        setIsResponding(false)
       }
+      setIsResponding(false)
     }
   }
 
@@ -283,6 +292,8 @@ function App() {
           <DocumentsPanel selectedModel={selectedModel} />
         ) : current.view === 'wiki' ? (
           <WikiPanel />
+        ) : current.view === 'wellbeing' ? (
+          <WellbeingPanel />
         ) : (
           <>
             <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">

@@ -20,7 +20,7 @@ from app.services.wiki_service import format_wiki_context, search_wiki_pages
 
 SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Answer clearly and conservatively. If the question needs document evidence, say what evidence is missing.
-Use the provided document context when it is relevant, and cite it with bracket references like [1].
+Use the provided document context when it is relevant.
 Do not invent citations or claim to have read uploaded documents unless the context is provided."""
 
 # Summarise older messages once the thread exceeds this count, keeping the most recent window verbatim.
@@ -183,7 +183,9 @@ def build_provider_messages(
         system_content += (
             "\n\nDocument Context:\n"
             f"{document_context}\n\n"
-            "When relying on document context, cite only the bracketed sources above. "
+            "When your answer draws on the document context above, end your response with a "
+            "**Sources** section listing only the citation labels of the chunks you actually used — "
+            "one per line, no bracket numbers. "
             "If the provided chunks do not answer the question, say what evidence is missing."
         )
 

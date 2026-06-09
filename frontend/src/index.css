@@ -62,6 +62,19 @@ textarea {
   background: #d4d4d4;
 }
 
+.lex-sidebar-scroll {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.lex-sidebar-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+
+.lex-sidebar-scroll::-webkit-scrollbar-thumb,
+.lex-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 /* Selection color */
 ::selection {
   background-color: #f3f4f6;

@@ -4,8 +4,9 @@ type ChatView = { view: 'chat'; threadId: string | null }
 type WikiView = { view: 'wiki'; pageId: string | null }
 type DocumentsView = { view: 'documents' }
 type MemoriesView = { view: 'memories' }
+type WellbeingView = { view: 'wellbeing' }
 
-export type AppView = ChatView | WikiView | DocumentsView | MemoriesView
+export type AppView = ChatView | WikiView | DocumentsView | MemoriesView | WellbeingView
 
 type ViewState = {
   current: AppView
@@ -14,6 +15,7 @@ type ViewState = {
   selectWiki: (pageId?: string | null) => void
   selectDocuments: () => void
   selectMemories: () => void
+  selectWellbeing: () => void
   setWikiPageId: (pageId: string | null) => void
 }
 
@@ -33,6 +35,8 @@ export const useViewStore = create<ViewState>((set, get) => ({
   selectDocuments: () => set({ current: { view: 'documents' } }),
 
   selectMemories: () => set({ current: { view: 'memories' } }),
+
+  selectWellbeing: () => set({ current: { view: 'wellbeing' } }),
 
   setWikiPageId: (pageId) =>
     set((state) =>
