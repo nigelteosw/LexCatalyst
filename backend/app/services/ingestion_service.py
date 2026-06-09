@@ -2,10 +2,15 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 
+import pytesseract
 from docx import Document as DocxDocument
+from pdf2image import convert_from_bytes
 from pypdf import PdfReader
 
 from app.services.storage_service import safe_filename
+
+# If native PDF text averages below this per page, fall back to OCR.
+_OCR_FALLBACK_CHARS_PER_PAGE = 100
 
 
 class IngestionError(RuntimeError):
@@ -56,6 +61,22 @@ def extract_text_blocks(file_bytes: bytes, filename: str, content_type: str) -> 
 
 
 def extract_pdf_blocks(file_bytes: bytes) -> list[TextBlock]:
+    blocks = _extract_pdf_native(file_bytes)
+    page_count = max(len(blocks), 1)
+    total_chars = sum(len(b.text) for b in blocks)
+
+    if total_chars / page_count >= _OCR_FALLBACK_CHARS_PER_PAGE:
+        return blocks
+
+    ocr_blocks = _extract_pdf_ocr(file_bytes)
+    if not ocr_blocks:
+        if blocks:
+            return blocks
+        raise IngestionError("No readable text found in the PDF (tried native extraction and OCR)")
+    return ocr_blocks
+
+
+def _extract_pdf_native(file_bytes: bytes) -> list[TextBlock]:
     try:
         reader = PdfReader(BytesIO(file_bytes))
         blocks = [
@@ -64,10 +85,23 @@ def extract_pdf_blocks(file_bytes: bytes) -> list[TextBlock]:
         ]
     except Exception as exc:
         raise IngestionError(f"PDF text extraction failed: {exc}") from exc
+    return [block for block in blocks if block.text]
 
-    blocks = [block for block in blocks if block.text]
-    if not blocks:
-        raise IngestionError("No readable text was found in the PDF")
+
+def _extract_pdf_ocr(file_bytes: bytes) -> list[TextBlock]:
+    try:
+        images = convert_from_bytes(file_bytes, dpi=300)
+    except Exception as exc:
+        raise IngestionError(f"PDF to image conversion failed: {exc}") from exc
+
+    blocks: list[TextBlock] = []
+    for page_num, image in enumerate(images, start=1):
+        try:
+            text = pytesseract.image_to_string(image, lang="eng").strip()
+        except Exception as exc:
+            raise IngestionError(f"OCR failed on page {page_num}: {exc}") from exc
+        if text:
+            blocks.append(TextBlock(text=text, page_number=page_num))
     return blocks
 
 
