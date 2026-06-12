@@ -158,7 +158,7 @@ apt-get install tesseract-ocr poppler-utils
 ### 3. Frontend
 ```bash
 cd frontend
-bun install  # or npm install — picks up react-markdown + remark-gfm
+bun install
 bun run dev
 ```
 
@@ -259,12 +259,24 @@ Retry: clicking "Retry summary" on a failed entry resets it back to `processing`
 
 After pushing this branch:
 
+Cloudflare Pages frontend settings:
+
+```txt
+Root directory: frontend
+Build command: bun run build
+Build output: dist
+BUN_VERSION: 1.3.11
+```
+
+The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`;
+Cloudflare treats it as an npm project and runs `npm ci` before the build command.
+
 | What | Where | Required? |
 |---|---|---|
 | Run migrations | Auto (Railway runs `alembic upgrade head && uvicorn ...`) | Auto |
 | Frontend deps install | `bun install` adds `react-markdown` + `remark-gfm` | Yes — happens at build |
 | Backend deps install | No new Python packages | n/a |
-| New env vars | None — DeepSeek Pro is hardcoded for KB summaries | n/a |
+| New env vars | `BUN_VERSION=1.3.11` in Cloudflare Pages | Recommended |
 | Existing KB entries | Get `status="ready"` automatically via the `server_default` | Auto |
 | Existing KB embeddings | `embedding_content_hash` is NULL until first refresh | Optional |
 | Repair search index | `POST /kb/backfill-embeddings` (or the "Repair search index" button) backfills missing hashes idempotently | Recommended once |

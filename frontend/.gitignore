@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# This project uses bun. Keep bun.lock authoritative.
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
