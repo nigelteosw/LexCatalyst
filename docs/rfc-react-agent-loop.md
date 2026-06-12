@@ -165,7 +165,10 @@ The standard market position for M&A NDAs is 5 years minimum…
 
 ## 7. Data Model Changes
 
-No schema changes required. The agent loop is purely a service-layer change. The final assistant message is saved to `chat_messages` as before — tool steps are not persisted (they are ephemeral streaming events).
+The final assistant message is saved to `chat_messages` with its ordered `tool_steps` JSON. Each
+step stores the provider tool-call ID, tool name, exact arguments, result summary, and completion
+status. The frontend renders the same structure during streaming and after thread history is
+reloaded.
 
 ---
 
@@ -244,7 +247,6 @@ steps?: ToolStep[]
 
 ## 11. Out of Scope
 
-- Persisting tool steps to the database
 - Parallel tool calls (the loop is sequential for now; parallelism adds complexity without clear benefit for legal Q&A)
 - Agent memory of past tool results across turns (each turn starts fresh)
 - Custom tool definitions per user or firm

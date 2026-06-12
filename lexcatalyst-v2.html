@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LexCatalyst</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --black: #0f0f0f; --white: #fafaf8; --surface: #f4f3ef; --surface2: #eeecea;
+  --border: rgba(15,15,15,0.1); --border2: rgba(15,15,15,0.18);
+  --text: #0f0f0f; --text2: #5a5a56; --text3: #9a9a94;
+  --green: #1a6b4a; --green-light: #e8f5ee; --green-mid: #2d9e6b;
+  --amber: #8a5a00; --amber-light: #fef3dc;
+  --red: #8a1f1f; --red-light: #fdeeed;
+  --purple: #4a3db0; --purple-light: #eeecff;
+  --blue: #1a4a8a; --blue-light: #e8f0fe;
+  --teal: #0f6e6e; --teal-light: #e0f5f5;
+  --r: 10px; --r-lg: 14px;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
+html, body { height: 100%; font-family: var(--sans); background: var(--surface); color: var(--text); font-size: 14px; line-height: 1.5; overflow: hidden; }
+
+/* ── SHELL ── */
+.shell { display: grid; grid-template-columns: 215px 1fr 295px; height: 100vh; overflow: hidden; }
+
+/* ── SIDEBAR ── */
+.sidebar { background: var(--black); color: var(--white); display: flex; flex-direction: column; overflow: hidden; }
+.sb-top { padding: 18px 14px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.logo { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; }
+.logo-mark { width: 30px; height: 30px; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 15px; color: #fff; font-style: italic; }
+.logo-text { font-family: var(--serif); font-size: 16px; color: #fff; font-style: italic; }
+.new-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--r); padding: 7px 10px; font-size: 12px; color: rgba(255,255,255,0.6); cursor: pointer; font-family: var(--sans); transition: background .15s; }
+.new-btn:hover { background: rgba(255,255,255,0.13); }
+
+.sb-nav { padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 1px; }
+.ni { display: flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: var(--r); font-size: 12px; color: rgba(255,255,255,0.5); cursor: pointer; transition: all .15s; }
+.ni:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.82); }
+.ni.active { background: rgba(255,255,255,0.1); color: #fff; }
+.badge { font-size: 9px; font-weight: 500; padding: 2px 6px; border-radius: 20px; margin-left: auto; }
+.bg-green { background: rgba(45,158,107,0.3); color: #6dd4a4; }
+.bg-purple { background: rgba(74,61,176,0.3); color: #a89ef5; }
+.bg-amber { background: rgba(186,117,23,0.3); color: #f5c878; }
+.bg-blue { background: rgba(26,74,138,0.3); color: #7aabf5; }
+
+.sb-recents { padding: 8px 6px; flex: 1; overflow-y: auto; }
+.sb-recents::-webkit-scrollbar { width: 3px; } .sb-recents::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.sec-lbl { font-size: 9px; letter-spacing: .09em; text-transform: uppercase; color: rgba(255,255,255,0.28); padding: 4px 9px 5px; }
+.ci { padding: 5px 9px; border-radius: var(--r); font-size: 11.5px; color: rgba(255,255,255,0.42); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: all .15s; display: flex; align-items: center; gap: 6px; }
+.ci:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.72); }
+.ci-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+.sb-user { padding: 10px 10px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; }
+.uav { width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 500; color: #fff; flex-shrink: 0; }
+.uname { font-size: 11.5px; color: rgba(255,255,255,0.78); }
+.urole { font-size: 10px; color: rgba(255,255,255,0.32); }
+.plan-tag { font-size: 9px; background: rgba(45,158,107,0.22); color: #6dd4a4; border-radius: 20px; padding: 2px 6px; margin-left: auto; }
+
+/* ── MAIN ── */
+.main { display: flex; flex-direction: column; background: var(--white); border-left: 1px solid var(--border); border-right: 1px solid var(--border); overflow: hidden; }
+.topbar { display: flex; align-items: center; gap: 7px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.chip { display: flex; align-items: center; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 11px; color: var(--text2); }
+.mentor-btn { margin-left: auto; display: flex; align-items: center; gap: 5px; background: var(--green-light); border: 1px solid rgba(26,107,74,0.18); border-radius: 20px; padding: 4px 11px; font-size: 11px; color: var(--green); font-weight: 500; cursor: pointer; transition: all .15s; }
+.mentor-btn:hover { background: #d6ede2; }
+.ldot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-mid); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+.vtabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 16px; flex-shrink: 0; overflow-x: auto; }
+.vtabs::-webkit-scrollbar { height: 0; }
+.vt { font-size: 12px; padding: 8px 12px; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
+.vt:hover { color: var(--text2); }
+.vt.active { color: var(--text); border-bottom-color: var(--black); font-weight: 500; }
+
+/* ── VIEWS ── */
+.view { flex: 1; overflow-y: auto; display: none; }
+.view.active { display: flex; flex-direction: column; }
+.view::-webkit-scrollbar { width: 3px; } .view::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Chat */
+.chat-msgs { flex: 1; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+.chat-msgs::-webkit-scrollbar { width: 3px; }
+.msg-u { display: flex; justify-content: flex-end; }
+.bub-u { background: var(--black); color: #fff; border-radius: 14px 14px 4px 14px; padding: 10px 14px; font-size: 12.5px; line-height: 1.65; max-width: 82%; }
+.msg-l { display: flex; gap: 9px; align-items: flex-start; }
+.lx-ic { width: 26px; height: 26px; border-radius: 7px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--text2); }
+.bub-l { background: var(--surface); border: 1px solid var(--border); border-radius: 4px 14px 14px 14px; padding: 11px 14px; font-size: 12.5px; line-height: 1.7; color: var(--text); max-width: 90%; }
+.iflag { display: flex; align-items: flex-start; gap: 7px; border-radius: 7px; padding: 7px 10px; margin: 7px 0 2px; font-size: 11.5px; line-height: 1.55; }
+.fd { background: var(--red-light); color: var(--red); border: 1px solid rgba(138,31,31,0.13); }
+.fw { background: var(--amber-light); color: var(--amber); border: 1px solid rgba(138,90,0,0.13); }
+.fo { background: var(--green-light); color: var(--green); border: 1px solid rgba(26,107,74,0.13); }
+.fb { background: var(--blue-light); color: var(--blue); border: 1px solid rgba(26,74,138,0.13); }
+.fi { flex-shrink: 0; margin-top: 1px; }
+.dref { display: inline-flex; align-items: center; gap: 5px; background: var(--white); border: 1px solid var(--border); border-radius: 20px; padding: 3px 9px; margin-top: 7px; font-size: 10.5px; color: var(--text3); cursor: pointer; }
+.dref:hover { border-color: var(--border2); color: var(--text2); }
+.typing { display: flex; gap: 4px; align-items: center; }
+.typing span { width: 5px; height: 5px; border-radius: 50%; background: var(--text3); animation: blink 1.2s infinite; }
+.typing span:nth-child(2){animation-delay:.2s;} .typing span:nth-child(3){animation-delay:.4s;}
+@keyframes blink{0%,80%,100%{opacity:.2;}40%{opacity:1;}}
+.chat-in { padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.in-wrap { display: flex; align-items: flex-end; gap: 7px; border: 1px solid var(--border2); border-radius: var(--r-lg); padding: 9px 11px; background: var(--surface); transition: border-color .15s; }
+.in-wrap:focus-within { border-color: rgba(15,15,15,.3); background: var(--white); }
+#chat-input { flex: 1; border: none; background: transparent; font-size: 12.5px; color: var(--text); outline: none; resize: none; font-family: var(--sans); line-height: 1.5; max-height: 90px; }
+#chat-input::placeholder { color: var(--text3); }
+.ib { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border); background: var(--white); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text3); transition: all .15s; }
+.ib:hover { background: var(--surface2); }
+.send { width: 28px; height: 28px; border-radius: 7px; background: var(--black); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; }
+.send:hover { background: #333; }
+.disclaimer { font-size: 10px; color: var(--text3); text-align: center; margin-top: 6px; }
+
+/* Generic content views */
+.view-pad { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.sec-title { font-size: 13.5px; font-weight: 500; color: var(--text); }
+.sec-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+/* Stats row */
+.stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+.stat { background: var(--surface); border-radius: var(--r); padding: 12px 13px; }
+.sv { font-size: 22px; font-weight: 300; color: var(--text); font-family: var(--serif); font-style: italic; }
+.sl { font-size: 10.5px; color: var(--text3); margin-top: 1px; }
+
+/* Cards */
+.card { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px 16px; background: var(--white); }
+.card:hover { border-color: var(--border2); }
+.card-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+.card-body { font-size: 12px; color: var(--text2); line-height: 1.65; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; }
+.tag { font-size: 10px; padding: 2px 7px; background: var(--surface); border-radius: 20px; color: var(--text2); border: 1px solid var(--border); }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+.pill { font-size: 9.5px; padding: 2px 7px; border-radius: 20px; font-weight: 500; }
+.pill-dark { background: var(--black); color: #fff; }
+.pill-green { background: var(--green-light); color: var(--green); }
+.pill-purple { background: var(--purple-light); color: var(--purple); }
+.pill-amber { background: var(--amber-light); color: var(--amber); }
+.pill-blue { background: var(--blue-light); color: var(--blue); }
+.pill-teal { background: var(--teal-light); color: var(--teal); }
+.pill-red { background: var(--red-light); color: var(--red); }
+
+/* Billable hour view */
+.bh-meter { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px; background: var(--white); }
+.bh-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.bh-row:last-child { border-bottom: none; }
+.bh-label { font-size: 12.5px; color: var(--text); flex: 1; }
+.bh-sub { font-size: 11px; color: var(--text3); }
+.bh-bar-wrap { width: 120px; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+.bh-bar { height: 100%; border-radius: 3px; transition: width .4s ease; }
+.bh-val { font-size: 12px; font-weight: 500; color: var(--text); width: 36px; text-align: right; font-family: var(--serif); font-style: italic; }
+
+/* Toggle */
+.toggle { width: 30px; height: 17px; border-radius: 9px; display: flex; align-items: center; padding: 2px; cursor: pointer; flex-shrink: 0; transition: background .2s; }
+.toggle.on { background: var(--green-mid); justify-content: flex-end; }
+.toggle.off { background: var(--border2); }
+.tknob { width: 13px; height: 13px; border-radius: 50%; background: #fff; }
+
+/* Principle cards */
+.prin-card { border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+.prin-hd { padding: 11px 14px; display: flex; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--border); }
+.prin-num { font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--text3); flex-shrink: 0; line-height: 1; }
+.prin-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.prin-sub { font-size: 11.5px; color: var(--text3); margin-top: 2px; }
+.prin-body { padding: 12px 14px; font-size: 12px; color: var(--text2); line-height: 1.65; }
+.prin-actions { padding: 8px 14px 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.act-btn { font-size: 11px; padding: 4px 10px; border-radius: var(--r); border: 1px solid var(--border); background: var(--white); color: var(--text2); cursor: pointer; transition: all .15s; }
+.act-btn:hover { background: var(--surface); border-color: var(--border2); }
+.act-btn-p { background: var(--black); color: #fff; border-color: var(--black); }
+.act-btn-p:hover { background: #333; }
+
+/* Wellbeing tracker */
+.wbtrack { display: flex; flex-direction: column; gap: 8px; }
+.wbrow { display: flex; align-items: center; gap: 10px; padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--r); background: var(--white); }
+.wbname { font-size: 12.5px; color: var(--text); flex: 1; }
+.wbbar { width: 80px; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+.wbfill { height: 100%; border-radius: 3px; }
+.wbpct { font-size: 11px; color: var(--text3); width: 30px; text-align: right; }
+
+/* IHC view */
+.ihc-card { border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+.ihc-hd { padding: 12px 15px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.ihc-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.ihc-body { padding: 14px 15px; font-size: 12px; color: var(--text2); line-height: 1.65; display: flex; flex-direction: column; gap: 10px; }
+.ihc-metric { display: flex; align-items: center; gap: 8px; padding: 8px 11px; background: var(--surface); border-radius: var(--r); }
+.ihc-metric-label { font-size: 12px; color: var(--text2); flex: 1; }
+.ihc-metric-val { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--text); }
+
+/* Mentor panel */
+.mp { display: flex; flex-direction: column; overflow: hidden; background: var(--white); }
+.mp-hd { padding: 13px 13px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+.mp-av { width: 32px; height: 32px; border-radius: 50%; background: var(--green-light); border: 1px solid rgba(26,107,74,0.18); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mp-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.mp-sub { font-size: 10.5px; color: var(--text3); }
+.mp-live { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--green); font-weight: 500; margin-left: auto; }
+
+.mptabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.mpt { flex: 1; padding: 8px 0; font-size: 11px; text-align: center; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; }
+.mpt:hover { color: var(--text2); }
+.mpt.active { color: var(--text); border-bottom-color: var(--green-mid); font-weight: 500; }
+
+.mpbody { flex: 1; overflow-y: auto; padding: 11px 12px; display: flex; flex-direction: column; gap: 9px; }
+.mpbody::-webkit-scrollbar { width: 3px; }
+.mmsg { background: var(--surface); border-radius: 4px 11px 11px 11px; padding: 9px 11px; font-size: 12px; line-height: 1.65; color: var(--text); border: 1px solid var(--border); }
+.ml { font-size: 9.5px; color: var(--text3); margin-bottom: 3px; }
+
+.fc { border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.fch { display: flex; align-items: center; gap: 6px; padding: 7px 10px; font-size: 11px; font-weight: 500; }
+.fcd { background: var(--red-light); color: var(--red); }
+.fcw { background: var(--amber-light); color: var(--amber); }
+.fco { background: var(--green-light); color: var(--green); }
+.fcb { background: var(--blue-light); color: var(--blue); }
+.fcbody { padding: 8px 10px; font-size: 11.5px; line-height: 1.6; color: var(--text2); }
+.fcsrc { padding: 0 10px 5px; font-size: 10px; color: var(--purple); font-weight: 500; display: flex; align-items: center; gap: 3px; }
+.fcact { padding: 5px 10px 8px; display: flex; gap: 5px; }
+.fbtn { font-size: 10.5px; padding: 3px 9px; border-radius: 7px; border: 1px solid var(--border); background: var(--white); color: var(--text2); cursor: pointer; transition: all .15s; }
+.fbtn:hover { background: var(--surface); }
+.fbtn-p { background: var(--green-light); border-color: rgba(26,107,74,0.2); color: var(--green); font-weight: 500; }
+
+.egbox { border: 1px solid rgba(74,61,176,0.18); border-radius: var(--r); overflow: hidden; }
+.eglbl { background: var(--purple-light); padding: 6px 10px; font-size: 9.5px; font-weight: 500; color: var(--purple); letter-spacing: .06em; text-transform: uppercase; display: flex; align-items: center; gap: 4px; }
+.egsrc { padding: 5px 10px 0; font-size: 10px; color: rgba(74,61,176,0.55); font-weight: 500; }
+.egtxt { padding: 6px 10px 10px; font-size: 12.5px; line-height: 1.65; color: var(--text2); font-style: italic; font-family: var(--serif); }
+
+/* Progress */
+.prog-sec { display: flex; flex-direction: column; gap: 6px; }
+.prog-lbl { font-size: 10.5px; font-weight: 500; color: var(--text2); margin-bottom: 1px; }
+.prow { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--surface); border-radius: var(--r); }
+.pname { font-size: 11px; color: var(--text2); flex: 1; }
+.pbar { width: 55px; height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+.pfill { height: 100%; border-radius: 2px; }
+.ppct { font-size: 10px; color: var(--text3); width: 24px; text-align: right; }
+
+/* Ask tab */
+.ask-msgs { flex: 1; overflow-y: auto; padding: 11px 12px; display: flex; flex-direction: column; gap: 9px; }
+.ask-prompt { background: var(--surface); border-radius: var(--r); padding: 8px 11px; font-size: 11.5px; color: var(--text2); cursor: pointer; border: 1px solid var(--border); transition: all .15s; line-height: 1.5; }
+.ask-prompt:hover { border-color: var(--border2); background: var(--surface2); }
+.apl { font-size: 9.5px; color: var(--text3); margin-bottom: 3px; }
+.mp-askbar { padding: 9px 11px; border-top: 1px solid var(--border); display: flex; gap: 6px; align-items: flex-end; flex-shrink: 0; }
+.askin { flex: 1; font-size: 12px; padding: 7px 10px; border-radius: var(--r); border: 1px solid var(--border2); background: var(--surface); color: var(--text); outline: none; font-family: var(--sans); resize: none; line-height: 1.5; }
+.askin::placeholder { color: var(--text3); }
+.asksend { width: 28px; height: 28px; border-radius: 7px; background: var(--green); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+
+/* Wellbeing mood check */
+.mood-row { display: flex; gap: 8px; }
+.mood-btn { flex: 1; padding: 9px; border: 1px solid var(--border); border-radius: var(--r); text-align: center; cursor: pointer; font-size: 11px; color: var(--text3); transition: all .15s; }
+.mood-btn:hover { border-color: var(--border2); color: var(--text2); }
+.mood-btn.selected { border-color: var(--green-mid); background: var(--green-light); color: var(--green); font-weight: 500; }
+.mood-em { font-size: 18px; margin-bottom: 3px; }
+
+/* Alert bar */
+.alert-bar { display: flex; align-items: center; gap: 9px; border-radius: var(--r); padding: 9px 12px; font-size: 12px; }
+.alert-green { background: var(--green-light); color: var(--green); border: 1px solid rgba(26,107,74,0.15); }
+.alert-amber { background: var(--amber-light); color: var(--amber); border: 1px solid rgba(138,90,0,0.15); }
+.alert-blue { background: var(--blue-light); color: var(--blue); border: 1px solid rgba(26,74,138,0.15); }
+
+/* Utility */
+.hidden { display: none !important; }
+.fade-in { animation: fi .22s ease; }
+@keyframes fi { from{opacity:0;transform:translateY(3px);} to{opacity:1;transform:translateY(0);} }
+.row { display: flex; align-items: center; gap: 8px; }
+.row-sb { display: flex; align-items: center; justify-content: space-between; }
+hr { border: none; border-top: 1px solid var(--border); }
+* { scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ══ SIDEBAR ══ -->
+<div class="sidebar">
+  <div class="sb-top">
+    <div class="logo">
+      <div class="logo-mark">L</div>
+      <span class="logo-text">LexCatalyst</span>
+    </div>
+    <button class="new-btn" onclick="newChat()">
+      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      New chat
+    </button>
+  </div>
+  <nav class="sb-nav">
+    <div class="ni active" id="sni-chat" onclick="sbNav('chat')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</div>
+    <div class="ni" id="sni-billable" onclick="sbNav('billable')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Value tracker<span class="badge bg-amber">New</span></div>
+    <div class="ni" id="sni-principles" onclick="sbNav('principles')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Principles<span class="badge bg-green">New</span></div>
+    <div class="ni" id="sni-ihc" onclick="sbNav('ihc')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>IHC tools<span class="badge bg-blue">New</span></div>
+    <div class="ni" id="sni-wellbeing" onclick="sbNav('wellbeing')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>Wellbeing<span class="badge bg-purple">New</span></div>
+    <div class="ni" id="sni-kb" onclick="sbNav('kb')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>Knowledge bank</div>
+    <div class="ni" id="sni-memories" onclick="sbNav('memories')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04Z"/></svg>Memories</div>
+  </nav>
+  <div class="sb-recents">
+    <div class="sec-lbl">Recent chats</div>
+    <div class="ci" onclick="loadChat(0)"><div class="ci-dot" style="background:#6dd4a4;"></div>NDA — Meridian Holdings</div>
+    <div class="ci" onclick="loadChat(1)"><div class="ci-dot" style="background:#a89ef5;"></div>SPA indemnity analysis</div>
+    <div class="ci" onclick="loadChat(2)"><div class="ci-dot" style="background:#f5c080;"></div>Governing law question</div>
+    <div class="ci" onclick="loadChat(3)"><div class="ci-dot" style="background:#888;"></div>Sustainability — quick query</div>
+  </div>
+  <div class="sb-user">
+    <div class="uav">SC</div>
+    <div><div class="uname">Sarah Chen</div><div class="urole">Trainee · M&A</div></div>
+    <span class="plan-tag">Pro</span>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+  <div class="topbar">
+    <div class="chip"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Meridian / NDA</div>
+    <div class="chip"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>Draft v2</div>
+    <div class="mentor-btn" id="mentor-toggle" onclick="toggleMentor()">
+      <div class="ldot" id="ldot"></div><span id="mtlabel">Mentor active</span>
+    </div>
+  </div>
+  <div class="vtabs">
+    <div class="vt active" id="vt-chat" onclick="switchView('chat')">Chat</div>
+    <div class="vt" id="vt-billable" onclick="switchView('billable')">Value tracker</div>
+    <div class="vt" id="vt-principles" onclick="switchView('principles')">Sustainability principles</div>
+    <div class="vt" id="vt-ihc" onclick="switchView('ihc')">IHC tools</div>
+    <div class="vt" id="vt-wellbeing" onclick="switchView('wellbeing')">Wellbeing</div>
+    <div class="vt" id="vt-kb" onclick="switchView('kb')">Knowledge bank</div>
+    <div class="vt" id="vt-memories" onclick="switchView('memories')">Memories</div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="view active" id="view-chat">
+    <div class="chat-msgs" id="chat-msgs"></div>
+    <div class="chat-in">
+      <div class="in-wrap">
+        <textarea id="chat-input" rows="1" placeholder="Type your legal question or request..." onkeydown="handleKey(event)" oninput="resize(this)"></textarea>
+        <div class="ib" title="Upload"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+        <button class="send" onclick="sendMsg()" aria-label="Send"><svg width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+      </div>
+      <div class="disclaimer">LexCatalyst can make mistakes. Check important info.</div>
+    </div>
+  </div>
+
+  <!-- VALUE TRACKER (Billable Hour Reimagined) -->
+  <div class="view" id="view-billable">
+    <div class="view-pad">
+      <div>
+        <div class="sec-title">Value tracker — reimagining the billable hour</div>
+        <div class="sec-sub">Captures efficiency, quality, and client value — not just time logged</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sv">6.2h</div><div class="sl">Hours logged today</div></div>
+        <div class="stat"><div class="sv">142%</div><div class="sl">Efficiency vs avg</div></div>
+        <div class="stat"><div class="sv">4.8★</div><div class="sl">Client value score</div></div>
+        <div class="stat"><div class="sv">£3.2k</div><div class="sl">Value delivered</div></div>
+      </div>
+
+      <div class="alert-bar alert-green"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span>Your Meridian NDA review was completed 40% faster than the team average — this contributes to your efficiency score and is flagged for the value bonus pool.</span></div>
+
+      <div class="bh-meter">
+        <div class="row-sb" style="margin-bottom:12px;"><span class="sec-title">Matter: Meridian NDA review</span><span class="pill pill-amber">In progress</span></div>
+        <div class="bh-row"><div><div class="bh-label">Time efficiency</div><div class="bh-sub">vs firm average for comparable tasks</div></div><div class="bh-bar-wrap"><div class="bh-bar" style="width:80%;background:var(--green-mid);"></div></div><div class="bh-val">+40%</div></div>
+        <div class="bh-row"><div><div class="bh-label">Output quality</div><div class="bh-sub">Based on mentor flags resolved, partner edits</div></div><div class="bh-bar-wrap"><div class="bh-bar" style="width:72%;background:var(--green-mid);"></div></div><div class="bh-val">72%</div></div>
+        <div class="bh-row"><div><div class="bh-label">Knowledge reuse</div><div class="bh-sub">Proportion drawn from knowledge bank</div></div><div class="bh-bar-wrap"><div class="bh-bar" style="width:60%;background:#4a3db0;"></div></div><div class="bh-val">60%</div></div>
+        <div class="bh-row"><div><div class="bh-label">Client complexity</div><div class="bh-sub">Deal complexity modifier applied to billing</div></div><div class="bh-bar-wrap"><div class="bh-bar" style="width:85%;background:var(--amber);"></div></div><div class="bh-val">High</div></div>
+        <div class="bh-row"><div><div class="bh-label">Supervision load</div><div class="bh-sub">Partner review time required on your work</div></div><div class="bh-bar-wrap"><div class="bh-bar" style="width:28%;background:var(--green-mid);"></div></div><div class="bh-val">Low</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Alternative billing model — active for this matter</div>
+        <div class="card-body" style="margin:8px 0;">This matter uses a <strong>hybrid value fee</strong>: a fixed base plus an efficiency kicker. Your faster-than-average completion qualifies for a share of the value pool. Traditional billable hour would have captured fewer pounds for the same work quality.</div>
+        <div class="grid2" style="margin-top:10px;">
+          <div style="background:var(--red-light);border-radius:var(--r);padding:10px 12px;"><div style="font-size:10px;color:var(--red);font-weight:500;margin-bottom:4px;">Billable hour (old model)</div><div style="font-family:var(--serif);font-style:italic;font-size:20px;color:var(--text);">£1,860</div><div style="font-size:10.5px;color:var(--text3);">6.2h × £300 partner rate</div></div>
+          <div style="background:var(--green-light);border-radius:var(--r);padding:10px 12px;"><div style="font-size:10px;color:var(--green);font-weight:500;margin-bottom:4px;">Value fee (current model)</div><div style="font-family:var(--serif);font-style:italic;font-size:20px;color:var(--text);">£3,200</div><div style="font-size:10.5px;color:var(--text3);">Base £2,500 + £700 efficiency kicker</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sec-title" style="margin-bottom:10px;">Firm-wide value initiatives</div>
+        <div class="grid2">
+          <div class="card"><span class="pill pill-teal" style="margin-bottom:8px;display:inline-block;">Active</span><div class="card-title">No-billable-minimum Fridays</div><div class="card-body">Friday afternoons are protected for learning, pro bono, and mentorship — not logged as billable. Reduces burnout without affecting client delivery.</div></div>
+          <div class="card"><span class="pill pill-purple" style="margin-bottom:8px;display:inline-block;">Piloting</span><div class="card-title">Outcome-based fee experiments</div><div class="card-body">Three M&A matters this quarter are testing fixed-fee structures with a success kicker. Feedback to partners monthly via this dashboard.</div></div>
+          <div class="card"><span class="pill pill-amber" style="margin-bottom:8px;display:inline-block;">Proposed</span><div class="card-title">AI efficiency dividend</div><div class="card-body">When AI tools (like LexCatalyst) reduce task time significantly, 50% of the time saved is returned to the junior as protected hours. Proposal under partner review.</div></div>
+          <div class="card"><span class="pill pill-green" style="margin-bottom:8px;display:inline-block;">Active</span><div class="card-title">Quality-over-quantity reviews</div><div class="card-body">Partner performance reviews now include a "supervision load" metric — partners who require excessive re-drafts from juniors are flagged, not rewarded.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUSTAINABILITY PRINCIPLES -->
+  <div class="view" id="view-principles">
+    <div class="view-pad">
+      <div>
+        <div class="sec-title">Sustainability principles</div>
+        <div class="sec-sub">Your firm's adoption status · Ashworth & Cole LLP · M&A team</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="sv">11</div><div class="sl">Principles tracked</div></div>
+        <div class="stat"><div class="sv">7</div><div class="sl">Fully adopted</div></div>
+        <div class="stat"><div class="sv">3</div><div class="sl">In progress</div></div>
+        <div class="stat"><div class="sv">78%</div><div class="sl">Team compliance</div></div>
+      </div>
+
+      <div class="alert-bar alert-blue"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Principle 4 (right to disconnect) is flagged as partially adopted — 3 partners are still emailing outside protected hours. Escalation reminder sent.</span></div>
+
+      <div class="prin-card">
+        <div class="prin-hd"><div class="prin-num">1</div><div><div class="prin-title">Reasonable working hours</div><div class="prin-sub">Protect against systemic overwork — not just crisis exceptions</div></div><span class="pill pill-green" style="margin-left:auto;flex-shrink:0;">Adopted</span></div>
+        <div class="prin-body">The firm commits to monitoring logged hours weekly. Any junior exceeding 55h/week for 2+ consecutive weeks triggers a mandatory check-in with their supervisor and a workload redistribution review. LexCatalyst tracks this automatically and flags to the team manager.</div>
+        <div class="prin-actions"><div class="act-btn act-btn-p" onclick="mpAsk('How is Principle 1 tracked in LexCatalyst?')">Ask mentor ↗</div><div class="act-btn">View your hours log</div><div class="act-btn">See firm data</div></div>
+      </div>
+
+      <div class="prin-card">
+        <div class="prin-hd"><div class="prin-num">2</div><div><div class="prin-title">Transparent progression criteria</div><div class="prin-sub">Promotion based on visible, objective standards — not subjective "fit"</div></div><span class="pill pill-green" style="margin-left:auto;flex-shrink:0;">Adopted</span></div>
+        <div class="prin-body">All promotion criteria are published and reviewed annually with junior input. Mentor tracks your progress against each criterion and surfaces gaps before review cycles — not during them. Criteria include quality scores, supervision load, client feedback, and learning breadth.</div>
+        <div class="prin-actions"><div class="act-btn act-btn-p" onclick="mpAsk('Show me my current progression scorecard against the published criteria.')">View my scorecard ↗</div><div class="act-btn">See full criteria</div></div>
+      </div>
+
+      <div class="prin-card">
+        <div class="prin-hd"><div class="prin-num">3</div><div><div class="prin-title">Structured mentorship</div><div class="prin-sub">Formal, resourced, not ad hoc</div></div><span class="pill pill-green" style="margin-left:auto;flex-shrink:0;">Adopted</span></div>
+        <div class="prin-body">Every trainee and junior associate is assigned a dedicated mentor with protected time (2h/month minimum). LexCatalyst's Mentor feature supplements — but does not replace — human mentoring. The AI surfaces what to discuss; the human provides judgment, sponsorship, and career context.</div>
+        <div class="prin-actions"><div class="act-btn act-btn-p" onclick="switchMentorTab('progress')">Open my progress ↗</div><div class="act-btn">Book mentor session</div></div>
+      </div>
+
+      <div class="prin-card">
+        <div class="prin-hd"><div class="prin-num">4</div><div><div class="prin-title">Right to disconnect</div><div class="prin-sub">Protected hours enforced, not just stated</div></div><span class="pill pill-amber" style="margin-left:auto;flex-shrink:0;">In progress</span></div>
+        <div class="prin-body">Email and Slack messages sent between 8pm–7am are held and delivered the next morning — except for genuine client emergencies (flagged by the sender). 3 partners have requested exceptions to the delay rule. Escalation in progress via the Sustainability Committee.</div>
+        <div class="prin-actions"><div class="act-btn act-btn-p" onclick="mpAsk('What steps can I take if my supervisor violates the right to disconnect policy?')">Ask mentor ↗</div><div class="act-btn">Flag a violation</div><div class="act-btn">See exception log</div></div>
+      </div>
+
+      <div class="prin-card">
+        <div class="prin-hd"><div class="prin-num">5</div><div><div class="prin-title">Psychological safety</div><div class="prin-sub">Safe to raise concerns, make mistakes, and ask questions</div></div><span class="pill pill-green" style="margin-left:auto;flex-shrink:0;">Adopted</span></div>
+        <div class="prin-body">Anonymous concern-raising is embedded in LexCatalyst — juniors can flag workload, supervision, or culture issues without identification. Aggregate data reviewed quarterly by the managing partner. Mentor's Ask tab provides a safe space for questions that feel too junior to raise in person.</div>
+        <div class="prin-actions"><div class="act-btn act-btn-p" onclick="switchMentorTab('ask')">Ask mentor anonymously ↗</div><div class="act-btn">Raise a concern</div></div>
+      </div>
+
+      <div class="prin-card">
+        <div class="prin-hd"><div class="prin-num">6</div><div><div class="prin-title">Pro bono and purpose</div><div class="prin-sub">Meaningful work embedded in the role, not bolted on</div></div><span class="pill pill-amber" style="margin-left:auto;flex-shrink:0;">In progress</span></div>
+        <div class="prin-body">Every associate is allocated 50 pro bono hours annually, protected from billable pressure. Current adoption: 34%. Barrier identified: pro bono work isn't yet reflected in progression criteria. Proposal to include it under Principle 2 is before the partnership.</div>
+        <div class="prin-actions"><div class="act-btn act-btn-p" onclick="mpAsk('How should I approach raising pro bono allocation with my supervisor?')">Ask mentor ↗</div><div class="act-btn">Log pro bono hours</div></div>
+      </div>
+
+      <div class="prin-card">
+        <div class="prin-hd"><div class="prin-num">7</div><div><div class="prin-title">Workload redistribution</div><div class="prin-sub">Equitable distribution — visible, not dependent on who shouts loudest</div></div><span class="pill pill-red" style="margin-left:auto;flex-shrink:0;">Needs attention</span></div>
+        <div class="prin-body">LexCatalyst's hours tracker reveals uneven distribution: top 20% of juniors carry 48% of logged hours. Recommended fix: a live workload dashboard visible to team managers with a reallocation nudge when any individual exceeds 120% of average load for 2+ weeks.</div>
+        <div class="prin-actions"><div class="act-btn act-btn-p" onclick="mpAsk('What are practical steps a junior can take if their workload is consistently above team average?')">Ask mentor ↗</div><div class="act-btn">View workload data</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IHC TOOLS -->
+  <div class="view" id="view-ihc">
+    <div class="view-pad">
+      <div>
+        <div class="sec-title">IHC propagation tools</div>
+        <div class="sec-sub">Helping in-house counsel embed sustainability principles with external counsel</div>
+      </div>
+      <div class="alert-bar alert-blue"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>3 of your external panel firms have not yet submitted their Sustainability Principles self-assessment. Reminder sent. Response due in 14 days.</span></div>
+
+      <div class="grid2">
+        <div class="ihc-card">
+          <div class="ihc-hd"><span class="ihc-title">Panel firm scorecard</span><span class="pill pill-green">Live</span></div>
+          <div class="ihc-body">
+            <div style="font-size:12px;color:var(--text2);">Track external counsel compliance with your Sustainability Principles requirements across all panel firms.</div>
+            <div class="ihc-metric"><span class="ihc-metric-label">Ashworth & Cole LLP</span><span class="pill pill-green">Compliant</span></div>
+            <div class="ihc-metric"><span class="ihc-metric-label">Meridian Legal Partners</span><span class="pill pill-amber">Partial</span></div>
+            <div class="ihc-metric"><span class="ihc-metric-label">Oaktree Counsel</span><span class="pill pill-red">Overdue</span></div>
+            <div class="ihc-metric"><span class="ihc-metric-label">FairWave Solicitors</span><span class="pill pill-green">Compliant</span></div>
+          </div>
+        </div>
+        <div class="ihc-card">
+          <div class="ihc-hd"><span class="ihc-title">RFP sustainability clause builder</span><span class="pill pill-purple">Tool</span></div>
+          <div class="ihc-body">
+            <div style="font-size:12px;color:var(--text2);">Auto-generate Sustainability Principles requirements to embed in panel appointment letters, RFPs, and engagement terms.</div>
+            <div class="act-btn act-btn-p" style="display:inline-block;margin-top:4px;cursor:pointer;" onclick="mpAsk('Draft sustainability clauses for an RFP to external counsel.')">Generate RFP clauses ↗</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ihc-card">
+        <div class="ihc-hd"><span class="ihc-title">External counsel sustainability self-assessment</span><span class="pill pill-blue">Quarterly</span></div>
+        <div class="ihc-body">
+          <div>Firms submit a structured self-assessment against each principle. LexCatalyst scores and surfaces gaps, enabling your legal ops team to engage meaningfully with underperforming panel firms rather than just requesting a tick-box response.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="background:var(--surface);border-radius:var(--r);padding:10px 12px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Principle 1 — working hours</div><div class="wbbar" style="width:100%;margin:4px 0;"><div class="wbfill" style="width:68%;background:var(--green-mid);height:5px;border-radius:3px;"></div></div><div style="font-size:11px;color:var(--text2);">68% of panel firms compliant</div></div>
+            <div style="background:var(--surface);border-radius:var(--r);padding:10px 12px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Principle 4 — right to disconnect</div><div class="wbbar" style="width:100%;margin:4px 0;"><div class="wbfill" style="width:41%;background:var(--amber);height:5px;border-radius:3px;"></div></div><div style="font-size:11px;color:var(--text2);">41% of panel firms compliant</div></div>
+            <div style="background:var(--surface);border-radius:var(--r);padding:10px 12px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Principle 6 — pro bono</div><div class="wbbar" style="width:100%;margin:4px 0;"><div class="wbfill" style="width:55%;background:var(--purple);height:5px;border-radius:3px;"></div></div><div style="font-size:11px;color:var(--text2);">55% of panel firms compliant</div></div>
+            <div style="background:var(--surface);border-radius:var(--r);padding:10px 12px;"><div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Principle 7 — workload equity</div><div class="wbbar" style="width:100%;margin:4px 0;"><div class="wbfill" style="width:33%;background:var(--red);height:5px;border-radius:3px;"></div></div><div style="font-size:11px;color:var(--text2);">33% of panel firms compliant</div></div>
+          </div>
+          <div class="act-btn act-btn-p" style="display:inline-block;cursor:pointer;margin-top:4px;" onclick="mpAsk('Draft a letter to a panel firm that is partially compliant with our Sustainability Principles.')">Draft follow-up letter ↗</div>
+        </div>
+      </div>
+
+      <div class="ihc-card">
+        <div class="ihc-hd"><span class="ihc-title">Engagement letter — sustainability rider</span><span class="pill pill-teal">Template</span></div>
+        <div class="ihc-body">
+          <div>Standard sustainability rider for all new panel engagements. Requires external counsel to confirm: (1) no hours targets that incentivise overworking juniors; (2) protected right to disconnect; (3) transparent progression criteria; (4) anonymous concern-raising mechanism; (5) annual self-assessment submission.</div>
+          <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+            <div class="act-btn act-btn-p" style="cursor:pointer;" onclick="mpAsk('Review the sustainability rider in our standard engagement letter and suggest improvements.')">Review & improve ↗</div>
+            <div class="act-btn" style="cursor:pointer;">Download template</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sec-title" style="margin-bottom:10px;">Young lawyer adoption — practical actions</div>
+        <div class="grid2">
+          <div class="card"><span class="pill pill-green" style="margin-bottom:7px;display:inline-block;">For firms</span><div class="card-title">Embed in onboarding, not orientation</div><div class="card-body">Sustainability Principles should be in the employment contract and explained on day one — not introduced at a wellness webinar in year two. LexCatalyst surfaces them in the Mentor panel from a trainee's first login.</div></div>
+          <div class="card"><span class="pill pill-green" style="margin-bottom:7px;display:inline-block;">For firms</span><div class="card-title">Make adoption visible to partners</div><div class="card-body">Partners who consistently undermine principles (late-night emails, excessive re-drafts, no pro bono allocation) are flagged in the firm's leadership dashboard — not named, but visible as patterns requiring intervention.</div></div>
+          <div class="card"><span class="pill pill-blue" style="margin-bottom:7px;display:inline-block;">For institutions</span><div class="card-title">Law school curriculum integration</div><div class="card-body">Sustainability Principles should be taught as a professional skills module alongside legal ethics. LexCatalyst can provide anonymised aggregate data on what junior lawyers actually encounter in practice.</div></div>
+          <div class="card"><span class="pill pill-blue" style="margin-bottom:7px;display:inline-block;">For institutions</span><div class="card-title">Peer-to-peer principle ambassadors</div><div class="card-body">Designate trained junior lawyers as Sustainability Ambassadors — not as a reporting mechanism, but as trusted peers who can help colleagues navigate principle violations informally before escalation.</div></div>
+          <div class="card"><span class="pill pill-purple" style="margin-bottom:7px;display:inline-block;">For you</span><div class="card-title">Document your own adoption</div><div class="card-body">Use LexCatalyst's Wellbeing and Principles tabs to build a record of your working patterns, flag moments where principles were violated, and bring data — not feelings — to any conversation with supervision.</div></div>
+          <div class="card"><span class="pill pill-purple" style="margin-bottom:7px;display:inline-block;">For you</span><div class="card-title">Use the Ask tab without fear</div><div class="card-body">The Mentor's Ask tab is private and unlogged by supervisors. Use it to ask questions that feel too junior to raise in person, rehearse difficult conversations, or understand your rights before raising a concern formally.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WELLBEING -->
+  <div class="view" id="view-wellbeing">
+    <div class="view-pad">
+      <div>
+        <div class="sec-title">Wellbeing dashboard</div>
+        <div class="sec-sub">Private to you — not visible to supervisors or the firm</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:10px;">How are you doing today?</div>
+        <div class="mood-row" id="mood-row">
+          <div class="mood-btn" onclick="selectMood(this)"><div class="mood-em">😔</div>Struggling</div>
+          <div class="mood-btn" onclick="selectMood(this)"><div class="mood-em">😐</div>Getting by</div>
+          <div class="mood-btn" onclick="selectMood(this)"><div class="mood-em">🙂</div>Okay</div>
+          <div class="mood-btn" onclick="selectMood(this)"><div class="mood-em">😊</div>Good</div>
+          <div class="mood-btn" onclick="selectMood(this)"><div class="mood-em">🔥</div>Thriving</div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="sv">47h</div><div class="sl">This week</div></div>
+        <div class="stat"><div class="sv">6</div><div class="sl">Days since last day off</div></div>
+        <div class="stat"><div class="sv">8.2</div><div class="sl">Avg hrs sleep (est.)</div></div>
+        <div class="stat"><div class="sv">2</div><div class="sl">Disconnection violations</div></div>
+      </div>
+
+      <div class="alert-bar alert-amber"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>You've had 2 messages from James Whitmore after 9pm this week. This is tracked under Principle 4. You can flag these anonymously or speak to a Sustainability Ambassador.</span></div>
+
+      <div>
+        <div class="sec-title" style="margin-bottom:10px;">Wellbeing indicators — rolling 4 weeks</div>
+        <div class="wbtrack">
+          <div class="wbrow"><span class="wbname">Work-life boundary quality</span><div class="wbbar"><div class="wbfill" style="width:55%;background:var(--amber);"></div></div><span class="wbpct">55%</span></div>
+          <div class="wbrow"><span class="wbname">Sense of professional purpose</span><div class="wbbar"><div class="wbfill" style="width:78%;background:var(--green-mid);"></div></div><span class="wbpct">78%</span></div>
+          <div class="wbrow"><span class="wbname">Learning and growth</span><div class="wbbar"><div class="wbfill" style="width:82%;background:var(--green-mid);"></div></div><span class="wbpct">82%</span></div>
+          <div class="wbrow"><span class="wbname">Psychological safety in team</span><div class="wbbar"><div class="wbfill" style="width:65%;background:var(--green-mid);"></div></div><span class="wbpct">65%</span></div>
+          <div class="wbrow"><span class="wbname">Clarity on progression criteria</span><div class="wbbar"><div class="wbfill" style="width:88%;background:var(--green-mid);"></div></div><span class="wbpct">88%</span></div>
+          <div class="wbrow"><span class="wbname">Workload sustainability</span><div class="wbbar"><div class="wbfill" style="width:42%;background:var(--red);"></div></div><span class="wbpct">42%</span></div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card"><div class="card-title">Protected time this week</div><div style="font-family:var(--serif);font-style:italic;font-size:28px;color:var(--text);margin:6px 0;">4h</div><div class="card-body">of your allocated 8h protected hours used for learning and non-billable development. Unused hours roll to next week (max 2 weeks).</div></div>
+        <div class="card"><div class="card-title">Sustainability Ambassador</div><div class="card-body" style="margin:8px 0;">Your team's ambassador is <strong>James Park</strong> (senior associate). He is available for confidential conversations — not a reporting channel, but a peer who can help.</div><div class="act-btn act-btn-p" style="display:inline-block;cursor:pointer;font-size:11px;margin-top:4px;" onclick="mpAsk('How do I raise a wellbeing concern confidentially under the Sustainability Principles?')">Prepare for that conversation ↗</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Firm-wide anonymised signals — this month</div>
+        <div class="card-body" style="margin-top:8px;">These patterns are shared with the managing partner — no individual data, only aggregate trends. Helps the firm see systemic issues, not blame individuals.</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;">
+          <div style="text-align:center;background:var(--surface);border-radius:var(--r);padding:10px;"><div style="font-family:var(--serif);font-style:italic;font-size:22px;">23%</div><div style="font-size:10.5px;color:var(--text3);margin-top:2px;">of juniors flagged workload concerns</div></div>
+          <div style="text-align:center;background:var(--surface);border-radius:var(--r);padding:10px;"><div style="font-family:var(--serif);font-style:italic;font-size:22px;">67%</div><div style="font-size:10.5px;color:var(--text3);margin-top:2px;">feel progression criteria are clear</div></div>
+          <div style="text-align:center;background:var(--surface);border-radius:var(--r);padding:10px;"><div style="font-family:var(--serif);font-style:italic;font-size:22px;">41%</div><div style="font-size:10.5px;color:var(--text3);margin-top:2px;">received a late-night message this week</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KNOWLEDGE BANK -->
+  <div class="view" id="view-kb">
+    <div class="view-pad">
+      <div class="row-sb"><div><div class="sec-title">Knowledge bank</div><div class="sec-sub">Ashworth & Cole LLP · M&A team</div></div><button class="act-btn act-btn-p">Upload documents</button></div>
+      <div class="stats">
+        <div class="stat"><div class="sv">312</div><div class="sl">Docs indexed</div></div>
+        <div class="stat"><div class="sv">18</div><div class="sl">Playbooks</div></div>
+        <div class="stat"><div class="sv">9</div><div class="sl">Partner profiles</div></div>
+        <div class="stat"><div class="sv">94%</div><div class="sl">Query coverage</div></div>
+      </div>
+      <div class="grid3">
+        <div class="card"><div class="row-sb" style="margin-bottom:8px;"><span class="pill pill-dark">Firm-wide</span></div><div class="card-title">M&A NDA negotiation playbook</div><div class="card-body">34 clauses · Updated 2 weeks ago</div><div class="tags"><span class="tag">NDA</span><span class="tag">Playbook</span></div></div>
+        <div class="card"><div class="row-sb" style="margin-bottom:8px;"><span class="pill pill-dark">Firm-wide</span></div><div class="card-title">Standard SPA — firm precedent</div><div class="card-body">87 clauses · Updated 1 month ago</div><div class="tags"><span class="tag">SPA</span><span class="tag">Precedent</span></div></div>
+        <div class="card"><div class="row-sb" style="margin-bottom:8px;"><span class="pill pill-purple">M&A team</span></div><div class="card-title">Partner redlines — indemnity</div><div class="card-body">12 partner edits · anonymised</div><div class="tags"><span class="tag">Indemnity</span></div></div>
+        <div class="card"><div class="row-sb" style="margin-bottom:8px;"><span class="pill pill-purple">M&A team</span></div><div class="card-title">W&I playbook</div><div class="card-body">45 clauses · Updated 6 weeks ago</div><div class="tags"><span class="tag">W&I</span></div></div>
+        <div class="card"><div class="row-sb" style="margin-bottom:8px;"><span class="pill pill-dark">Firm-wide</span></div><div class="card-title">IP licensing risk positions</div><div class="card-body">21 clauses · Updated 3 months ago</div><div class="tags"><span class="tag">IP</span><span class="tag">Risk</span></div></div>
+        <div class="card"><div class="row-sb" style="margin-bottom:8px;"><span class="pill pill-teal">Sustainability</span></div><div class="card-title">Sustainability Principles guide</div><div class="card-body">11 principles · Full adoption guide</div><div class="tags"><span class="tag">Wellbeing</span><span class="tag">IHC</span></div></div>
+      </div>
+      <div>
+        <div class="sec-title" style="margin-bottom:10px;">Partner preferences</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r);background:var(--white);"><div style="width:26px;height:26px;border-radius:50%;background:var(--purple-light);color:var(--purple);font-size:9.5px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;">JW</div><div><div style="font-size:12.5px;font-weight:500;color:var(--text);">James Whitmore</div><div style="font-size:11.5px;color:var(--text2);margin-top:2px;">5-year survival minimum on NDAs. Mutual indemnity caps at 2× fees. No "best efforts".</div></div></div>
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r);background:var(--white);"><div style="width:26px;height:26px;border-radius:50%;background:var(--green-light);color:var(--green);font-size:9.5px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;">SR</div><div><div style="font-size:12.5px;font-weight:500;color:var(--text);">Sunita Rao</div><div style="font-size:11.5px;color:var(--text2);margin-top:2px;">English governing law default. Singapore only for financial institution clients.</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEMORIES -->
+  <div class="view" id="view-memories">
+    <div class="view-pad">
+      <div class="row-sb"><div class="sec-title">Your memory bank</div><button class="act-btn act-btn-p" onclick="addMem()">+ Add memory</button></div>
+      <div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;">
+        <div style="padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12px;font-weight:500;color:var(--text);">Stable facts</div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text2);display:flex;justify-content:space-between;gap:10px;"><span>Ashworth & Cole LLP · M&A team · Trainee associate · Year 1</span><div style="display:flex;gap:5px;"><div class="act-btn" style="font-size:10px;padding:2px 7px;">Edit</div><div class="act-btn" style="font-size:10px;padding:2px 7px;">Delete</div></div></div>
+        <div style="padding:10px 14px;font-size:12.5px;color:var(--text2);display:flex;justify-content:space-between;gap:10px;"><span>Supervising partner: James Whitmore. English governing law preference.</span><div style="display:flex;gap:5px;"><div class="act-btn" style="font-size:10px;padding:2px 7px;">Edit</div><div class="act-btn" style="font-size:10px;padding:2px 7px;">Delete</div></div></div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;">
+        <div style="padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12px;font-weight:500;color:var(--text);">Working style</div>
+        <div style="padding:10px 14px;font-size:12.5px;color:var(--text2);">Prefers concise answers with clause-level specificity. Wants to understand the commercial reasoning behind legal positions. Always ask for worked examples.</div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;" id="mem-session">
+        <div style="padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12px;font-weight:500;color:var(--text);">Session notes</div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text2);">Reviewing Meridian NDA v2 — flagged survival clause (2yr → 5yr) and contractor carve-out.</div>
+        <div style="padding:10px 14px;font-size:12.5px;color:var(--text2);">Wellbeing: flagged 2 late-night messages from JW this week under Principle 4.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MENTOR PANEL ══ -->
+<div class="mp" id="mentor-panel">
+  <div class="mp-hd">
+    <div class="mp-av"><svg width="15" height="15" fill="none" stroke="#1a6b4a" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+    <div><div class="mp-name">Mentor</div><div class="mp-sub" id="mp-ctx">Reviewing your work</div></div>
+    <div class="mp-live"><div class="ldot"></div>Live</div>
+  </div>
+  <div class="mptabs">
+    <div class="mpt active" id="mptab-review" onclick="switchMentorTab('review')">Review</div>
+    <div class="mpt" id="mptab-examples" onclick="switchMentorTab('examples')">Examples</div>
+    <div class="mpt" id="mptab-ask" onclick="switchMentorTab('ask')">Ask</div>
+    <div class="mpt" id="mptab-progress" onclick="switchMentorTab('progress')">Progress</div>
+  </div>
+
+  <!-- Review -->
+  <div class="mpbody" id="mt-review">
+    <div class="mmsg"><div class="ml">Mentor · overall</div>Good work on the NDA draft. Two legal issues to fix — and one sustainability flag I want to raise with you, separate from the legal work.</div>
+    <div class="fc"><div class="fch fcd"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Issue — survival period</div><div class="fcbody">2 years is below market standard for M&A. Recommend 5 years minimum, trade secrets indefinitely.</div><div class="fcsrc"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>M&A NDA playbook · clause 7.2</div><div class="fcact"><div class="fbtn fbtn-p" onclick="switchMentorTab('examples')">See example ↗</div><div class="fbtn" onclick="switchMentorTab('ask')">Ask mentor</div></div></div>
+    <div class="fc"><div class="fch fcw"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Watch — contractor carve-out</div><div class="fcbody">No pass-down obligation. James always requires contractors to be bound by equivalent written terms.</div><div class="fcsrc"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Partner pref · James Whitmore</div><div class="fcact"><div class="fbtn fbtn-p" onclick="switchMentorTab('examples')">See example ↗</div><div class="fbtn" onclick="switchMentorTab('ask')">Ask mentor</div></div></div>
+    <div class="fc"><div class="fch fco"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Good — equitable relief</div><div class="fcbody">Well-drafted. No-bond language is standard and protective.</div></div>
+    <div class="fc"><div class="fch fcb"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Sustainability flag</div><div class="fcbody">You've been on this matter 11 days without a full day off. Your Principle 1 threshold is approaching. This doesn't affect your work — but it's worth raising with James before it becomes a pattern.</div><div class="fcact"><div class="fbtn fbtn-p" onclick="switchView('wellbeing');sbNav('wellbeing')">View wellbeing ↗</div><div class="fbtn" onclick="switchMentorTab('ask')">How to raise it</div></div></div>
+  </div>
+
+  <!-- Examples -->
+  <div class="mpbody hidden" id="mt-examples">
+    <div class="mmsg"><div class="ml">Mentor · examples</div>From firm precedents in the knowledge bank. Both are pulled from executed agreements.</div>
+    <div class="egbox"><div class="eglbl"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Strong survival clause</div><div class="egsrc">Oaktree SPA — executed 2023</div><div class="egtxt">"The obligations in this clause shall survive termination for five (5) years from the date of last disclosure, provided that obligations relating to trade secrets shall survive indefinitely."</div></div>
+    <div class="egbox"><div class="eglbl"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Contractor carve-out with pass-down</div><div class="egsrc">M&A NDA playbook · James Whitmore preference</div><div class="egtxt">"...to its employees, officers, and contractors who (a) need to know such information for the Purpose and (b) are bound by written confidentiality obligations no less restrictive than those set out herein."</div></div>
+    <div class="mmsg"><div class="ml">Mentor · tip</div>Both examples close the loophole rather than just narrowing it. No residual exposure, not just less exposure — that's the goal.</div>
+  </div>
+
+  <!-- Ask -->
+  <div class="hidden" id="mt-ask" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="ask-msgs" id="ask-msgs">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:2px;">Try asking</div>
+      <div class="ask-prompt" onclick="doAsk('Why does survival period length matter more in M&A NDAs?')"><div class="apl">Tap to ask →</div>Why does survival period length matter more in M&A NDAs?</div>
+      <div class="ask-prompt" onclick="doAsk('How do I raise a concern about late-night messages from my supervisor?')"><div class="apl">Tap to ask →</div>How do I raise a concern about late-night messages from my supervisor?</div>
+      <div class="ask-prompt" onclick="doAsk('What does the billable hour efficiency kicker mean for my review?')"><div class="apl">Tap to ask →</div>What does the efficiency kicker mean for my performance review?</div>
+      <div class="ask-prompt" onclick="doAsk('How can I get my pro bono hours to count toward progression?')"><div class="apl">Tap to ask →</div>How can I get my pro bono hours to count toward progression?</div>
+      <div class="ask-prompt" onclick="doAsk('What does reasonable endeavours actually require?')"><div class="apl">Tap to ask →</div>What does "reasonable endeavours" actually require?</div>
+    </div>
+    <div class="mp-askbar">
+      <textarea class="askin" id="ask-in" rows="1" placeholder="Ask your mentor anything..." onkeydown="handleAskKey(event)" oninput="resize(this)"></textarea>
+      <button class="asksend" onclick="sendAsk()" aria-label="Send"><svg width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="mpbody hidden" id="mt-progress">
+    <div class="mmsg"><div class="ml">Mentor · your development</div>Based on recent drafts and questions. Updates as you work — a learning map, not a performance report.</div>
+    <div class="prog-sec">
+      <div class="prog-lbl">NDA drafting</div>
+      <div class="prow"><span class="pname">Survival clauses</span><div class="pbar"><div class="pfill" style="width:45%;background:var(--amber);"></div></div><span class="ppct">45%</span></div>
+      <div class="prow"><span class="pname">Confidentiality scope</span><div class="pbar"><div class="pfill" style="width:70%;background:var(--green-mid);"></div></div><span class="ppct">70%</span></div>
+      <div class="prow"><span class="pname">Equitable relief</span><div class="pbar"><div class="pfill" style="width:88%;background:var(--green-mid);"></div></div><span class="ppct">88%</span></div>
+      <div class="prow"><span class="pname">Contractor carve-outs</span><div class="pbar"><div class="pfill" style="width:35%;background:var(--red);"></div></div><span class="ppct">35%</span></div>
+    </div>
+    <div class="prog-sec">
+      <div class="prog-lbl">SPA drafting</div>
+      <div class="prow"><span class="pname">Governing law</span><div class="pbar"><div class="pfill" style="width:82%;background:var(--green-mid);"></div></div><span class="ppct">82%</span></div>
+      <div class="prow"><span class="pname">Indemnity caps</span><div class="pbar"><div class="pfill" style="width:55%;background:var(--amber);"></div></div><span class="ppct">55%</span></div>
+      <div class="prow"><span class="pname">MAC clauses</span><div class="pbar"><div class="pfill" style="width:28%;background:var(--red);"></div></div><span class="ppct">28%</span></div>
+    </div>
+    <div class="prog-sec">
+      <div class="prog-lbl">Sustainability & wellbeing</div>
+      <div class="prow"><span class="pname">Principles knowledge</span><div class="pbar"><div class="pfill" style="width:72%;background:var(--green-mid);"></div></div><span class="ppct">72%</span></div>
+      <div class="prow"><span class="pname">Workload boundary-setting</span><div class="pbar"><div class="pfill" style="width:38%;background:var(--red);"></div></div><span class="ppct">38%</span></div>
+      <div class="prow"><span class="pname">Using feedback channels</span><div class="pbar"><div class="pfill" style="width:50%;background:var(--amber);"></div></div><span class="ppct">50%</span></div>
+    </div>
+    <div class="mmsg"><div class="ml">Mentor · next focus</div>Your biggest gap right now is contractor carve-outs legally, and workload boundary-setting personally. Both have the same root: knowing what you're entitled to ask for.</div>
+  </div>
+</div>
+
+</div><!-- shell -->
+<script>
+// ── DATA ──
+const CHATS = [
+  [{r:'u',t:'Can you review clause 3 of the Meridian NDA — survival period and contractor carve-out?'},{r:'l',t:'I\'ve reviewed clause 3. Solid overall — two things stand out. Check the mentor panel for detail and worked examples.',flags:[{type:'d',t:'Survival period of 2 years is below market standard for M&A NDAs (3–5 years).'},{type:'w',t:'Contractor carve-out has no pass-down obligation — standard practice requires contractors be bound by equivalent terms.'},{type:'o',t:'Equitable relief clause is well-drafted. No changes needed.'}],ref:'M&A NDA playbook · clause 7.2'},{r:'u',t:'Why does the survival period matter so much specifically in M&A?'},{r:'l',t:'In M&A, due diligence exposes high-value information — financials, customer data, IP — that retains commercial sensitivity long after a deal collapses. A 2-year window means a failed bidder could exploit that information with no legal recourse after year 2. Deals can also collapse and restart years later, so the protection window needs to match the realistic lifecycle of the risk.',ref:'Lex-Wiki · M&A NDA — survival clauses'}],
+  [{r:'u',t:'Is the 100% indemnity cap on the Oaktree SPA market standard?'},{r:'l',t:'100% is on the higher end. In W&I-backed deals, 100% is standard for fundamental warranties, but general warranty caps typically sit at 10–25%. For a PE exit like Oaktree, W&I insurance would normally be in play — which compresses the general warranty cap significantly. Worth checking the W&I policy terms before the final positions are agreed.',ref:'W&I playbook · cap positions'}],
+  [{r:'u',t:'Partner asked why we used English law for this APAC deal. What\'s the answer?'},{r:'l',t:'English law is the default for PE-backed and bank-financed M&A across APAC. Financing banks typically require it as a condition of lending. Singapore law is increasingly accepted — especially for Singapore-domiciled entities and financial institution counterparties — but deviating from English law needs a specific commercial justification that you should be prepared to articulate.',ref:'Governing law precedents · firm position'}],
+  [{r:'u',t:'What does LexCatalyst do about the sustainability principles — is that actually tracked?'},{r:'l',t:'Yes. The Sustainability Principles tab tracks your firm\'s adoption status against each principle, flags where individual or team behaviour deviates (like late-night emails), and gives you tools to raise concerns confidentially. The Wellbeing dashboard is private to you. The Value Tracker reimagines how your work is measured — efficiency and output quality, not just hours billed.',flags:[{type:'b',t:'See the Sustainability Principles and Wellbeing tabs for the full picture.'}]}]
+];
+
+let chatIdx = 0;
+let mentorOn = true;
+let curView = 'chat';
+let curMPTab = 'review';
+
+function init(){ renderChat(CHATS[chatIdx]); }
+
+function renderChat(msgs){
+  const el = document.getElementById('chat-msgs');
+  el.innerHTML = '';
+  msgs.forEach(m => {
+    if(m.r==='u'){
+      const d = document.createElement('div');
+      d.className='msg-u fade-in';
+      d.innerHTML=`<div class="bub-u">${m.t}</div>`;
+      el.appendChild(d);
+    } else {
+      const d = document.createElement('div');
+      d.className='msg-l fade-in';
+      let fh='';
+      if(m.flags) m.flags.forEach(f=>{
+        const cls = f.type==='d'?'fd':f.type==='w'?'fw':f.type==='b'?'fb':'fo';
+        const ic = f.type==='d'?'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>':f.type==='w'?'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>':f.type==='b'?'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>':'<polyline points="20 6 9 17 4 12"/>';
+        fh+=`<div class="iflag ${cls}"><svg class="fi" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">${ic}</svg><span>${f.t}</span></div>`;
+      });
+      const rh = m.ref?`<div class="dref"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>${m.ref}</div>`:'';
+      d.innerHTML=`<div class="lx-ic">L</div><div><div class="bub-l">${m.t}${fh}${rh}</div></div>`;
+      el.appendChild(d);
+    }
+  });
+  setTimeout(()=>{ el.scrollTop=el.scrollHeight; },50);
+}
+
+function loadChat(i){ chatIdx=i; switchView('chat'); sbNav('chat'); renderChat(CHATS[i]); const c=['Reviewing Meridian NDA','Reviewing Oaktree SPA','Governing law','Sustainability query']; document.getElementById('mp-ctx').textContent=c[i]||'Active'; }
+
+function newChat(){
+  switchView('chat'); sbNav('chat');
+  document.getElementById('chat-msgs').innerHTML=`<div class="fade-in" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;text-align:center;padding:40px;"><div style="width:42px;height:42px;border-radius:11px;background:var(--black);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-style:italic;font-size:19px;color:white;margin-bottom:4px;">L</div><div style="font-family:var(--serif);font-style:italic;font-size:19px;color:var(--text);">How can I help today?</div><div style="font-size:12.5px;color:var(--text3);max-width:320px;line-height:1.65;">Analyse legal documents, review your draft, check sustainability principles, or just ask a question.</div></div>`;
+  chatIdx=-1;
+}
+
+function sendMsg(){
+  const inp = document.getElementById('chat-input');
+  const txt = inp.value.trim(); if(!txt) return;
+  inp.value=''; inp.style.height='auto';
+  if(chatIdx===-1){ CHATS.push([]); chatIdx=CHATS.length-1; }
+  CHATS[chatIdx].push({r:'u',t:txt}); renderChat(CHATS[chatIdx]);
+  const el = document.getElementById('chat-msgs');
+  const te = document.createElement('div');
+  te.id='typing'; te.className='msg-l fade-in';
+  te.innerHTML='<div class="lx-ic">L</div><div><div class="bub-l"><div class="typing"><span></span><span></span><span></span></div></div></div>';
+  el.appendChild(te); el.scrollTop=el.scrollHeight;
+  setTimeout(()=>{ te.remove(); const r=genResp(txt); CHATS[chatIdx].push(r); renderChat(CHATS[chatIdx]); }, 1100+Math.random()*500);
+}
+
+function genResp(t){
+  const tl=t.toLowerCase();
+  if(tl.includes('survival')||tl.includes('2 year')||tl.includes('two year')) return {r:'l',t:'A 2-year survival period is below market standard for M&A NDAs. Recommend revising to 5 years minimum, with trade secrets surviving indefinitely. The risk: a failed bidder can freely use due diligence materials after year 2.',flags:[{type:'d',t:'Revise survival to 5 years minimum — market standard for M&A NDAs.'}],ref:'M&A NDA playbook · clause 7.2'};
+  if(tl.includes('contractor')||tl.includes('carve-out')) return {r:'l',t:'The contractor carve-out needs a pass-down obligation. Without it, your client\'s confidential information could reach contractors with no binding obligations. James Whitmore\'s standard: contractors must be bound by written terms no less restrictive than the NDA.',flags:[{type:'w',t:'Add: contractors must be bound by equivalent written obligations.'}],ref:'Partner pref · James Whitmore'};
+  if(tl.includes('indemnity')||tl.includes('cap')) return {r:'l',t:'Indemnity caps vary by deal type. W&I-backed deals: general warranties 10–25%, fundamental warranties 100%. Without W&I: general caps 30–50%. The right number depends on whether W&I is in play and the negotiating positions.',ref:'W&I playbook · cap positions'};
+  if(tl.includes('sustainability')||tl.includes('principle')||tl.includes('wellbeing')) return {r:'l',t:'The Sustainability Principles tab tracks your firm\'s adoption of 11 principles across working hours, transparency, mentorship, disconnection rights, and more. Your Wellbeing dashboard is private — never visible to supervisors. The Value Tracker reimagines how your contribution is measured.',flags:[{type:'b',t:'Open the Sustainability Principles or Wellbeing tabs for the full picture.'}]};
+  if(tl.includes('billable')||tl.includes('hours')||tl.includes('billing')||tl.includes('efficiency')) return {r:'l',t:'The Value Tracker replaces raw hours with a composite score: time efficiency (vs firm average), output quality (mentor flags resolved, partner edits), knowledge reuse, client complexity, and supervision load. Your Meridian NDA was completed 40% faster than average — this qualifies for the efficiency kicker under the hybrid fee model.',ref:'Value tracker · Meridian NDA'};
+  if(tl.includes('disconnect')||tl.includes('late night')||tl.includes('out of hours')) return {r:'l',t:'Under Principle 4, messages sent between 8pm–7am are held and delivered the next morning unless flagged as a genuine client emergency. If your supervisor is sending messages outside these hours without emergency justification, you can flag it anonymously or raise it with your Sustainability Ambassador — James Park in your team.',flags:[{type:'b',t:'See the Wellbeing tab to flag this under Principle 4.'}]};
+  if(tl.includes('pro bono')||tl.includes('progression')||tl.includes('promotion')) return {r:'l',t:'Progression criteria are published and visible in your scorecard under Principle 2. Pro bono hours (50 per year allocated) don\'t currently count toward progression — there\'s a proposal before the partnership to change this. Your mentor tracks your progress against each criterion and surfaces gaps before review cycles.',ref:'Sustainability Principles · Principle 2 & 6'};
+  if(tl.includes('governing law')||tl.includes('singapore')||tl.includes('english law')) return {r:'l',t:'English law is the default for PE-backed and bank-financed M&A across APAC — financing banks typically require it. Singapore law is increasingly accepted for Singapore-domiciled entities and financial institution counterparties, but deviating needs a specific commercial justification.',ref:'Governing law precedents · firm position'};
+  if(tl.includes('reasonable endeavour')||tl.includes('best effort')) return {r:'l',t:'"Reasonable endeavours" lets you take your own commercial interests into account — you\'re not required to sacrifice your business. "Best endeavours" is stricter; some courts suggest you must take every step a prudent board would, even at significant cost. Always push for reasonable endeavours on the client\'s side.',ref:'Partner pref · David Kim · drafting positions'};
+  return {r:'l',t:'Good question. Let me cross-reference the knowledge bank and current matter context. The short answer depends on whether you\'re asking about the legal principle, the commercial rationale, or the drafting approach — which is most useful?',ref:'Knowledge bank · M&A team'};
+}
+
+// ── NAVIGATION ──
+function switchView(v){
+  curView=v;
+  document.querySelectorAll('.view').forEach(el=>{ el.classList.toggle('active', el.id==='view-'+v); });
+  document.querySelectorAll('.vt').forEach(el=>{ el.classList.toggle('active', el.id==='vt-'+v); });
+  const chatIn = document.querySelector('.chat-in');
+  if(chatIn) chatIn.style.display = v==='chat'?'block':'none';
+}
+
+function sbNav(n){
+  document.querySelectorAll('.ni').forEach(el=>el.classList.remove('active'));
+  const el = document.getElementById('sni-'+n);
+  if(el) el.classList.add('active');
+  const vmap = {chat:'chat',billable:'billable',principles:'principles',ihc:'ihc',wellbeing:'wellbeing',kb:'kb',memories:'memories'};
+  if(vmap[n]) switchView(vmap[n]);
+}
+
+// ── MENTOR ──
+function toggleMentor(){
+  mentorOn=!mentorOn;
+  const p=document.getElementById('mentor-panel');
+  const lbl=document.getElementById('mtlabel');
+  const dot=document.getElementById('ldot');
+  const btn=document.getElementById('mentor-toggle');
+  if(mentorOn){
+    p.style.display='flex';
+    lbl.textContent='Mentor active';
+    dot.style.display='block';
+    btn.style.background='var(--green-light)';
+    btn.style.color='var(--green)';
+    btn.style.borderColor='rgba(26,107,74,0.18)';
+    document.querySelector('.shell').style.gridTemplateColumns='215px 1fr 295px';
+  } else {
+    p.style.display='none';
+    lbl.textContent='Mentor off';
+    dot.style.display='none';
+    btn.style.background='var(--surface)';
+    btn.style.color='var(--text3)';
+    btn.style.borderColor='var(--border)';
+    document.querySelector('.shell').style.gridTemplateColumns='215px 1fr 0px';
+  }
+}
+
+function switchMentorTab(t){
+  curMPTab=t;
+  ['review','examples','ask','progress'].forEach(tab=>{
+    document.getElementById('mptab-'+tab).classList.toggle('active',tab===t);
+    const el=document.getElementById('mt-'+tab);
+    if(!el) return;
+    if(tab==='ask'){
+      el.style.display=t==='ask'?'flex':'none';
+      el.classList.toggle('hidden',t!=='ask');
+    } else {
+      el.classList.toggle('hidden',tab!==t);
+    }
+  });
+}
+
+function mpAsk(txt){
+  switchMentorTab('ask');
+  setTimeout(()=>{ document.getElementById('ask-in').value=txt; sendAsk(); },200);
+}
+
+function doAsk(txt){ document.getElementById('ask-in').value=txt; sendAsk(); }
+
+function sendAsk(){
+  const inp=document.getElementById('ask-in');
+  const txt=inp.value.trim(); if(!txt) return;
+  inp.value=''; inp.style.height='auto';
+  const msgs=document.getElementById('ask-msgs');
+  const ub=document.createElement('div');
+  ub.className='fade-in';
+  ub.style.cssText='background:var(--black);color:#fff;border-radius:11px 11px 4px 11px;padding:8px 11px;font-size:11.5px;line-height:1.6;margin-left:16px;';
+  ub.textContent=txt; msgs.appendChild(ub); msgs.scrollTop=msgs.scrollHeight;
+  setTimeout(()=>{
+    const rb=document.createElement('div');
+    rb.className='mmsg fade-in';
+    rb.innerHTML=`<div class="ml">Mentor · answer</div>${getMentorAns(txt)}`;
+    msgs.appendChild(rb); msgs.scrollTop=msgs.scrollHeight;
+  }, 800+Math.random()*300);
+}
+
+function getMentorAns(t){
+  const tl=t.toLowerCase();
+  if(tl.includes('survival')&&tl.includes('m&a')) return 'In M&A, due diligence exposes commercially sensitive material — financials, customer lists, IP — that retains value long after a deal falls apart. A short survival window creates a period where a failed bidder can exploit that information freely. 3–5 years reflects the realistic lifecycle of that risk. Trade secrets get indefinite protection because their value doesn\'t decay.';
+  if(tl.includes('late-night')||tl.includes('disconnect')||tl.includes('supervisor')) return 'Under Principle 4, you have the right to raise this. The least confrontational first step: document the messages with timestamps in your Wellbeing tab. Then speak to James Park (Sustainability Ambassador) as a confidential sounding board before deciding whether to escalate formally. You can also flag anonymously — aggregate data goes to the managing partner without identifying you.';
+  if(tl.includes('efficiency kicker')||tl.includes('billable')||tl.includes('performance')) return 'The efficiency kicker means that when you complete a task faster than the firm average — without sacrificing quality — you share in the value that speed creates. It changes the incentive: under the old model, being fast just meant getting more work; under the new model, it\'s recognised and rewarded directly. Your Meridian NDA was 40% faster than average, which generated a £700 kicker on a £2,500 base.';
+  if(tl.includes('pro bono')||tl.includes('progression')) return 'Currently, pro bono hours don\'t count formally toward progression criteria — that\'s Principle 6\'s gap. The practical move: keep a record of your pro bono work in your wellbeing log and raise it explicitly in your review conversation as evidence of professional breadth. The proposal to include it formally is before the partnership — your documented record will matter when it passes.';
+  if(tl.includes('reasonable endeavour')) return '"Reasonable endeavours" lets you weigh your own commercial interests. You\'re not required to go to extraordinary lengths or sacrifice your business to fulfil the obligation. "Best endeavours" is stricter — courts have suggested it may require spending significant money and sacrificing self-interest. The practical advice: always push for reasonable endeavours on your client\'s side, and flag whenever the counterparty tries to slip in "best" or "all reasonable."';
+  if(tl.includes('sustainability')||tl.includes('principle')||tl.includes('rfi')||tl.includes('rfp')||tl.includes('ihc')||tl.includes('external counsel')) return 'For IHC propagation, the most effective approach is contractual embedding — sustainability requirements in the engagement letter or panel appointment terms, not just a questionnaire. A clause requiring annual self-assessment and giving you audit rights is more powerful than a request. The RFP clause builder in the IHC Tools tab can draft this for you.';
+  if(tl.includes('workload')||tl.includes('boundary')||tl.includes('concern')) return 'The most effective way to raise a workload concern is with data, not feelings. Your Value Tracker and hours log give you objective numbers. The conversation then becomes: "I\'ve been at 120% of average load for 3 weeks — can we look at redistribution?" rather than "I\'m overwhelmed." The Sustainability Ambassador is the right first step if you\'re not sure how a supervisor will respond.';
+  return 'Good question to be asking. The short answer depends on the specific context — whether it\'s about the legal principle, the commercial rationale, or how to raise it with your supervisor. What aspect are you most uncertain about?';
+}
+
+// ── WELLBEING ──
+function selectMood(el){ document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected')); el.classList.add('selected'); }
+
+// ── UTILITIES ──
+function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();} }
+function handleAskKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAsk();} }
+function resize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,90)+'px'; }
+function addMem(){ const t=prompt('Add a memory:'); if(!t) return; const s=document.getElementById('mem-session'); const d=document.createElement('div'); d.style.cssText='padding:10px 14px;border-top:1px solid var(--border);font-size:12.5px;color:var(--text2);'; d.textContent=t; s.appendChild(d); }
+
+init();
+</script>
+</body>
+</html>

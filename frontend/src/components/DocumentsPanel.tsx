@@ -9,27 +9,74 @@ import {
   listKnowledgeBankEntries,
   uploadDocument,
 } from '../lib/api'
-import type { ChatModel, WorkspaceDocument } from '../types/workspace'
+import type { WorkspaceDocument } from '../types/workspace'
 import { useViewStore } from '../store/viewStore'
 
 type DocumentsPanelProps = {
-  selectedModel: ChatModel
   selectedMatterId: string | null
 }
 
-export function DocumentsPanel({ selectedModel, selectedMatterId }: DocumentsPanelProps) {
+export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
   const { selectKnowledgeBank } = useViewStore()
   const queryClient = useQueryClient()
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
   const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const documentsQuery = useQuery({ queryKey: ['documents'], queryFn: listDocuments })
+  const ACCEPTED = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ]
+
+  function pickFile(file: File) {
+    const extension = file.name.toLowerCase().split('.').pop()
+    const hasSupportedExtension = extension === 'pdf' || extension === 'docx'
+    if (!ACCEPTED.includes(file.type) && !hasSupportedExtension) {
+      setMutationError('Only PDF and DOCX files are supported.')
+      return
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setMutationError('Files must be 25 MB or smaller.')
+      return
+    }
+    setMutationError(null)
+    setSelectedFile(file)
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  function onDragLeave(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false)
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) pickFile(file)
+  }
+
+  const documentsQuery = useQuery({
+    queryKey: ['documents'],
+    queryFn: listDocuments,
+    refetchInterval: (query) => {
+      const docs = query.state.data ?? []
+      return docs.some((d) => d.status === 'uploaded' || d.status === 'processing') ? 3000 : false
+    },
+  })
   const knowledgeEntriesQuery = useQuery({
     queryKey: ['kbEntries'],
     queryFn: () => listKnowledgeBankEntries(),
+    refetchInterval: (query) => {
+      const entries = query.state.data ?? []
+      return entries.some((e) => e.status === 'processing') ? 3000 : false
+    },
   })
 
   const documents = documentsQuery.data ?? []
@@ -68,9 +115,10 @@ export function DocumentsPanel({ selectedModel, selectedMatterId }: DocumentsPan
     setIngestingDocumentId(document.id)
     setMutationError(null)
     try {
-      const entry = await ingestDocumentToKnowledgeBank(document.id, selectedModel)
+      // Fire-and-forget: the backend schedules a background summary job
+      // and returns a placeholder entry with status="processing".
+      await ingestDocumentToKnowledgeBank(document.id)
       queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
-      selectKnowledgeBank(entry.id)
     } catch (err) {
       setMutationError(getErrorMessage(err))
     } finally {
@@ -106,38 +154,73 @@ export function DocumentsPanel({ selectedModel, selectedMatterId }: DocumentsPan
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 lg:px-6">
-        <div className="mb-5 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <label className="flex min-h-20 flex-1 cursor-pointer items-center gap-3 rounded-md border border-dashed border-neutral-300 bg-white px-3 py-3 hover:border-neutral-400">
-              <UploadCloud size={20} className="text-neutral-500" />
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-neutral-800">
-                  {selectedFile ? selectedFile.name : 'Choose a PDF or DOCX'}
-                </div>
-                <div className="text-xs text-neutral-500">
-                  Files are stored in R2, extracted, chunked, and embedded
-                  {selectedMatterId ? ' in the active matter.' : '.'}
+        <div className="mb-5">
+          {/* Drop zone */}
+          <label
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
+              isDragOver
+                ? 'border-neutral-900 bg-neutral-50'
+                : selectedFile
+                  ? 'border-neutral-300 bg-neutral-50'
+                  : 'border-neutral-200 bg-white hover:border-neutral-300 hover:bg-neutral-50'
+            }`}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+          >
+            <UploadCloud
+              size={24}
+              className={isDragOver ? 'text-neutral-900' : 'text-neutral-400'}
+            />
+            {selectedFile ? (
+              <div>
+                <div className="text-sm font-medium text-neutral-900">{selectedFile.name}</div>
+                <div className="mt-0.5 text-xs text-neutral-500">
+                  {(selectedFile.size / 1024 / 1024).toFixed(1)} MB · ready to upload
                 </div>
               </div>
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                className="sr-only"
-                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
-            <Button
-              onClick={() => selectedFile && uploadMutation.mutate(selectedFile)}
-              disabled={!selectedFile || uploadMutation.isPending}
-              size="md"
-              variant="primary"
-            >
-              {uploadMutation.isPending ? 'Processing...' : 'Upload'}
-            </Button>
-          </div>
+            ) : (
+              <div>
+                <div className="text-sm font-medium text-neutral-700">
+                  {isDragOver ? 'Drop to upload' : 'Drop a file here, or click to browse'}
+                </div>
+                <div className="mt-0.5 text-xs text-neutral-400">
+                  PDF or DOCX · max 25 MB{selectedMatterId ? ' · attached to active matter' : ''}
+                </div>
+              </div>
+            )}
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="sr-only"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f) }}
+            />
+          </label>
+
+          {/* Upload action row */}
+          {selectedFile && (
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <button
+                className="text-xs text-neutral-400 hover:text-neutral-600"
+                onClick={() => { setSelectedFile(null); if (inputRef.current) inputRef.current.value = '' }}
+                type="button"
+              >
+                Clear
+              </button>
+              <Button
+                onClick={() => uploadMutation.mutate(selectedFile)}
+                disabled={uploadMutation.isPending}
+                size="sm"
+                variant="primary"
+              >
+                {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
+              </Button>
+            </div>
+          )}
+
           {error && (
-            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
               {error}
             </div>
           )}
@@ -172,14 +255,30 @@ export function DocumentsPanel({ selectedModel, selectedMatterId }: DocumentsPan
                     {knowledgeEntry && (
                       <div className="mt-1 text-xs text-neutral-500">
                         Knowledge Bank: {knowledgeEntry.title} ({knowledgeEntry.scope.replace('_', ' ')})
+                        {knowledgeEntry.status === 'processing' && (
+                          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                            Summarising...
+                          </span>
+                        )}
+                        {knowledgeEntry.status === 'failed' && (
+                          <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                            Failed — retry below
+                          </span>
+                        )}
                       </div>
                     )}
                     {document.errorMessage && (
                       <div className="mt-2 text-xs text-red-600">{document.errorMessage}</div>
                     )}
+                    {knowledgeEntry?.errorMessage && (
+                      <div className="mt-2 text-xs text-red-600">
+                        Summary error: {knowledgeEntry.errorMessage}
+                      </div>
+                    )}
                   </div>
                   <div className="flex shrink-0 gap-2 sm:justify-end">
-                    {knowledgeEntry ? (
+                    {knowledgeEntry?.status === 'ready' ? (
                       <Button
                         onClick={() => selectKnowledgeBank(knowledgeEntry.id)}
                         size="sm"
@@ -187,6 +286,16 @@ export function DocumentsPanel({ selectedModel, selectedMatterId }: DocumentsPan
                       >
                         <BookOpen size={14} />
                         Open Knowledge Bank
+                      </Button>
+                    ) : knowledgeEntry?.status === 'processing' ? (
+                      <Button
+                        disabled
+                        size="sm"
+                        variant="secondary"
+                        title="Summary is being generated"
+                      >
+                        <BookOpen size={14} />
+                        Summarising...
                       </Button>
                     ) : (
                       <Button
@@ -196,12 +305,18 @@ export function DocumentsPanel({ selectedModel, selectedMatterId }: DocumentsPan
                         variant="secondary"
                         title={
                           document.status === 'ready'
-                            ? 'Generate a private Knowledge Bank summary'
+                            ? knowledgeEntry?.status === 'failed'
+                              ? 'Retry summary generation'
+                              : 'Generate a private Knowledge Bank summary'
                             : 'Document must be ready first'
                         }
                       >
                         <BookOpen size={14} />
-                        {isGenerating ? 'Adding...' : 'Add to Knowledge Bank'}
+                        {isGenerating
+                          ? 'Queuing...'
+                          : knowledgeEntry?.status === 'failed'
+                            ? 'Retry summary'
+                            : 'Add to Knowledge Bank'}
                       </Button>
                     )}
                     <Button

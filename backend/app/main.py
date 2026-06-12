@@ -1,26 +1,47 @@
 import json
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, get_or_create_user, verify_google_token
 from app.config import get_settings
 from app.database import create_db_tables, get_db
-from app.dependencies import get_current_user
-from app.models import User
+from app.dependencies import (
+    can_create_firm_wide,
+    get_current_user,
+    is_senior_or_above,
+    require_kb_read,
+    require_kb_write,
+    require_partner_or_admin,
+)
+from app.models import Document, User
 from app.providers.deepseek import DeepSeekError, DeepSeekProvider, SUPPORTED_CHAT_MODELS
 from app.providers.embedding_provider import EmbeddingError
 from app.schemas import (
+    ActionItemCreate,
+    ActionItemResponse,
+    ActionItemUpdate,
     ChatMessageResponse,
     ChatRequest,
     ChatResponse,
     ChatThreadResponse,
     DocumentResponse,
     KnowledgeBankAccessLogResponse,
+    KnowledgeBankBackfillResponse,
     KnowledgeBankEntryCreate,
     KnowledgeBankEntryResponse,
     KnowledgeBankEntryUpdate,
@@ -35,7 +56,14 @@ from app.schemas import (
     MemoryUpdate,
     RedactionApprovalRequest,
     RedactionProposalResponse,
+    SurveyQuestionCreate,
+    SurveyQuestionResponse,
+    SurveyQuestionUpdate,
+    SurveyResponseCreate,
+    SurveyResultsResponse,
     TeamResponse,
+    UserResponse,
+    UserSettingsUpdate,
     WikiGraphEdge,
     WikiGraphNode,
     WikiGraphResponse,
@@ -48,7 +76,6 @@ from app.schemas import (
 )
 from app.services.agent_service import run_agent_loop
 from app.services.chat_service import (
-    create_chat_request,
     create_chat_response,
     list_thread_messages,
     list_threads,
@@ -68,10 +95,14 @@ from app.services.memory_service import (
     list_memories,
     update_memory,
 )
+from app.services.kb_ingestion_service import (
+    create_pending_kb_entry,
+    process_kb_summary,
+)
 from app.services.knowledge_bank_service import (
     KnowledgeBankError,
-    add_document_to_kb,
     approve_redaction,
+    backfill_missing_kb_embeddings,
     build_kb_graph,
     create_kb_entry,
     delete_kb_entry,
@@ -81,6 +112,7 @@ from app.services.knowledge_bank_service import (
     list_kb_entries,
     log_kb_access,
     promote_kb_entry,
+    sync_linked_wiki_page_to_kb,
     update_kb_entry,
 )
 from app.services.organization_service import (
@@ -105,6 +137,22 @@ from app.services.wiki_service import (
     list_wiki_pages,
     publish_wiki_page,
     update_wiki_page,
+)
+from app.services.user_service import update_user_role
+from app.services.birdie_service import stream_birdie_response
+from app.services.survey_service import (
+    create_survey_question,
+    get_survey_results,
+    list_survey_questions,
+    submit_survey_response,
+    update_survey_question,
+)
+from app.services.action_service import (
+    create_action_item,
+    delete_action_item,
+    get_action_item,
+    list_action_items,
+    update_action_item,
 )
 
 app = FastAPI(title="LexCatalyst API")
@@ -154,6 +202,8 @@ async def auth_google(request: GoogleAuthRequest, db: Session = Depends(get_db))
                 "id": user.id,
                 "email": user.email,
                 "full_name": user.full_name,
+                "firm_role": user.firm_role,
+                "is_admin": user.is_admin,
             },
         }
     except ValueError as e:
@@ -161,6 +211,28 @@ async def auth_google(request: GoogleAuthRequest, db: Session = Depends(get_db))
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
         )
+
+
+@app.get("/me", response_model=UserResponse)
+def me(current_user: User = Depends(get_current_user)) -> UserResponse:
+    return UserResponse.model_validate(current_user)
+
+
+@app.patch("/me", response_model=UserResponse)
+def update_me(
+    schema: UserSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    try:
+        user = update_user_role(
+            db,
+            user=current_user,
+            firm_role=schema.firm_role,
+        )
+        return UserResponse.model_validate(user)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="User settings are unavailable") from exc
 
 
 @app.get("/health")
@@ -383,7 +455,7 @@ def wiki_page_detail(
 
 
 @app.patch("/wiki/pages/{page_id}", response_model=WikiPageResponse)
-def patch_wiki_page(
+async def patch_wiki_page(
     page_id: str,
     schema: WikiPageUpdate,
     db: Session = Depends(get_db),
@@ -391,8 +463,12 @@ def patch_wiki_page(
 ) -> WikiPageResponse:
     try:
         page = update_wiki_page(db, user_id=current_user.id, page_id=page_id, schema=schema)
+        if page:
+            await sync_linked_wiki_page_to_kb(db, user=current_user, page=page)
     except WikiForbiddenError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except KnowledgeBankError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Wiki database is unavailable") from exc
     if not page:
@@ -543,7 +619,7 @@ async def chat_stream(
             async for event_type, event_data in run_agent_loop(
                 initial_messages,
                 db,
-                user_id=current_user.id,
+                user=current_user,
                 matter_id=active_matter_id,
                 model=selected_model,
             ):
@@ -551,6 +627,7 @@ async def chat_stream(
                     chunks.append(event_data["content"])
                 elif event_type == "tool_call":
                     tool_steps.append({
+                        "id": event_data["step_id"],
                         "tool": event_data["tool"],
                         "args": event_data["args"],
                         "summary": None,
@@ -558,7 +635,7 @@ async def chat_stream(
                     })
                 elif event_type == "tool_result":
                     for step in reversed(tool_steps):
-                        if step["tool"] == event_data["tool"] and step["status"] == "running":
+                        if step["id"] == event_data["step_id"]:
                             step["summary"] = event_data["summary"]
                             step["status"] = "done"
                             break
@@ -605,6 +682,57 @@ async def chat_stream(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+class BirdieMessage(BaseModel):
+    role: str
+    content: str
+
+
+class BirdieRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=20_000)
+    history: list[BirdieMessage] = Field(default_factory=list, max_length=40)
+    matter_id: str | None = None
+
+
+@app.post("/birdie/stream")
+async def birdie_stream(
+    request: BirdieRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    def event(name: str, payload: dict) -> str:
+        return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
+
+    async def stream():
+        try:
+            chunks: list[str] = []
+            async for token in stream_birdie_response(
+                db,
+                user=current_user,
+                user_message=request.message,
+                history=[{"role": m.role, "content": m.content} for m in request.history],
+                matter_id=request.matter_id,
+            ):
+                chunks.append(token)
+                yield event("token", {"content": token})
+
+            full_response = "".join(chunks).strip()
+            if not full_response:
+                yield event("error", {"detail": "Birdie returned an empty response"})
+                return
+            yield event("done", {"content": full_response})
+        except DeepSeekError as exc:
+            yield event("error", {"detail": str(exc)})
+        except Exception as exc:
+            print(f"Birdie stream error: {exc!r}")
+            yield event("error", {"detail": "An unexpected error occurred"})
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -798,6 +926,7 @@ def kb_entries(
     try:
         entries = list_kb_entries(
             db,
+            user=current_user,
             scope=scope,
             entry_type=entry_type,
             matter_id=matter_id,
@@ -820,9 +949,38 @@ async def post_kb_entry(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
+    if schema.scope == "firm_wide" and not can_create_firm_wide(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only partners can create firm-wide entries")
     try:
         entry = await create_kb_entry(db, user=current_user, schema=schema)
         return KnowledgeBankEntryResponse.model_validate(entry)
+    except KnowledgeBankError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+
+
+@app.post(
+    "/kb/backfill-embeddings",
+    response_model=KnowledgeBankBackfillResponse,
+)
+async def backfill_kb_embeddings(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> KnowledgeBankBackfillResponse:
+    try:
+        (
+            embedded_count,
+            normalized_scope_count,
+            remaining_count,
+        ) = await backfill_missing_kb_embeddings(db)
+        return KnowledgeBankBackfillResponse(
+            embedded_count=embedded_count,
+            normalized_scope_count=normalized_scope_count,
+            remaining_count=remaining_count,
+        )
+    except KnowledgeBankError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
 
@@ -830,28 +988,48 @@ async def post_kb_entry(
 @app.post(
     "/kb/ingest/document/{document_id}",
     response_model=KnowledgeBankEntryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def ingest_document_kb_entry(
     document_id: str,
-    request: WikiIngestRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
-    try:
-        page = await ingest_document_to_wiki(
-            db,
-            user=current_user,
-            document_id=document_id,
-            request=request,
+    """Kick off async summarization of a document into a KB entry.
+
+    Returns a placeholder entry with `status="processing"` immediately. The
+    actual summarization runs in a background task using DeepSeek Pro and
+    flips the entry to `status="ready"` (or `"failed"`) when done.
+    Clients should poll `GET /kb/entries/{id}` to observe completion.
+    """
+    document = db.scalar(
+        select(Document).where(
+            Document.id == document_id,
+            Document.user_id == current_user.id,
         )
-        entry = await add_document_to_kb(db, user=current_user, page=page)
-        return KnowledgeBankEntryResponse.model_validate(entry)
-    except (WikiIngestionError, KnowledgeBankError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except DeepSeekError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if document.status != "ready":
+        raise HTTPException(
+            status_code=409,
+            detail="Document is still being processed. Try again once it is ready.",
+        )
+
+    try:
+        entry = create_pending_kb_entry(db, user=current_user, document=document)
     except SQLAlchemyError as exc:
-        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
+        raise HTTPException(
+            status_code=503, detail="Knowledge Bank is unavailable",
+        ) from exc
+
+    if entry.status == "processing" and not entry.body_markdown:
+        # Only schedule if the entry actually needs processing. Re-clicking
+        # while a job is in flight is a no-op.
+        background_tasks.add_task(process_kb_summary, entry.id)
+
+    return KnowledgeBankEntryResponse.model_validate(entry)
 
 
 @app.get("/kb/entries/{entry_id}", response_model=KnowledgeBankEntryResponse)
@@ -867,6 +1045,7 @@ def kb_entry_detail(
         entry = get_kb_entry(db, entry_id)
         if not entry:
             raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+        require_kb_read(db, current_user, entry)
         log_kb_access(
             db,
             user_id=current_user.id,
@@ -912,6 +1091,10 @@ async def patch_kb_entry(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
+    existing = get_kb_entry(db, entry_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+    require_kb_write(db, current_user, existing)
     try:
         entry = await update_kb_entry(
             db,
@@ -919,6 +1102,8 @@ async def patch_kb_entry(
             entry_id=entry_id,
             schema=schema,
         )
+    except KnowledgeBankError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
     if not entry:
@@ -932,6 +1117,10 @@ def delete_kb_entry_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
+    existing = get_kb_entry(db, entry_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+    require_kb_write(db, current_user, existing)
     try:
         success = delete_kb_entry(db, user=current_user, entry_id=entry_id)
     except SQLAlchemyError as exc:
@@ -995,14 +1184,14 @@ def kb_redaction_detail(
     "/kb/entries/{entry_id}/approve-redaction",
     response_model=KnowledgeBankEntryResponse,
 )
-def approve_kb_redaction(
+async def approve_kb_redaction(
     entry_id: str,
     schema: RedactionApprovalRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
     try:
-        entry = approve_redaction(
+        entry = await approve_redaction(
             db,
             user=current_user,
             entry_id=entry_id,
@@ -1023,6 +1212,7 @@ def audit_log(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[KnowledgeBankAccessLogResponse]:
+    require_partner_or_admin(current_user)
     try:
         return [
             KnowledgeBankAccessLogResponse.model_validate(item)
@@ -1074,3 +1264,113 @@ def delete_memory_endpoint(
         return {"status": "ok"}
     except SQLAlchemyError:
         raise HTTPException(status_code=503, detail="Database is unavailable")
+
+
+# ---------------------------------------------------------------------------
+# Survey routes
+# ---------------------------------------------------------------------------
+
+
+@app.get("/survey/questions", response_model=list[SurveyQuestionResponse])
+def get_survey_questions(
+    active_only: bool = True,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> list[SurveyQuestionResponse]:
+    return [SurveyQuestionResponse.model_validate(q) for q in list_survey_questions(db, active_only=active_only)]
+
+
+@app.post("/survey/questions", response_model=SurveyQuestionResponse, status_code=status.HTTP_201_CREATED)
+def post_survey_question(
+    schema: SurveyQuestionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SurveyQuestionResponse:
+    require_partner_or_admin(current_user)
+    q = create_survey_question(db, user=current_user, schema=schema)
+    return SurveyQuestionResponse.model_validate(q)
+
+
+@app.patch("/survey/questions/{question_id}", response_model=SurveyQuestionResponse)
+def patch_survey_question(
+    question_id: str,
+    schema: SurveyQuestionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SurveyQuestionResponse:
+    require_partner_or_admin(current_user)
+    q = update_survey_question(db, question_id=question_id, schema=schema)
+    if not q:
+        raise HTTPException(status_code=404, detail="Survey question not found")
+    return SurveyQuestionResponse.model_validate(q)
+
+
+@app.post("/survey/responses", status_code=status.HTTP_201_CREATED)
+def post_survey_response(
+    schema: SurveyResponseCreate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    submit_survey_response(db, schema=schema)
+    return {"status": "ok"}
+
+
+@app.get("/survey/results", response_model=SurveyResultsResponse)
+def survey_results(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SurveyResultsResponse:
+    require_partner_or_admin(current_user)
+    return SurveyResultsResponse(questions=get_survey_results(db))
+
+
+# ---------------------------------------------------------------------------
+# Action item routes
+# ---------------------------------------------------------------------------
+
+
+@app.get("/actions", response_model=list[ActionItemResponse])
+def get_actions(
+    matter_id: str | None = None,
+    item_status: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[ActionItemResponse]:
+    items = list_action_items(db, user=current_user, matter_id=matter_id, status=item_status)
+    return [ActionItemResponse.model_validate(item) for item in items]
+
+
+@app.post("/actions", response_model=ActionItemResponse, status_code=status.HTTP_201_CREATED)
+def post_action(
+    schema: ActionItemCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ActionItemResponse:
+    if not is_senior_or_above(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Partner or senior associate access required")
+    item = create_action_item(db, user=current_user, schema=schema)
+    return ActionItemResponse.model_validate(item)
+
+
+@app.patch("/actions/{item_id}", response_model=ActionItemResponse)
+def patch_action(
+    item_id: str,
+    schema: ActionItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ActionItemResponse:
+    item = update_action_item(db, user=current_user, item_id=item_id, schema=schema)
+    if not item:
+        raise HTTPException(status_code=404, detail="Action item not found or access denied")
+    return ActionItemResponse.model_validate(item)
+
+
+@app.delete("/actions/{item_id}")
+def delete_action(
+    item_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    if not delete_action_item(db, user=current_user, item_id=item_id):
+        raise HTTPException(status_code=404, detail="Action item not found or access denied")
+    return {"status": "ok"}

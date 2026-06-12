@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 import { AlertCircle, BookMarked, Brain, FileText, LoaderCircle, Paperclip, SendHorizontal, Sparkles, Square } from 'lucide-react'
 import { Button } from './Button'
+import { MarkdownContent } from './MarkdownContent'
 import type { Message, ToolStep } from '../types/workspace'
 
 type ChatPanelProps = {
@@ -241,7 +242,7 @@ function ChatMessage({ message, userInitials }: ChatMessageProps) {
         {!isUser && message.steps && message.steps.length > 0 && (
           <div className="mb-2 flex flex-col gap-1 w-full">
             {message.steps.map((step, i) => (
-              <ToolStepRow key={i} step={step} />
+              <ToolStepRow key={step.id ?? `${step.tool}-${i}`} step={step} />
             ))}
           </div>
         )}
@@ -264,7 +265,11 @@ function ChatMessage({ message, userInitials }: ChatMessageProps) {
               <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 animate-bounce [animation-delay:300ms]" />
             </span>
           ) : (
-            <div className="whitespace-pre-wrap">{message.body}</div>
+            isUser ? (
+              <div className="whitespace-pre-wrap">{message.body}</div>
+            ) : (
+              <MarkdownContent markdown={message.body} />
+            )
           )}
         </div>
       </div>
@@ -285,24 +290,40 @@ function ToolStepRow({ step }: { step: ToolStep }) {
     search_memories: 'Searching memories',
     get_kb_entry: 'Reading KB entry',
   }
-  const query = typeof step.args.query === 'string' ? step.args.query
-    : typeof step.args.entry_id === 'string' ? step.args.entry_id
-    : ''
+  const input = formatToolInput(step)
 
   return (
-    <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 pl-1">
-      <span className="text-neutral-400">{icons[step.tool] ?? <Sparkles size={12} />}</span>
-      <span>{labels[step.tool] ?? step.tool}</span>
-      {query && <span className="text-neutral-300">·</span>}
-      {query && <span className="italic truncate max-w-[200px]">"{query}"</span>}
-      {step.status === 'running' ? (
-        <LoaderCircle size={11} className="ml-1 animate-spin text-neutral-300" />
-      ) : (
-        <>
-          <span className="text-neutral-300">·</span>
-          <span className="text-neutral-400">{step.summary}</span>
-        </>
+    <div className="rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px] text-neutral-500">
+      <div className="flex items-center gap-1.5">
+        <span>{icons[step.tool] ?? <Sparkles size={12} />}</span>
+        <span className="font-medium text-neutral-600">{labels[step.tool] ?? step.tool}</span>
+        {step.status === 'running' ? (
+          <LoaderCircle size={11} className="ml-auto animate-spin text-neutral-400" />
+        ) : (
+          <span className="ml-auto min-w-0 max-w-[55%] truncate text-right text-neutral-400">
+            {step.summary ?? 'Completed'}
+          </span>
+        )}
+      </div>
+      {input && (
+        <div className="mt-1 break-words font-mono text-[10px] leading-4 text-neutral-400">
+          {input}
+        </div>
       )}
     </div>
   )
+}
+
+function formatToolInput(step: ToolStep) {
+  if (typeof step.args.query === 'string') {
+    return `query: "${step.args.query}"`
+  }
+  if (typeof step.args.entry_id === 'string') {
+    return `entry_id: "${step.args.entry_id}"`
+  }
+  const entries = Object.entries(step.args)
+  if (entries.length === 0) return ''
+  return entries
+    .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+    .join(', ')
 }

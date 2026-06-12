@@ -1,4 +1,5 @@
 export type ToolStep = {
+  id?: string
   tool: string
   args: Record<string, unknown>
   summary: string | null
@@ -142,16 +143,76 @@ export type Matter = {
   team?: Team | null
 }
 
+export type FirmRole = 'partner' | 'senior_associate' | 'associate'
+
+export type CurrentUser = {
+  id: string
+  email: string
+  fullName?: string | null
+  firmRole: FirmRole
+  isAdmin: boolean
+  defaultTeamId?: string | null
+  createdAt: string
+}
+
 export type KnowledgeBankScope = 'firm_wide' | 'team' | 'matter' | 'private'
-export type KnowledgeBankEntryType =
-  | 'precedent'
-  | 'playbook'
-  | 'matter_note'
-  | 'partner_pref'
-  | 'style_guide'
-  | 'entity'
-  | 'clause'
+export type KnowledgeBankEntryType = 'knowledge_bank' | 'style_guide' | 'action'
 export type PiiStatus = 'clean' | 'flagged' | 'pending_review' | 'redacted'
+
+export type SurveyCategory = 'workload' | 'mental_health' | 'team_dynamics' | 'learning'
+
+export type SurveyQuestion = {
+  id: string
+  text: string
+  category: SurveyCategory
+  orderIndex: number
+  isActive: boolean
+  createdAt: string
+}
+
+export type SurveyWeekResult = {
+  weekOf: string
+  avgScore: number
+  responseCount: number
+}
+
+export type SurveyQuestionResult = {
+  questionId: string
+  questionText: string
+  category: string
+  weeks: SurveyWeekResult[]
+}
+
+export type SurveyResults = {
+  questions: SurveyQuestionResult[]
+}
+
+export type ActionStatus = 'pending' | 'in_progress' | 'review' | 'done'
+export type ActionPriority = 'low' | 'medium' | 'high'
+
+export type ActionUser = {
+  id: string
+  fullName?: string | null
+  email: string
+}
+
+export type ActionItem = {
+  id: string
+  title: string
+  description?: string | null
+  assigneeId?: string | null
+  assignerId: string
+  matterId?: string | null
+  dueDate?: string | null
+  status: ActionStatus
+  priority: ActionPriority
+  createdAt: string
+  updatedAt: string
+  assignee?: ActionUser | null
+  assigner?: ActionUser | null
+}
+
+export type KbEntryStatus = 'processing' | 'ready' | 'failed'
 
 export type KnowledgeBankEntry = {
   id: string
@@ -165,6 +226,8 @@ export type KnowledgeBankEntry = {
   bodyMarkdown: string
   tags: string[]
   piiStatus: PiiStatus
+  status: KbEntryStatus
+  errorMessage?: string | null
   createdBy: string
   createdByRole: string
   version: number

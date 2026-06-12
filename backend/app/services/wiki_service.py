@@ -20,8 +20,8 @@ from app.schemas import WikiIngestRequest, WikiPageCreate, WikiPageUpdate
 
 DEFAULT_PAGE_TYPES = {"source_summary", "issue", "timeline", "playbook", "memory_note"}
 ALL_PAGE_TYPES = DEFAULT_PAGE_TYPES | {"entity", "clause", "authority", "question_answer"}
-MAX_INGEST_CHUNKS = 10
-MAX_CHUNK_CHARS = 2200
+MAX_INGEST_CHUNKS = 25
+MAX_CHUNK_CHARS = 3000
 
 
 class WikiIngestionError(RuntimeError):
@@ -376,12 +376,13 @@ async def ingest_document_to_wiki(
         model=request.model,
     )
     payload = parse_json_object(content)
-    page_payload = first_page_payload(payload)
+    # New prompt returns the page object directly; old format wrapped it in {"pages": [...]}
+    page_payload = payload if "title" in payload else first_page_payload(payload)
 
     page = WikiPage(
         owner_user_id=user.id,
         author_user_id=user.id,
-        title=clean_string(page_payload.get("title")) or f"{document.filename} - Source Summary",
+        title=clean_string(page_payload.get("title")) or f"{document.filename} — Summary",
         slug=unique_slug(db, clean_string(page_payload.get("slug")) or document.filename, owner_user_id=user.id),
         body_markdown=clean_string(page_payload.get("body_markdown")) or fallback_page_body(document),
         excerpt=clean_string(page_payload.get("excerpt")),
@@ -403,7 +404,6 @@ async def ingest_document_to_wiki(
         change_summary=f"Generated from {document.filename}",
     )
     add_sources(db, page=page, document=document, chunks=chunks, payload=page_payload)
-    add_links(db, page=page, payload=page_payload, user_id=user.id)
     db.commit()
     db.refresh(page)
     return page
@@ -500,6 +500,58 @@ def add_links(db: Session, *, page: WikiPage, payload: dict[str, Any], user_id: 
         )
 
 
+_INGESTION_SYSTEM = """\
+You are a Knowledge Bank editor at a law firm. You convert document extracts into tight, \
+scannable KB entries that a lawyer can read in under 60 seconds.
+
+Style rules:
+- Direct, professional prose. No academic hedging or filler.
+- Cite sources inline as [p.X] using the page number from citation_label. \
+  If no page number is available, omit the citation rather than showing an ID.
+- Never output a "Source Notes" section or footnotes listing chunk IDs.
+- Aim for 250–450 words in body_markdown total.
+- Use ## section headings and short bullet points (- item).
+- Do not repeat the document filename or title in every sentence.\
+"""
+
+_INGESTION_USER = """\
+Create one KB entry from the document chunks below.
+
+Return only valid JSON — no markdown fences, no commentary outside the JSON:
+{{
+  "title": "Concise descriptive title (max 80 chars)",
+  "slug": "url-safe-slug",
+  "excerpt": "One sentence summary, max 160 chars.",
+  "body_markdown": "...",
+  "sources": [
+    {{"chunk_id": "...", "citation_label": "...", "relevance_note": "one-line note"}}
+  ]
+}}
+
+body_markdown must contain exactly these sections (omit any section with no real content):
+
+## What This Is
+One short paragraph: document type, subject matter, who produced it, and its purpose.
+
+## Key Points
+3–6 bullets. Each bullet is one concrete takeaway a lawyer would act on or remember. \
+Cite inline as [p.X] at the end of the bullet where the claim comes from a specific chunk.
+
+## Risk Flags
+2–4 bullets on caveats, limitations, open issues, or things requiring caution. \
+Omit entirely if there are none.
+
+## How to Use
+1–3 bullets on how this document would be applied in practice — \
+drafting, negotiation, due diligence, advice, etc.
+
+Document: {filename}
+
+Chunks:
+{chunks}\
+"""
+
+
 def build_ingestion_prompt(
     *,
     document: Document,
@@ -509,49 +561,19 @@ def build_ingestion_prompt(
     for chunk in chunks:
         text = chunk.text[:MAX_CHUNK_CHARS]
         chunk_blocks.append(
-            "\n".join(
-                [
-                    f"chunk_id: {chunk.id}",
-                    f"citation_label: {chunk.citation_label}",
-                    text,
-                ]
-            )
+            f"[chunk_id: {chunk.id} | {chunk.citation_label}]\n{text}"
         )
 
-    prompt = f"""Generate one LexCatalyst wiki source_summary page from the document chunks.
-
-Return only valid JSON in this shape:
-{{
-  "pages": [
-    {{
-      "title": "...",
-      "slug": "...",
-      "page_type": "source_summary",
-      "excerpt": "...",
-      "body_markdown": "...",
-      "links": [
-        {{"target_title": "...", "link_text": "...", "link_type": "related"}}
-      ],
-      "sources": [
-        {{"chunk_id": "...", "citation_label": "...", "relevance_note": "..."}}
-      ]
-    }}
-  ]
-}}
-
-Rules:
-- Use only the chunks below.
-- Cite source-backed claims in Source Notes.
-- Do not paste the full document.
-- Preserve uncertainty and list open questions.
-- Write for a junior lawyer reducing matter cognitive load.
-
-Document filename: {document.filename}
-
-Chunks:
-{chr(10).join(chunk_blocks)}
-"""
-    return [{"role": "user", "content": prompt}]
+    return [
+        {"role": "system", "content": _INGESTION_SYSTEM},
+        {
+            "role": "user",
+            "content": _INGESTION_USER.format(
+                filename=document.filename,
+                chunks="\n\n---\n\n".join(chunk_blocks),
+            ),
+        },
+    ]
 
 
 def parse_json_object(content: str) -> dict[str, Any]:

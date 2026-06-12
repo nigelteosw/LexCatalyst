@@ -5,19 +5,15 @@ from pydantic import BaseModel, Field
 
 ChatModel = Literal["deepseek-v4-flash", "deepseek-v4-pro"]
 DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
-FirmRole = Literal["partner", "associate", "trainee"]
+FirmRole = Literal["partner", "senior_associate", "associate"]
 MatterStatus = Literal["active", "closed", "archived"]
 KnowledgeBankScope = Literal["firm_wide", "team", "matter", "private"]
-KnowledgeBankEntryType = Literal[
-    "precedent",
-    "playbook",
-    "matter_note",
-    "partner_pref",
-    "style_guide",
-    "entity",
-    "clause",
-]
+KnowledgeBankEntryType = Literal["knowledge_bank", "style_guide", "action"]
 PiiStatus = Literal["clean", "flagged", "pending_review", "redacted"]
+KbEntryStatus = Literal["processing", "ready", "failed"]
+SurveyCategory = Literal["workload", "mental_health", "team_dynamics", "learning"]
+ActionStatus = Literal["pending", "in_progress", "review", "done"]
+ActionPriority = Literal["low", "medium", "high"]
 WikiPageStatus = Literal["draft", "published", "archived"]
 WikiPageType = Literal[
     "source_summary",
@@ -285,6 +281,8 @@ class KnowledgeBankEntryResponse(BaseModel):
     body_markdown: str
     tags: list[str]
     pii_status: str
+    status: str = "ready"
+    error_message: str | None = None
     created_by: str
     created_by_role: str
     version: int
@@ -294,6 +292,12 @@ class KnowledgeBankEntryResponse(BaseModel):
     matter: MatterResponse | None = None
 
     model_config = {"from_attributes": True}
+
+
+class KnowledgeBankBackfillResponse(BaseModel):
+    embedded_count: int
+    normalized_scope_count: int
+    remaining_count: int
 
 
 class KnowledgeBankPromoteRequest(BaseModel):
@@ -321,5 +325,112 @@ class KnowledgeBankAccessLogResponse(BaseModel):
     context_thread_id: str | None = None
     ip_address: str | None = None
     timestamp: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str | None = None
+    firm_role: str
+    is_admin: bool
+    default_team_id: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UserSettingsUpdate(BaseModel):
+    firm_role: FirmRole
+
+
+class SurveyQuestionCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+    category: SurveyCategory
+    order_index: int = 0
+
+
+class SurveyQuestionUpdate(BaseModel):
+    text: str | None = Field(default=None, min_length=1, max_length=500)
+    category: SurveyCategory | None = None
+    order_index: int | None = None
+    is_active: bool | None = None
+
+
+class SurveyQuestionResponse(BaseModel):
+    id: str
+    text: str
+    category: str
+    order_index: int
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SurveyResponseCreate(BaseModel):
+    question_id: str
+    score: int = Field(ge=1, le=5)
+    week_of: datetime
+
+
+class SurveyWeekResult(BaseModel):
+    week_of: datetime
+    avg_score: float
+    response_count: int
+
+
+class SurveyQuestionResult(BaseModel):
+    question_id: str
+    question_text: str
+    category: str
+    weeks: list[SurveyWeekResult]
+
+
+class SurveyResultsResponse(BaseModel):
+    questions: list[SurveyQuestionResult]
+
+
+class ActionItemCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
+    assignee_id: str | None = None
+    matter_id: str | None = None
+    due_date: datetime | None = None
+    priority: ActionPriority = "medium"
+
+
+class ActionItemUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
+    assignee_id: str | None = None
+    status: ActionStatus | None = None
+    priority: ActionPriority | None = None
+    due_date: datetime | None = None
+
+
+class ActionUserResponse(BaseModel):
+    id: str
+    full_name: str | None = None
+    email: str
+
+    model_config = {"from_attributes": True}
+
+
+class ActionItemResponse(BaseModel):
+    id: str
+    title: str
+    description: str | None = None
+    assignee_id: str | None = None
+    assigner_id: str
+    matter_id: str | None = None
+    due_date: datetime | None = None
+    status: str
+    priority: str
+    created_at: datetime
+    updated_at: datetime
+    assignee: ActionUserResponse | None = None
+    assigner: ActionUserResponse | None = None
 
     model_config = {"from_attributes": True}

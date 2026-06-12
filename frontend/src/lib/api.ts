@@ -1,6 +1,11 @@
 import type {
+  ActionItem,
+  ActionPriority,
+  ActionStatus,
   ChatModel,
   ChatThread,
+  CurrentUser,
+  FirmRole,
   KnowledgeBankAccessLog,
   KnowledgeBankEntry,
   KnowledgeBankEntryType,
@@ -10,6 +15,9 @@ import type {
   MemoryCategory,
   Message,
   RedactionProposal,
+  SurveyCategory,
+  SurveyQuestion,
+  SurveyResults,
   Team,
   WikiGraph,
   WikiPage,
@@ -19,6 +27,7 @@ import type {
 } from '../types/workspace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
+const UNAUTHORIZED_EVENT = 'lexcatalyst:unauthorized'
 
 type BackendThread = {
   id: string
@@ -32,7 +41,7 @@ type BackendMessage = {
   role: 'assistant' | 'user'
   content: string
   model: string | null
-  tool_steps: Array<{ tool: string; args: Record<string, unknown>; summary: string | null; status: 'running' | 'done' }> | null
+  tool_steps: Array<{ id?: string; tool: string; args: Record<string, unknown>; summary: string | null; status: 'running' | 'done' }> | null
   created_at: string
 }
 
@@ -117,8 +126,8 @@ type StreamChatOptions = {
   matterId?: string | null
   signal?: AbortSignal
   onThread: (threadId: string, title: string) => void
-  onToolCall: (tool: string, args: Record<string, unknown>) => void
-  onToolResult: (tool: string, summary: string) => void
+  onToolCall: (stepId: string, tool: string, args: Record<string, unknown>) => void
+  onToolResult: (stepId: string, tool: string, summary: string) => void
   onToken: (content: string) => void
   onDone: (payload: { threadId: string; message: Message; model: string }) => void
 }
@@ -154,6 +163,8 @@ type BackendKnowledgeBankEntry = {
   body_markdown: string
   tags: string[]
   pii_status: KnowledgeBankEntry['piiStatus']
+  status: KnowledgeBankEntry['status']
+  error_message: string | null
   created_by: string
   created_by_role: string
   version: number
@@ -193,7 +204,9 @@ type BackendMemory = {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('token')
   const headers = new Headers(init?.headers)
-  headers.set('Content-Type', 'application/json')
+  if (init?.body != null && !(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
+  }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
@@ -203,13 +216,38 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
   })
 
+  handleUnauthorized(response)
+
+  const responseText = await response.text()
   if (!response.ok) {
-    const payload = await response.json().catch(() => null)
+    const payload = parseJson(responseText)
     const detail = typeof payload?.detail === 'string' ? payload.detail : response.statusText
     throw new Error(detail)
   }
 
-  return response.json() as Promise<T>
+  if (!responseText) return undefined as T
+  return JSON.parse(responseText) as T
+}
+
+function parseJson(value: string): Record<string, unknown> | null {
+  if (!value) return null
+  try {
+    return JSON.parse(value) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function handleUnauthorized(response: Response) {
+  if (response.status !== 401 || !localStorage.getItem('token')) return
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+}
+
+export function subscribeToUnauthorized(callback: () => void) {
+  window.addEventListener(UNAUTHORIZED_EVENT, callback)
+  return () => window.removeEventListener(UNAUTHORIZED_EVENT, callback)
 }
 
 function mapThread(thread: BackendThread): ChatThread {
@@ -282,6 +320,8 @@ function mapKnowledgeBankEntry(entry: BackendKnowledgeBankEntry): KnowledgeBankE
     bodyMarkdown: entry.body_markdown,
     tags: entry.tags,
     piiStatus: entry.pii_status,
+    status: entry.status ?? 'ready',
+    errorMessage: entry.error_message,
     createdBy: entry.created_by,
     createdByRole: entry.created_by_role,
     version: entry.version,
@@ -394,6 +434,7 @@ export async function uploadDocument(
     body,
   })
 
+  handleUnauthorized(response)
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
     const detail = typeof payload?.detail === 'string' ? payload.detail : response.statusText
@@ -550,6 +591,7 @@ export async function streamChatMessage({
     signal,
   })
 
+  handleUnauthorized(response)
   if (!response.ok || !response.body) {
     const payload = await response.json().catch(() => null)
     const detail = typeof payload?.detail === 'string' ? payload.detail : response.statusText
@@ -559,6 +601,7 @@ export async function streamChatMessage({
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let completed = false
 
   while (true) {
     const { done, value } = await reader.read()
@@ -571,13 +614,18 @@ export async function streamChatMessage({
     buffer = events.pop() ?? ''
 
     for (const rawEvent of events) {
-      handleStreamEvent(rawEvent, { onThread, onToolCall, onToolResult, onToken, onDone })
+      completed =
+        handleStreamEvent(rawEvent, { onThread, onToolCall, onToolResult, onToken, onDone }) ===
+          'done' || completed
     }
   }
 
   if (buffer.trim()) {
-    handleStreamEvent(buffer, { onThread, onToolCall, onToolResult, onToken, onDone })
+    completed =
+      handleStreamEvent(buffer, { onThread, onToolCall, onToolResult, onToken, onDone }) ===
+        'done' || completed
   }
+  if (!completed) throw new Error('The response stream ended before completion. Please try again.')
 }
 
 export async function listTeams(): Promise<Team[]> {
@@ -635,6 +683,23 @@ export async function getKnowledgeBankEntry(id: string): Promise<KnowledgeBankEn
   )
 }
 
+export async function backfillKnowledgeBankEmbeddings(): Promise<{
+  embeddedCount: number
+  normalizedScopeCount: number
+  remainingCount: number
+}> {
+  const result = await request<{
+    embedded_count: number
+    normalized_scope_count: number
+    remaining_count: number
+  }>('/kb/backfill-embeddings', { method: 'POST' })
+  return {
+    embeddedCount: result.embedded_count,
+    normalizedScopeCount: result.normalized_scope_count,
+    remainingCount: result.remaining_count,
+  }
+}
+
 export async function createKnowledgeBankEntry(payload: {
   title: string
   bodyMarkdown: string
@@ -662,15 +727,13 @@ export async function createKnowledgeBankEntry(payload: {
 
 export async function ingestDocumentToKnowledgeBank(
   documentId: string,
-  model: ChatModel,
 ): Promise<KnowledgeBankEntry> {
+  // The backend always uses DeepSeek Pro for KB summarisation and runs it
+  // as an async background task. The response is a placeholder entry with
+  // status="processing"; clients should poll until status="ready".
   return mapKnowledgeBankEntry(
     await request<BackendKnowledgeBankEntry>(`/kb/ingest/document/${documentId}`, {
       method: 'POST',
-      body: JSON.stringify({
-        page_types: ['source_summary'],
-        model,
-      }),
     }),
   )
 }
@@ -769,7 +832,7 @@ export async function listKnowledgeBankAuditLog(): Promise<KnowledgeBankAccessLo
 function handleStreamEvent(
   rawEvent: string,
   callbacks: Pick<StreamChatOptions, 'onThread' | 'onToolCall' | 'onToolResult' | 'onToken' | 'onDone'>,
-) {
+): string | null {
   const eventName = rawEvent
     .split('\n')
     .find((line) => line.startsWith('event: '))
@@ -780,7 +843,7 @@ function handleStreamEvent(
     ?.replace('data: ', '')
 
   if (!eventName || !data) {
-    return
+    return null
   }
 
   const payload: unknown = JSON.parse(data)
@@ -788,25 +851,33 @@ function handleStreamEvent(
   if (eventName === 'thread') {
     const thread = payload as StreamThreadPayload
     callbacks.onThread(thread.thread_id, thread.title)
-    return
+    return eventName
   }
 
   if (eventName === 'tool_call') {
-    const { tool, args } = payload as { tool: string; args: Record<string, unknown> }
-    callbacks.onToolCall(tool, args)
-    return
+    const { step_id, tool, args } = payload as {
+      step_id: string
+      tool: string
+      args: Record<string, unknown>
+    }
+    callbacks.onToolCall(step_id, tool, args)
+    return eventName
   }
 
   if (eventName === 'tool_result') {
-    const { tool, summary } = payload as { tool: string; summary: string }
-    callbacks.onToolResult(tool, summary)
-    return
+    const { step_id, tool, summary } = payload as {
+      step_id: string
+      tool: string
+      summary: string
+    }
+    callbacks.onToolResult(step_id, tool, summary)
+    return eventName
   }
 
   if (eventName === 'token') {
     const token = payload as StreamTokenPayload
     callbacks.onToken(token.content)
-    return
+    return eventName
   }
 
   if (eventName === 'done') {
@@ -816,24 +887,305 @@ function handleStreamEvent(
       message: mapMessage(donePayload.message),
       model: donePayload.model,
     })
-    return
+    return eventName
   }
 
   if (eventName === 'error') {
     const errorPayload = payload as StreamErrorPayload
     throw new Error(errorPayload.detail)
   }
+  return eventName
 }
 
 export async function loginWithGoogle(credential: string) {
   return request<{
     access_token: string
     token_type: string
-    user: { id: string; email: string; full_name: string }
+    user: { id: string; email: string; full_name: string; firm_role: FirmRole; is_admin: boolean }
   }>('/auth/google', {
     method: 'POST',
     body: JSON.stringify({ credential }),
   })
+}
+
+export async function getCurrentUser(): Promise<CurrentUser> {
+  const u = await request<{
+    id: string
+    email: string
+    full_name: string | null
+    firm_role: FirmRole
+    is_admin: boolean
+    default_team_id: string | null
+    created_at: string
+  }>('/me')
+  return {
+    id: u.id,
+    email: u.email,
+    fullName: u.full_name,
+    firmRole: u.firm_role,
+    isAdmin: u.is_admin,
+    defaultTeamId: u.default_team_id,
+    createdAt: u.created_at,
+  }
+}
+
+export async function updateCurrentUserRole(firmRole: FirmRole): Promise<CurrentUser> {
+  const u = await request<{
+    id: string
+    email: string
+    full_name: string | null
+    firm_role: FirmRole
+    is_admin: boolean
+    default_team_id: string | null
+    created_at: string
+  }>('/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ firm_role: firmRole }),
+  })
+  return {
+    id: u.id,
+    email: u.email,
+    fullName: u.full_name,
+    firmRole: u.firm_role,
+    isAdmin: u.is_admin,
+    defaultTeamId: u.default_team_id,
+    createdAt: u.created_at,
+  }
+}
+
+// Survey
+
+type BackendSurveyQuestion = {
+  id: string
+  text: string
+  category: SurveyCategory
+  order_index: number
+  is_active: boolean
+  created_at: string
+}
+
+function mapSurveyQuestion(q: BackendSurveyQuestion): SurveyQuestion {
+  return {
+    id: q.id,
+    text: q.text,
+    category: q.category,
+    orderIndex: q.order_index,
+    isActive: q.is_active,
+    createdAt: q.created_at,
+  }
+}
+
+export async function listSurveyQuestions(activeOnly = true): Promise<SurveyQuestion[]> {
+  const qs = await request<BackendSurveyQuestion[]>(`/survey/questions?active_only=${activeOnly}`)
+  return qs.map(mapSurveyQuestion)
+}
+
+export async function createSurveyQuestion(payload: {
+  text: string
+  category: SurveyCategory
+  orderIndex?: number
+}): Promise<SurveyQuestion> {
+  return mapSurveyQuestion(
+    await request<BackendSurveyQuestion>('/survey/questions', {
+      method: 'POST',
+      body: JSON.stringify({ text: payload.text, category: payload.category, order_index: payload.orderIndex ?? 0 }),
+    }),
+  )
+}
+
+export async function updateSurveyQuestion(
+  id: string,
+  payload: { text?: string; category?: SurveyCategory; orderIndex?: number; isActive?: boolean },
+): Promise<SurveyQuestion> {
+  return mapSurveyQuestion(
+    await request<BackendSurveyQuestion>(`/survey/questions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        text: payload.text,
+        category: payload.category,
+        order_index: payload.orderIndex,
+        is_active: payload.isActive,
+      }),
+    }),
+  )
+}
+
+export async function submitSurveyResponse(payload: {
+  questionId: string
+  score: number
+  weekOf: string
+}): Promise<void> {
+  await request('/survey/responses', {
+    method: 'POST',
+    body: JSON.stringify({ question_id: payload.questionId, score: payload.score, week_of: payload.weekOf }),
+  })
+}
+
+export async function getSurveyResults(): Promise<SurveyResults> {
+  return request<SurveyResults>('/survey/results')
+}
+
+// Action items
+
+type BackendActionUser = { id: string; full_name: string | null; email: string }
+type BackendActionItem = {
+  id: string
+  title: string
+  description: string | null
+  assignee_id: string | null
+  assigner_id: string
+  matter_id: string | null
+  due_date: string | null
+  status: ActionStatus
+  priority: ActionPriority
+  created_at: string
+  updated_at: string
+  assignee: BackendActionUser | null
+  assigner: BackendActionUser | null
+}
+
+function mapActionItem(item: BackendActionItem): ActionItem {
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    assigneeId: item.assignee_id,
+    assignerId: item.assigner_id,
+    matterId: item.matter_id,
+    dueDate: item.due_date,
+    status: item.status,
+    priority: item.priority,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+    assignee: item.assignee ? { id: item.assignee.id, fullName: item.assignee.full_name, email: item.assignee.email } : null,
+    assigner: item.assigner ? { id: item.assigner.id, fullName: item.assigner.full_name, email: item.assigner.email } : null,
+  }
+}
+
+export async function listActionItems(params?: { matterId?: string; status?: ActionStatus }): Promise<ActionItem[]> {
+  const search = new URLSearchParams()
+  if (params?.matterId) search.set('matter_id', params.matterId)
+  if (params?.status) search.set('item_status', params.status)
+  const suffix = search.toString() ? `?${search}` : ''
+  const items = await request<BackendActionItem[]>(`/actions${suffix}`)
+  return items.map(mapActionItem)
+}
+
+export async function createActionItem(payload: {
+  title: string
+  description?: string | null
+  assigneeId?: string | null
+  matterId?: string | null
+  dueDate?: string | null
+  priority?: ActionPriority
+}): Promise<ActionItem> {
+  return mapActionItem(
+    await request<BackendActionItem>('/actions', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: payload.title,
+        description: payload.description,
+        assignee_id: payload.assigneeId,
+        matter_id: payload.matterId,
+        due_date: payload.dueDate,
+        priority: payload.priority ?? 'medium',
+      }),
+    }),
+  )
+}
+
+export async function updateActionItem(
+  id: string,
+  payload: { title?: string; description?: string | null; assigneeId?: string | null; status?: ActionStatus; priority?: ActionPriority; dueDate?: string | null },
+): Promise<ActionItem> {
+  return mapActionItem(
+    await request<BackendActionItem>(`/actions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: payload.title,
+        description: payload.description,
+        assignee_id: payload.assigneeId,
+        status: payload.status,
+        priority: payload.priority,
+        due_date: payload.dueDate,
+      }),
+    }),
+  )
+}
+
+export async function deleteActionItem(id: string): Promise<void> {
+  await request(`/actions/${id}`, { method: 'DELETE' })
+}
+
+// Birdie mentor streaming
+
+type BirdieHistoryMessage = { role: 'user' | 'assistant'; content: string }
+
+export async function streamBirdieMessage({
+  message,
+  history,
+  matterId,
+  signal,
+  onToken,
+  onDone,
+  onError,
+}: {
+  message: string
+  history: BirdieHistoryMessage[]
+  matterId: string | null
+  signal?: AbortSignal
+  onToken: (content: string) => void
+  onDone: (fullContent: string) => void
+  onError: (detail: string) => void
+}) {
+  const token = localStorage.getItem('token')
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const response = await fetch(`${API_BASE_URL}/birdie/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ message, history, matter_id: matterId }),
+    signal,
+  })
+
+  handleUnauthorized(response)
+  if (!response.ok || !response.body) {
+    const payload = await response.json().catch(() => null)
+    onError(typeof payload?.detail === 'string' ? payload.detail : response.statusText)
+    return
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let completed = false
+
+  function processEvent(raw: string) {
+    const eventName = raw.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
+    const data = raw.split('\n').find((line) => line.startsWith('data: '))?.slice(6)
+    if (!eventName || !data) return
+    const payload = JSON.parse(data) as Record<string, string>
+    if (eventName === 'token') onToken(payload.content)
+    else if (eventName === 'done') {
+      completed = true
+      onDone(payload.content)
+    } else if (eventName === 'error') {
+      completed = true
+      onError(payload.detail)
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() ?? ''
+    for (const raw of events) processEvent(raw)
+  }
+  if (buffer.trim()) processEvent(buffer)
+  if (!completed) onError('Birdie stopped responding before the answer completed.')
 }
 
 export async function listMemories(category?: MemoryCategory): Promise<Memory[]> {

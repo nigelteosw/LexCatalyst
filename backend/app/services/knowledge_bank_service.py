@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import re
 from datetime import UTC, datetime
@@ -11,7 +12,9 @@ from app.models import (
     KnowledgeBankAccessLog,
     KnowledgeBankEntry,
     Matter,
+    MatterMember,
     PiiRedaction,
+    TeamMember,
     User,
     WikiPage,
 )
@@ -23,17 +26,82 @@ from app.schemas import (
     RedactionApprovalRequest,
 )
 
+MAX_EMBEDDING_TEXT_CHARS = 30_000
+
 
 class KnowledgeBankError(Exception):
     pass
 
 
+def _entry_embedding_text(entry: KnowledgeBankEntry) -> str:
+    return f"{entry.title}\n\n{entry.body_markdown}".strip()[:MAX_EMBEDDING_TEXT_CHARS]
+
+
+def _entry_embedding_hash(entry: KnowledgeBankEntry) -> str:
+    return hashlib.sha256(_entry_embedding_text(entry).encode("utf-8")).hexdigest()
+
+
+def _embedding_is_stale(entry: KnowledgeBankEntry) -> bool:
+    return (
+        entry.embedding is None
+        or entry.embedding_content_hash != _entry_embedding_hash(entry)
+    )
+
+
 async def _embed_entry(entry: KnowledgeBankEntry) -> None:
-    text = f"{entry.title}\n\n{entry.body_markdown}".strip()
     try:
-        entry.embedding = (await embed_texts([text]))[0]
+        entry.embedding = (await embed_texts([_entry_embedding_text(entry)]))[0]
+        entry.embedding_content_hash = _entry_embedding_hash(entry)
     except EmbeddingError as exc:
-        print(f"KB entry embedding skipped: {exc}")
+        raise KnowledgeBankError(f"Knowledge Bank embedding failed: {exc}") from exc
+
+
+async def backfill_missing_kb_embeddings(
+    db: Session,
+    *,
+    limit: int = 100,
+) -> tuple[int, int, int]:
+    orphaned_matter_entries = list(
+        db.scalars(
+            select(KnowledgeBankEntry).where(
+                KnowledgeBankEntry.scope == "matter",
+                KnowledgeBankEntry.matter_id.is_(None),
+                KnowledgeBankEntry.source_document_id.is_not(None),
+            )
+        )
+    )
+    for entry in orphaned_matter_entries:
+        entry.scope = "private"
+
+    all_entries = list(
+        db.scalars(
+            select(KnowledgeBankEntry)
+            .order_by(KnowledgeBankEntry.created_at)
+        )
+    )
+    stale_entries = [entry for entry in all_entries if _embedding_is_stale(entry)]
+    entries = stale_entries[:limit]
+    try:
+        if entries:
+            embeddings = await embed_texts(
+                [_entry_embedding_text(entry) for entry in entries]
+            )
+
+            for entry, embedding in zip(entries, embeddings, strict=True):
+                entry.embedding = embedding
+                entry.embedding_content_hash = _entry_embedding_hash(entry)
+
+        if entries or orphaned_matter_entries:
+            db.commit()
+    except EmbeddingError as exc:
+        db.rollback()
+        raise KnowledgeBankError(f"Knowledge Bank backfill failed: {exc}") from exc
+    except Exception:
+        db.rollback()
+        raise
+
+    remaining_count = max(0, len(stale_entries) - len(entries))
+    return len(entries), len(orphaned_matter_entries), remaining_count
 
 
 def log_kb_access(
@@ -96,9 +164,41 @@ def build_kb_graph(db: Session) -> dict[str, list[dict[str, str | None]]]:
     return {"nodes": nodes, "edges": edges}
 
 
+def _user_kb_scope_filter(db: Session, user: User):
+    """Build a WHERE clause that limits results to entries the user can read."""
+    if user.is_admin:
+        return None
+
+    user_team_ids = list(
+        db.scalars(select(TeamMember.team_id).where(TeamMember.user_id == user.id))
+    )
+    user_matter_ids = list(
+        db.scalars(select(MatterMember.matter_id).where(MatterMember.user_id == user.id))
+    )
+
+    allowed = [KnowledgeBankEntry.scope == "firm_wide"]
+
+    if user_team_ids:
+        allowed.append(
+            (KnowledgeBankEntry.scope == "team")
+            & KnowledgeBankEntry.team_id.in_(user_team_ids)
+        )
+    if user_matter_ids:
+        allowed.append(
+            (KnowledgeBankEntry.scope == "matter")
+            & KnowledgeBankEntry.matter_id.in_(user_matter_ids)
+        )
+    allowed.append(
+        (KnowledgeBankEntry.scope == "private")
+        & (KnowledgeBankEntry.created_by == user.id)
+    )
+    return or_(*allowed)
+
+
 def list_kb_entries(
     db: Session,
     *,
+    user: User,
     scope: str | None = None,
     entry_type: str | None = None,
     matter_id: str | None = None,
@@ -107,6 +207,11 @@ def list_kb_entries(
     query: str | None = None,
 ) -> list[KnowledgeBankEntry]:
     stmt = _entry_query()
+
+    scope_filter = _user_kb_scope_filter(db, user)
+    if scope_filter is not None:
+        stmt = stmt.where(scope_filter)
+
     if scope:
         stmt = stmt.where(KnowledgeBankEntry.scope == scope)
     if entry_type:
@@ -152,18 +257,22 @@ async def create_kb_entry(
         created_by=user.id,
         created_by_role=user.firm_role,
     )
-    db.add(entry)
-    db.flush()
-    await _embed_entry(entry)
-    log_kb_access(
-        db,
-        user_id=user.id,
-        action="write",
-        entry_id=entry.id,
-        matter_id=entry.matter_id,
-        commit=False,
-    )
-    db.commit()
+    try:
+        db.add(entry)
+        db.flush()
+        await _embed_entry(entry)
+        log_kb_access(
+            db,
+            user_id=user.id,
+            action="write",
+            entry_id=entry.id,
+            matter_id=entry.matter_id,
+            commit=False,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return get_kb_entry(db, entry.id) or entry
 
 
@@ -192,6 +301,28 @@ async def add_document_to_kb(
         )
     )
     if existing:
+        if (
+            existing.title != page.title
+            or existing.body_markdown != page.body_markdown
+            or _embedding_is_stale(existing)
+        ):
+            existing.title = page.title
+            existing.body_markdown = page.body_markdown
+            existing.version = max(existing.version + 1, page.version)
+            try:
+                await _embed_entry(existing)
+                log_kb_access(
+                    db,
+                    user_id=user.id,
+                    action="write",
+                    entry_id=existing.id,
+                    matter_id=existing.matter_id,
+                    commit=False,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
         return get_kb_entry(db, existing.id) or existing
 
     entry = KnowledgeBankEntry(
@@ -200,7 +331,7 @@ async def add_document_to_kb(
         matter_id=document.matter_id,
         source_document_id=document.id,
         scope="matter" if document.matter_id else "private",
-        entry_type="matter_note",
+        entry_type="knowledge_bank",
         title=page.title,
         body_markdown=page.body_markdown,
         tags=["source summary"],
@@ -211,19 +342,49 @@ async def add_document_to_kb(
         created_at=page.created_at,
         updated_at=page.updated_at,
     )
-    db.add(entry)
-    db.flush()
-    await _embed_entry(entry)
-    log_kb_access(
-        db,
-        user_id=user.id,
-        action="write",
-        entry_id=entry.id,
-        matter_id=entry.matter_id,
-        commit=False,
-    )
-    db.commit()
+    try:
+        db.add(entry)
+        db.flush()
+        await _embed_entry(entry)
+        log_kb_access(
+            db,
+            user_id=user.id,
+            action="write",
+            entry_id=entry.id,
+            matter_id=entry.matter_id,
+            commit=False,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return get_kb_entry(db, entry.id) or entry
+
+
+async def sync_linked_wiki_page_to_kb(
+    db: Session,
+    *,
+    user: User,
+    page: WikiPage,
+) -> KnowledgeBankEntry | None:
+    """Re-sync a KB entry from an updated wiki page.
+
+    Only entries created via the legacy wiki-ingestion path share an id
+    with their wiki page. Entries created via the async KB ingestion path
+    own their content (DeepSeek Pro summary) and must NOT be overwritten
+    by wiki edits — we'd silently clobber the Pro-generated summary.
+    """
+    if not page.source_document_id:
+        return None
+    linked_entry = db.scalar(
+        select(KnowledgeBankEntry.id).where(
+            KnowledgeBankEntry.id == page.id,
+            KnowledgeBankEntry.created_by == user.id,
+        )
+    )
+    if not linked_entry:
+        return None
+    return await add_document_to_kb(db, user=user, page=page)
 
 
 async def update_kb_entry(
@@ -236,19 +397,33 @@ async def update_kb_entry(
     entry = db.get(KnowledgeBankEntry, entry_id)
     if not entry:
         return None
-    for field, value in schema.model_dump(exclude_unset=True).items():
-        setattr(entry, field, value)
-    entry.version += 1
-    await _embed_entry(entry)
-    log_kb_access(
-        db,
-        user_id=user.id,
-        action="write",
-        entry_id=entry.id,
-        matter_id=entry.matter_id,
-        commit=False,
+    updates = schema.model_dump(exclude_unset=True)
+    changed = any(getattr(entry, field) != value for field, value in updates.items())
+    if not changed:
+        return get_kb_entry(db, entry.id)
+
+    content_changed = any(
+        field in updates and getattr(entry, field) != updates[field]
+        for field in ("title", "body_markdown")
     )
-    db.commit()
+    try:
+        for field, value in updates.items():
+            setattr(entry, field, value)
+        entry.version += 1
+        if content_changed or _embedding_is_stale(entry):
+            await _embed_entry(entry)
+        log_kb_access(
+            db,
+            user_id=user.id,
+            action="write",
+            entry_id=entry.id,
+            matter_id=entry.matter_id,
+            commit=False,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return get_kb_entry(db, entry.id)
 
 
@@ -363,31 +538,36 @@ async def promote_kb_entry(
         created_by=user.id,
         created_by_role=user.firm_role,
     )
-    db.add(promoted)
-    db.flush()
-    redaction = PiiRedaction(
-        kb_entry_id=promoted.id,
-        source_matter_id=source.matter_id,
-        target_scope=target_scope,
-        redacted_fields=redacted_fields,
-        original_content=source.body_markdown,
-        redacted_content=redacted_content,
-    )
-    db.add(redaction)
-    log_kb_access(
-        db,
-        user_id=user.id,
-        action="share",
-        entry_id=source.id,
-        matter_id=source.matter_id,
-        commit=False,
-    )
-    db.commit()
+    try:
+        db.add(promoted)
+        db.flush()
+        await _embed_entry(promoted)
+        redaction = PiiRedaction(
+            kb_entry_id=promoted.id,
+            source_matter_id=source.matter_id,
+            target_scope=target_scope,
+            redacted_fields=redacted_fields,
+            original_content=source.body_markdown,
+            redacted_content=redacted_content,
+        )
+        db.add(redaction)
+        log_kb_access(
+            db,
+            user_id=user.id,
+            action="share",
+            entry_id=source.id,
+            matter_id=source.matter_id,
+            commit=False,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(redaction)
     return get_kb_entry(db, promoted.id) or promoted, redaction
 
 
-def approve_redaction(
+async def approve_redaction(
     db: Session,
     *,
     user: User,
@@ -403,23 +583,28 @@ def approve_redaction(
     if not redaction:
         raise KnowledgeBankError("Redaction proposal not found")
 
-    if schema.redacted_content is not None:
-        redaction.redacted_content = schema.redacted_content
-        entry.body_markdown = schema.redacted_content
-    if schema.redacted_fields is not None:
-        redaction.redacted_fields = schema.redacted_fields
-    entry.pii_status = "redacted"
-    entry.version += 1
-    redaction.approved_by = user.id
-    redaction.approved_at = datetime.now(UTC)
-    log_kb_access(
-        db,
-        user_id=user.id,
-        action="redact_applied",
-        entry_id=entry.id,
-        commit=False,
-    )
-    db.commit()
+    try:
+        if schema.redacted_content is not None:
+            redaction.redacted_content = schema.redacted_content
+            entry.body_markdown = schema.redacted_content
+        if schema.redacted_fields is not None:
+            redaction.redacted_fields = schema.redacted_fields
+        entry.pii_status = "redacted"
+        entry.version += 1
+        redaction.approved_by = user.id
+        redaction.approved_at = datetime.now(UTC)
+        await _embed_entry(entry)
+        log_kb_access(
+            db,
+            user_id=user.id,
+            action="redact_applied",
+            entry_id=entry.id,
+            commit=False,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return get_kb_entry(db, entry.id)
 
 
@@ -451,37 +636,58 @@ async def search_kb_for_chat(
         query_embedding = None
 
     base = _entry_query().where(
-        KnowledgeBankEntry.pii_status.in_(["clean", "redacted"]),
         KnowledgeBankEntry.embedding.is_not(None),
+        KnowledgeBankEntry.embedding_content_hash.is_not(None),
     )
 
     if matter_id:
         matter = db.get(Matter, matter_id)
         team_id = matter.team_id if matter else None
-        allowed = [
+        clean_or_redacted = KnowledgeBankEntry.pii_status.in_(["clean", "redacted"])
+        allowed_scope = [
             KnowledgeBankEntry.scope == "firm_wide",
-            KnowledgeBankEntry.matter_id == matter_id,
-            KnowledgeBankEntry.created_by == user_id,
+            (KnowledgeBankEntry.scope == "matter")
+            & (KnowledgeBankEntry.matter_id == matter_id),
+            (KnowledgeBankEntry.scope == "private")
+            & (KnowledgeBankEntry.created_by == user_id),
         ]
         if team_id:
-            allowed.append(
+            allowed_scope.append(
                 (KnowledgeBankEntry.scope == "team")
                 & (KnowledgeBankEntry.team_id == team_id)
             )
-        base = base.where(or_(*allowed))
+        base = base.where(
+            or_(
+                clean_or_redacted & or_(*allowed_scope),
+                (KnowledgeBankEntry.pii_status == "flagged")
+                & or_(
+                    (KnowledgeBankEntry.scope == "matter")
+                    & (KnowledgeBankEntry.matter_id == matter_id),
+                    (KnowledgeBankEntry.scope == "private")
+                    & (KnowledgeBankEntry.created_by == user_id),
+                ),
+            )
+        )
     else:
         base = base.where(
             or_(
-                KnowledgeBankEntry.scope == "firm_wide",
-                (KnowledgeBankEntry.scope == "private")
+                KnowledgeBankEntry.pii_status.in_(["clean", "redacted"])
+                & or_(
+                    KnowledgeBankEntry.scope == "firm_wide",
+                    (KnowledgeBankEntry.scope == "private")
+                    & (KnowledgeBankEntry.created_by == user_id),
+                ),
+                (KnowledgeBankEntry.pii_status == "flagged")
+                & (KnowledgeBankEntry.scope == "private")
                 & (KnowledgeBankEntry.created_by == user_id),
             )
         )
 
     if query_embedding is not None:
         distance = KnowledgeBankEntry.embedding.cosine_distance(query_embedding).label("distance")
-        stmt = base.add_columns(distance).order_by(distance).limit(limit)
-        return [entry for entry, _ in db.execute(stmt).all()]
+        stmt = base.add_columns(distance).order_by(distance).limit(limit * 3)
+        candidates = [entry for entry, _ in db.execute(stmt).all()]
+        return [entry for entry in candidates if not _embedding_is_stale(entry)][:limit]
 
     # Keyword fallback if embedding is unavailable
     terms = re.findall(r"[A-Za-z0-9]{3,}", query)[:8]
@@ -497,7 +703,10 @@ async def search_kb_for_chat(
                 ]
             )
         )
-    return list(db.scalars(base.order_by(desc(KnowledgeBankEntry.updated_at)).limit(limit)))
+    candidates = list(
+        db.scalars(base.order_by(desc(KnowledgeBankEntry.updated_at)).limit(limit * 3))
+    )
+    return [entry for entry in candidates if not _embedding_is_stale(entry)][:limit]
 
 
 def format_kb_context(entries: list[KnowledgeBankEntry]) -> str:

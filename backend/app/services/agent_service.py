@@ -3,12 +3,21 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.orm import Session
 
+from app.dependencies import check_kb_read
+from app.models import User
 from app.providers.deepseek import DeepSeekProvider
-from app.services.knowledge_bank_service import get_kb_entry, search_kb_for_chat
+from app.services.document_service import get_document_full_text
+from app.services.knowledge_bank_service import (
+    get_kb_entry,
+    log_kb_access,
+    search_kb_for_chat,
+)
 from app.services.memory_service import list_memories
 from app.services.rag_service import search_documents
 
 MAX_TOOL_ROUNDS = 5
+MAX_MEMORY_RESULTS = 6
+MAX_KB_BODY_PREVIEW = 2000
 
 TOOLS: list[dict] = [
     {
@@ -33,8 +42,8 @@ TOOLS: list[dict] = [
         "function": {
             "name": "search_knowledge_bank",
             "description": (
-                "Search the firm's knowledge bank for precedents, playbooks, partner preferences, "
-                "style guides, and matter notes."
+                "Search the firm's knowledge bank for playbooks, precedents, style guides, "
+                "and soft-skill advice the user has access to."
             ),
             "parameters": {
                 "type": "object",
@@ -50,13 +59,13 @@ TOOLS: list[dict] = [
         "function": {
             "name": "search_memories",
             "description": (
-                "Search the user's memory bank for personal context, working style preferences, "
-                "and past matter facts."
+                "Keyword-search the user's memory bank for personal context, working style "
+                "preferences, and past matter facts."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Natural-language search query"},
+                    "query": {"type": "string", "description": "Keyword(s) to match against memories"},
                 },
                 "required": ["query"],
             },
@@ -79,7 +88,29 @@ TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_document",
+            "description": (
+                "Read the full extracted text of an uploaded document by its ID. "
+                "Use this when the KB summary is not detailed enough and you need to "
+                "quote or analyse the original document. The document_id can be found "
+                "on a KB entry as 'source_document_id', or surfaced by search_documents."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "document_id": {"type": "string", "description": "The document ID"},
+                },
+                "required": ["document_id"],
+            },
+        },
+    },
 ]
+
+
+# --- Tool execution -------------------------------------------------------
 
 
 async def _execute_tool(
@@ -87,100 +118,151 @@ async def _execute_tool(
     args: dict,
     *,
     db: Session,
-    user_id: str,
+    user: User,
     matter_id: str | None,
-) -> str:
+) -> tuple[str, str]:
+    """Return (result_text_for_llm, short_summary_for_ui)."""
     if name == "search_documents":
         query = str(args.get("query", "")).strip()
         if not query:
-            return "No query provided."
+            return "No query provided.", "no query"
         try:
-            results = await search_documents(db, query=query, user_id=user_id)
+            results = await search_documents(
+                db, query=query, user_id=user.id, matter_id=matter_id,
+            )
         except Exception as exc:
-            return f"Document search unavailable: {exc}"
+            return f"Document search unavailable: {exc}", "search unavailable"
         if not results:
-            return "No relevant document chunks found."
-        parts = []
-        for i, r in enumerate(results, start=1):
-            parts.append(f"Source {i} — {r.citation_label}\n{r.text}")
-        return "\n\n---\n\n".join(parts)
+            return "No relevant document chunks found.", "no results"
+        parts = [
+            f"Source {i} — {r.citation_label}\n{r.text}"
+            for i, r in enumerate(results, start=1)
+        ]
+        summary = f"{len(results)} chunk{'s' if len(results) != 1 else ''}"
+        return "\n\n---\n\n".join(parts), summary
 
     if name == "search_knowledge_bank":
         query = str(args.get("query", "")).strip()
         if not query:
-            return "No query provided."
+            return "No query provided.", "no query"
         try:
             entries = await search_kb_for_chat(
-                db, user_id=user_id, query=query, matter_id=matter_id
+                db, user_id=user.id, query=query, matter_id=matter_id,
             )
         except Exception as exc:
-            return f"Knowledge bank search unavailable: {exc}"
+            return f"Knowledge bank search unavailable: {exc}", "search unavailable"
         if not entries:
-            return "No relevant knowledge bank entries found."
-        return "\n\n---\n\n".join(
-            f"[KB:{e.id}] {e.title} ({e.entry_type}, {e.scope})\n{e.body_markdown[:2000]}"
+            return "No relevant knowledge bank entries found.", "no results"
+        body = "\n\n---\n\n".join(
+            f"[KB:{e.id}] {e.title} ({e.entry_type}, {e.scope})\n"
+            f"{e.body_markdown[:MAX_KB_BODY_PREVIEW]}"
             for e in entries
         )
+        summary = f"{len(entries)} KB entr{'ies' if len(entries) != 1 else 'y'}"
+        return body, summary
 
     if name == "search_memories":
         query = str(args.get("query", "")).strip().lower()
-        memories = list_memories(db, user_id=user_id)
-        relevant = [m for m in memories if not query or query in m.content.lower()][:6]
+        memories = list_memories(db, user_id=user.id)
+        relevant = [
+            m for m in memories if not query or query in m.content.lower()
+        ][:MAX_MEMORY_RESULTS]
         if not relevant:
-            return "No relevant memories found."
-        return "\n".join(f"[{m.category}] {m.content}" for m in relevant)
+            return "No relevant memories found.", "no results"
+        body = "\n".join(f"[{m.category}] {m.content}" for m in relevant)
+        summary = f"{len(relevant)} memor{'ies' if len(relevant) != 1 else 'y'}"
+        return body, summary
 
     if name == "get_kb_entry":
         entry_id = str(args.get("entry_id", "")).strip()
         if not entry_id:
-            return "No entry ID provided."
+            return "No entry ID provided.", "no id"
         entry = get_kb_entry(db, entry_id)
         if not entry:
-            return f"Knowledge bank entry '{entry_id}' not found."
-        return f"# {entry.title}\nType: {entry.entry_type} | Scope: {entry.scope}\n\n{entry.body_markdown}"
+            return f"Knowledge bank entry '{entry_id}' not found.", "not found"
+        if not check_kb_read(db, user, entry):
+            return (
+                f"You do not have access to entry '{entry_id}'.",
+                "access denied",
+            )
+        log_kb_access(
+            db,
+            user_id=user.id,
+            action="read",
+            entry_id=entry.id,
+            matter_id=matter_id,
+            commit=False,
+        )
+        header = f"# {entry.title}\nType: {entry.entry_type} | Scope: {entry.scope}"
+        if entry.source_document_id:
+            header += f" | source_document_id: {entry.source_document_id}"
+        body = f"{header}\n\n{entry.body_markdown}"
+        summary = f"loaded: {entry.title[:60]}"
+        return body, summary
 
-    return f"Unknown tool: {name}"
+    if name == "read_document":
+        document_id = str(args.get("document_id", "")).strip()
+        if not document_id:
+            return "No document ID provided.", "no id"
+        result = get_document_full_text(
+            db, user_id=user.id, document_id=document_id,
+        )
+        if result is None:
+            return f"Document '{document_id}' not found.", "not found"
+        document, full_text = result
+        if not full_text:
+            return (
+                f"Document '{document.filename}' has no extracted text yet.",
+                "no text",
+            )
+        summary = (
+            f"read: {document.filename} ({len(full_text):,} chars)"
+        )
+        body = f"# {document.filename}\n\n{full_text}"
+        return body, summary
+
+    return f"Unknown tool: {name}", "unknown tool"
 
 
-def _tool_result_summary(name: str, result: str) -> str:
-    lower = result.lower()
-    if "not found" in lower or "no relevant" in lower or "unavailable" in lower:
-        return result.rstrip(".")
-
-    if name == "search_documents":
-        count = result.count("[")
-        return f"{count} chunk{'s' if count != 1 else ''} found"
-    if name == "search_knowledge_bank":
-        count = result.count("[KB:")
-        return f"{count} KB entr{'ies' if count != 1 else 'y'} found"
-    if name == "search_memories":
-        count = result.count("[")
-        return f"{count} memor{'ies' if count != 1 else 'y'} found"
-    if name == "get_kb_entry":
-        first_line = result.split("\n")[0].lstrip("# ")
-        return f"Loaded: {first_line[:80]}"
-    return "Done"
+# --- ReAct loop -----------------------------------------------------------
 
 
 AgentEvent = tuple[str, dict]
+
+
+def _call_fingerprint(tool_call: dict) -> str:
+    """Stable hash of a tool call so we can detect repeats."""
+    fn = tool_call.get("function", {})
+    return f"{fn.get('name', '')}::{fn.get('arguments', '')}"
 
 
 async def run_agent_loop(
     messages: list[dict],
     db: Session,
     *,
-    user_id: str,
+    user: User,
     matter_id: str | None,
     model: str,
 ) -> AsyncGenerator[AgentEvent, None]:
     """
-    Async generator that drives the ReAct loop and yields:
-      ("tool_call",   {"tool": str, "args": dict})
-      ("tool_result", {"tool": str, "summary": str})
+    Run a ReAct-style tool-calling loop and yield streaming events.
+
+    Yields:
       ("token",       {"content": str})
+      ("tool_call",   {"step_id": str, "tool": str, "args": dict})
+      ("tool_result", {"step_id": str, "tool": str, "summary": str})
+
+    Loop design:
+      - Up to MAX_TOOL_ROUNDS rounds of tool calls are allowed.
+      - The (MAX_TOOL_ROUNDS + 1)-th iteration is a final round with tools
+        disabled, forcing the model to produce a text answer.
+      - If the model issues an identical tool call (same name + args) twice
+        in a row, the loop short-circuits to the final answer round to
+        prevent runaway loops on hallucinated queries.
     """
     provider = DeepSeekProvider()
     current_messages = list(messages)
+    previous_fingerprints: set[str] = set()
 
     for round_num in range(MAX_TOOL_ROUNDS + 1):
         is_final_round = round_num == MAX_TOOL_ROUNDS
@@ -200,7 +282,7 @@ async def run_agent_loop(
         assistant_content: str | None = None
 
         async for event_type, event_data in provider.stream_with_tools(
-            current_messages, tools, model=model
+            current_messages, tools, model=model,
         ):
             if event_type == "token":
                 yield ("token", {"content": event_data})
@@ -210,10 +292,31 @@ async def run_agent_loop(
                 assistant_content = event_data["content"]
 
         if not accumulated_tool_calls:
-            # LLM gave a final answer — loop is done
             return
 
-        # Add assistant's tool-call decision to conversation history
+        # Detect duplicate tool-call rounds; force final answer if seen.
+        round_fingerprints = {_call_fingerprint(tc) for tc in accumulated_tool_calls}
+        if round_fingerprints.issubset(previous_fingerprints):
+            current_messages.append({
+                "role": "system",
+                "content": (
+                    "You are repeating the same tool calls. Stop and answer "
+                    "with what you already have."
+                ),
+            })
+            # Skip executing the repeats; go straight to final-answer round.
+            continue
+        previous_fingerprints |= round_fingerprints
+
+        # Persist the assistant turn (tool_calls + reasoning) before any tool replies.
+        # Ensure every tool_call has a stable id so the tool reply ids match.
+        for tool_index, tool_call in enumerate(accumulated_tool_calls):
+            if not tool_call.get("id"):
+                tool_call["id"] = (
+                    f"call_{round_num}_{tool_index}_"
+                    f"{tool_call['function']['name']}"
+                )
+
         current_messages.append({
             "role": "assistant",
             "content": assistant_content,
@@ -223,25 +326,32 @@ async def run_agent_loop(
             "tool_calls": accumulated_tool_calls,
         })
 
-        # Execute each requested tool and feed results back
+        # Execute each tool and feed results back.
         for tool_call in accumulated_tool_calls:
             name = tool_call["function"]["name"]
+            step_id = tool_call["id"]
             try:
                 args: dict = json.loads(tool_call["function"]["arguments"])
             except (json.JSONDecodeError, ValueError):
                 args = {}
 
-            yield ("tool_call", {"tool": name, "args": args})
+            yield ("tool_call", {"step_id": step_id, "tool": name, "args": args})
 
-            result_text = await _execute_tool(
-                name, args, db=db, user_id=user_id, matter_id=matter_id
+            result_text, summary = await _execute_tool(
+                name, args, db=db, user=user, matter_id=matter_id,
             )
-            summary = _tool_result_summary(name, result_text)
 
-            yield ("tool_result", {"tool": name, "summary": summary})
+            yield (
+                "tool_result",
+                {"step_id": step_id, "tool": name, "summary": summary},
+            )
 
             current_messages.append({
                 "role": "tool",
-                "tool_call_id": tool_call["id"],
+                "tool_call_id": step_id,
                 "content": result_text,
             })
+
+    # Loop should have returned via the no-tool-calls branch; if we fall
+    # through, persist any pending audit log commits to be safe.
+    db.commit()

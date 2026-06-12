@@ -6,6 +6,8 @@ type DocumentsView = { view: 'documents' }
 type MemoriesView = { view: 'memories' }
 type WellbeingView = { view: 'wellbeing' }
 type KnowledgeBankView = { view: 'knowledge_bank'; entryId: string | null }
+type ActionsView = { view: 'actions' }
+type SettingsView = { view: 'settings' }
 
 export type AppView =
   | ChatView
@@ -14,6 +16,8 @@ export type AppView =
   | MemoriesView
   | WellbeingView
   | KnowledgeBankView
+  | ActionsView
+  | SettingsView
 
 type ViewState = {
   current: AppView
@@ -24,6 +28,8 @@ type ViewState = {
   selectMemories: () => void
   selectWellbeing: () => void
   selectKnowledgeBank: (entryId?: string | null) => void
+  selectActions: () => void
+  selectSettings: () => void
   setWikiPageId: (pageId: string | null) => void
 }
 
@@ -56,6 +62,10 @@ export const useViewStore = create<ViewState>((set, get) => ({
       },
     })
   },
+
+  selectActions: () => set({ current: { view: 'actions' } }),
+
+  selectSettings: () => set({ current: { view: 'settings' } }),
 
   setWikiPageId: (pageId) =>
     set((state) =>

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import { Brain, Trash2, Plus, Edit2, Check, X, Shield, Settings, Activity, AlertCircle } from 'lucide-react'
 import { Button } from './Button'
 import { listMemories, createMemory, updateMemory, deleteMemory } from '../lib/api'
@@ -6,7 +7,8 @@ import type { Memory, MemoryCategory } from '../types/workspace'
 
 export function MemoriesPanel() {
   const [memories, setMemories] = useState<Memory[]>([])
-  const [, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isMutating, setIsMutating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -16,56 +18,85 @@ export function MemoriesPanel() {
   const [newCategory, setNewCategory] = useState<MemoryCategory>('semantic')
   const [editContent, setEditContent] = useState('')
 
-  const fetchMemories = async () => {
-    setIsLoading(true)
-    try {
-      const data = await listMemories()
-      setMemories(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load memories')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   useEffect(() => {
-    void fetchMemories()
+    let cancelled = false
+    void listMemories()
+      .then((data) => {
+        if (!cancelled) {
+          setMemories(data)
+          setError(null)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load memories')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  const refreshMemories = async () => {
+    const data = await listMemories()
+    setMemories(data)
+  }
 
   const handleAdd = async () => {
     if (!newContent.trim()) return
+    setIsMutating(true)
     try {
       await createMemory({ category: newCategory, content: newContent })
       setNewContent('')
       setIsAdding(false)
-      await fetchMemories()
+      setError(null)
+      await refreshMemories()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create memory')
+    } finally {
+      setIsMutating(false)
     }
   }
 
   const handleUpdate = async (id: string) => {
     if (!editContent.trim()) return
+    setIsMutating(true)
     try {
       await updateMemory(id, { content: editContent })
       setEditingId(null)
-      await fetchMemories()
+      setError(null)
+      await refreshMemories()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update memory')
+    } finally {
+      setIsMutating(false)
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this memory?')) return
+    setIsMutating(true)
     try {
       await deleteMemory(id)
-      await fetchMemories()
+      setError(null)
+      await refreshMemories()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete memory')
+    } finally {
+      setIsMutating(false)
     }
   }
 
-  const categories: { id: MemoryCategory; label: string; icon: any; color: string; description: string }[] = [
+  const categories: Array<{
+    id: MemoryCategory
+    label: string
+    icon: LucideIcon
+    color: string
+    description: string
+  }> = [
     {
       id: 'semantic',
       label: 'Stable Facts',
@@ -140,7 +171,7 @@ export function MemoriesPanel() {
                 </Button>
               </div>
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                   {categories.map((cat) => (
                     <Button
                       key={cat.id}
@@ -168,6 +199,7 @@ export function MemoriesPanel() {
                     Cancel
                   </Button>
                   <Button
+                    disabled={isMutating}
                     onClick={handleAdd}
                     size="sm"
                     variant="primary"
@@ -179,6 +211,11 @@ export function MemoriesPanel() {
             </div>
           )}
 
+          {isLoading ? (
+            <div className="rounded-2xl border border-dashed border-neutral-200 p-12 text-center text-sm text-neutral-500">
+              Loading memories...
+            </div>
+          ) : (
           <div className="space-y-16">
             {categories.map((cat) => {
               const catMemories = memories.filter((m) => m.category === cat.id)
@@ -234,8 +271,9 @@ export function MemoriesPanel() {
                                 <p className="text-sm leading-relaxed text-neutral-700 whitespace-pre-wrap">
                                   {memory.content}
                                 </p>
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                                   <Button
+                                    disabled={isMutating}
                                     onClick={() => {
                                       setEditingId(memory.id)
                                       setEditContent(memory.content)
@@ -247,6 +285,7 @@ export function MemoriesPanel() {
                                     <Edit2 size={14} />
                                   </Button>
                                   <Button
+                                    disabled={isMutating}
                                     onClick={() => handleDelete(memory.id)}
                                     size="icon"
                                     title="Delete memory"
@@ -279,6 +318,7 @@ export function MemoriesPanel() {
               )
             })}
           </div>
+          )}
         </div>
       </div>
     </section>

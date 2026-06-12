@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FileText, GitBranch, RefreshCcw, Save, Trash2, UploadCloud } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from './Button'
+import { MarkdownContent } from './MarkdownContent'
 import { WikiGraphCanvas } from './WikiGraphCanvas'
 import {
   deleteWikiPage,
@@ -12,10 +13,10 @@ import {
   publishWikiPage,
   updateWikiPage,
 } from '../lib/api'
-import type { WikiPage } from '../types/workspace'
+import type { CurrentUser, WikiPage } from '../types/workspace'
 import { useViewStore } from '../store/viewStore'
 
-export function WikiPanel() {
+export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) {
   const { current, setWikiPageId, selectDocuments } = useViewStore()
   const pageId = current.view === 'wiki' ? current.pageId : null
 
@@ -41,7 +42,7 @@ export function WikiPanel() {
     enabled: !!pageId,
   })
 
-  const pages = pagesQuery.data ?? []
+  const pages = useMemo(() => pagesQuery.data ?? [], [pagesQuery.data])
   const graph = graphQuery.data ?? { nodes: [], edges: [] }
   const activePage = pageQuery.data ?? null
   const sources = sourcesQuery.data ?? []
@@ -108,7 +109,16 @@ export function WikiPanel() {
   const isSaving = saveMutation.isPending || publishMutation.isPending
   const isDeleting = deleteMutation.isPending
 
-  const error = mutationError ?? pagesQuery.error?.message ?? pageQuery.error?.message ?? null
+  const error =
+    mutationError ??
+    pagesQuery.error?.message ??
+    pageQuery.error?.message ??
+    graphQuery.error?.message ??
+    sourcesQuery.error?.message ??
+    null
+  const canEdit =
+    !!activePage &&
+    (currentUser?.isAdmin === true || activePage.ownerUserId === currentUser?.id)
 
   const filteredPages = useMemo(() => {
     const query = filter.trim().toLowerCase()
@@ -125,7 +135,7 @@ export function WikiPanel() {
 
   async function handleDelete() {
     if (!activePage || isDeleting) return
-    if (!window.confirm(`Delete "${activePage.title}"? This cannot be undone.`)) return
+    if (!window.confirm(`Remove "${activePage.title}" from Lex-Wiki?`)) return
     deleteMutation.mutate()
   }
 
@@ -155,8 +165,8 @@ export function WikiPanel() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside className="min-h-0 border-b border-neutral-100 lg:border-b-0 lg:border-r">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[280px_minmax(0,1fr)_320px] lg:overflow-hidden">
+        <aside className="border-b border-neutral-100 lg:min-h-0 lg:border-b-0 lg:border-r">
           <div className="border-b border-neutral-100 p-3">
             <input
               value={filter}
@@ -197,7 +207,7 @@ export function WikiPanel() {
           </div>
         </aside>
 
-        <main className="min-h-0 overflow-y-auto px-4 py-4 lg:px-6">
+        <main className="px-4 py-4 lg:min-h-0 lg:overflow-y-auto lg:px-6">
           {error && (
             <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
@@ -208,7 +218,7 @@ export function WikiPanel() {
             <article className="mx-auto max-w-3xl">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  {isEditing ? (
+                  {canEdit && isEditing ? (
                     <input
                       value={draftTitle}
                       onChange={(event) => setDraftTitle(event.target.value)}
@@ -231,7 +241,7 @@ export function WikiPanel() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {isEditing ? (
+                  {canEdit && isEditing ? (
                     <>
                       <Button
                         onClick={() => setIsEditing(false)}
@@ -243,7 +253,7 @@ export function WikiPanel() {
                       </Button>
                       <Button
                         onClick={() => saveMutation.mutate()}
-                        disabled={isSaving}
+                        disabled={isSaving || !draftTitle.trim() || !draftBody.trim()}
                         size="sm"
                         variant="primary"
                       >
@@ -251,7 +261,7 @@ export function WikiPanel() {
                         Save
                       </Button>
                     </>
-                  ) : (
+                  ) : canEdit ? (
                     <>
                       {activePage.status === 'draft' && (
                         <Button
@@ -277,18 +287,20 @@ export function WikiPanel() {
                         {isDeleting ? 'Deleting…' : 'Delete'}
                       </Button>
                     </>
+                  ) : (
+                    <span className="text-xs text-neutral-500">Read-only page</span>
                   )}
                 </div>
               </div>
 
-              {isEditing ? (
+              {canEdit && isEditing ? (
                 <textarea
                   value={draftBody}
                   onChange={(event) => setDraftBody(event.target.value)}
                   className="min-h-[520px] w-full rounded-lg border border-neutral-200 px-3 py-3 font-mono text-sm leading-6 outline-none focus:border-neutral-400"
                 />
               ) : (
-                <MarkdownPreview markdown={activePage.bodyMarkdown} />
+                <MarkdownContent markdown={activePage.bodyMarkdown} />
               )}
             </article>
           ) : (
@@ -302,7 +314,7 @@ export function WikiPanel() {
           )}
         </main>
 
-        <aside className="min-h-0 border-t border-neutral-100 bg-neutral-50/70 lg:border-l lg:border-t-0">
+        <aside className="border-t border-neutral-100 bg-neutral-50/70 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
           <div className="space-y-4 p-4">
             <section>
               <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -362,70 +374,6 @@ function StatusBadge({ status }: { status: WikiPage['status'] }) {
     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${className}`}>
       {status}
     </span>
-  )
-}
-
-function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g)
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={i}>{part.slice(1, -1)}</em>
-    }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code key={i} className="rounded bg-neutral-100 px-1 font-mono text-[0.875em]">
-          {part.slice(1, -1)}
-        </code>
-      )
-    }
-    return part
-  })
-}
-
-function MarkdownPreview({ markdown }: { markdown: string }) {
-  const blocks = markdown.split(/\n{2,}/)
-  return (
-    <div className="space-y-4 text-sm leading-7 text-neutral-800">
-      {blocks.map((block, index) => {
-        const trimmed = block.trim()
-        if (!trimmed) return null
-        if (trimmed === '---') return <hr key={index} className="border-neutral-200" />
-        if (trimmed.startsWith('### '))
-          return (
-            <h3 key={index} className="pt-1 text-base font-semibold text-neutral-950">
-              {renderInline(trimmed.slice(4))}
-            </h3>
-          )
-        if (trimmed.startsWith('## '))
-          return (
-            <h2 key={index} className="pt-2 text-lg font-semibold text-neutral-950">
-              {renderInline(trimmed.slice(3))}
-            </h2>
-          )
-        if (trimmed.startsWith('# '))
-          return (
-            <h1 key={index} className="text-xl font-semibold text-neutral-950">
-              {renderInline(trimmed.slice(2))}
-            </h1>
-          )
-        if (trimmed.split('\n').every((line) => line.trim().startsWith('- ')))
-          return (
-            <ul key={index} className="list-disc space-y-1 pl-5">
-              {trimmed.split('\n').map((line, lineIndex) => (
-                <li key={lineIndex}>{renderInline(line.trim().replace(/^- /, ''))}</li>
-              ))}
-            </ul>
-          )
-        return (
-          <p key={index} className="whitespace-pre-wrap">
-            {renderInline(trimmed)}
-          </p>
-        )
-      })}
-    </div>
   )
 }
 

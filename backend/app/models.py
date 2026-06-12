@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, SmallInteger, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import get_settings
@@ -29,6 +29,7 @@ class User(Base):
         nullable=True,
     )
     firm_role: Mapped[str] = mapped_column(String(24), nullable=False, default="associate")
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -538,7 +539,10 @@ class KnowledgeBankEntry(Base):
     body_markdown: Mapped[str] = mapped_column(Text, nullable=False)
     tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     pii_status: Mapped[str] = mapped_column(String(24), index=True, nullable=False, default="clean")
+    status: Mapped[str] = mapped_column(String(24), index=True, nullable=False, default="ready")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIMENSIONS), nullable=True)
+    embedding_content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_by: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
@@ -636,3 +640,92 @@ class PiiRedaction(Base):
     @original_content.setter
     def original_content(self, value: str) -> None:
         self._original_content = encrypt_text(value) or ""
+
+
+class SurveyQuestion(Base):
+    __tablename__ = "survey_questions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_id])
+    responses: Mapped[list["SurveyResponse"]] = relationship(
+        back_populates="question",
+        cascade="all, delete-orphan",
+    )
+
+
+class SurveyResponse(Base):
+    """Truly anonymous — no user_id column."""
+
+    __tablename__ = "survey_responses"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    question_id: Mapped[str] = mapped_column(
+        ForeignKey("survey_questions.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    score: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    week_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    question: Mapped[SurveyQuestion] = relationship(back_populates="responses")
+
+
+class ActionItem(Base):
+    __tablename__ = "action_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assignee_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    assigner_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    matter_id: Mapped[str | None] = mapped_column(
+        ForeignKey("matters.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), index=True, nullable=False, default="pending")
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    assignee: Mapped[User | None] = relationship(foreign_keys=[assignee_id])
+    assigner: Mapped[User] = relationship(foreign_keys=[assigner_id])
+    matter: Mapped[Matter | None] = relationship()

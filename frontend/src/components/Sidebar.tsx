@@ -3,11 +3,13 @@ import {
   BookMarked,
   Brain,
   BriefcaseBusiness,
+  CheckSquare,
   Clock,
   FileText,
   HeartPulse,
   LogOut,
   Plus,
+  Settings,
   X,
 } from 'lucide-react'
 import type { ChatThread, Matter } from '../types/workspace'
@@ -18,6 +20,7 @@ type SidebarProps = {
   matters: Matter[]
   selectedMatterId: string | null
   onMatterChange: (matterId: string | null) => void
+  onNewChat: () => void
   isOpen: boolean
   onClose: () => void
   onLogout: () => void
@@ -42,6 +45,7 @@ export function Sidebar({
   matters,
   selectedMatterId,
   onMatterChange,
+  onNewChat,
   isOpen,
   onClose,
   onLogout,
@@ -50,12 +54,13 @@ export function Sidebar({
 }: SidebarProps) {
   const {
     current,
-    startNewChat,
     selectThread,
     selectMemories,
     selectDocuments,
     selectKnowledgeBank,
     selectWellbeing,
+    selectActions,
+    selectSettings,
   } = useViewStore()
 
   const [width, setWidth] = useState(DEFAULT_WIDTH)
@@ -112,7 +117,7 @@ export function Sidebar({
         className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-[#0f0f0f] text-[#fafaf8] transition-transform duration-300 lg:relative lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ width: isOpen || window.innerWidth >= 1024 ? `${width}px` : 'auto' }}
+        style={{ width: `${width}px` }}
       >
         <div className="flex h-full min-h-0 flex-col">
           {/* Sidebar Header */}
@@ -138,7 +143,7 @@ export function Sidebar({
 
             <button
               onClick={() => {
-                startNewChat()
+                onNewChat()
                 closeMobile()
               }}
               className="flex w-full items-center justify-center gap-1.5 rounded-[9px] border border-white/10 bg-white/[0.07] px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.13] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
@@ -204,6 +209,19 @@ export function Sidebar({
             >
               <HeartPulse size={14} />
               Wellbeing
+            </button>
+            <button
+              onClick={() => {
+                selectActions()
+                closeMobile()
+              }}
+              className={`${sidebarActionClass} ${
+                current.view === 'actions' ? sidebarNavActiveClass : sidebarNavClass
+              }`}
+              type="button"
+            >
+              <CheckSquare size={14} />
+              Actions
             </button>
           </nav>
 
@@ -294,15 +312,25 @@ export function Sidebar({
 
           {/* Sidebar Footer */}
           <div className="flex items-center gap-2 border-t border-white/[0.08] px-2.5 py-2.5">
-            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-[9px] font-semibold uppercase text-white">
-              {userInitials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[11.5px] font-medium text-white/80">
-                {userFullName}
+            <button
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              onClick={() => {
+                selectSettings()
+                closeMobile()
+              }}
+              type="button"
+            >
+              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-[9px] font-semibold uppercase text-white">
+                {userInitials}
               </div>
-              <div className="truncate text-[9.5px] text-white/30">Professional plan</div>
-            </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11.5px] font-medium text-white/80">
+                  {userFullName}
+                </div>
+                <div className="truncate text-[9.5px] text-white/30">Profile settings</div>
+              </div>
+              <Settings size={14} className="shrink-0 text-white/35" />
+            </button>
             <button
               onClick={onLogout}
               aria-label="Log out"

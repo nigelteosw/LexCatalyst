@@ -13,6 +13,7 @@ import {
   PanelRightOpen,
   Plus,
   CircleHelp,
+  RefreshCcw,
   Search,
   ShieldCheck,
   Tags,
@@ -22,6 +23,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   approveKnowledgeBankRedaction,
+  backfillKnowledgeBankEmbeddings,
   createKnowledgeBankEntry,
   createMatter,
   deleteKnowledgeBankEntry,
@@ -35,6 +37,7 @@ import {
   updateKnowledgeBankEntry,
 } from '../lib/api'
 import type {
+  CurrentUser,
   KnowledgeBankEntry,
   KnowledgeBankEntryType,
   KnowledgeBankScope,
@@ -43,21 +46,19 @@ import type {
 } from '../types/workspace'
 import { useViewStore } from '../store/viewStore'
 import { WikiGraphCanvas } from './WikiGraphCanvas'
+import { MarkdownContent } from './MarkdownContent'
 
 type KnowledgeBankPanelProps = {
   matters: Matter[]
   selectedMatterId: string | null
   onMatterChange: (matterId: string | null) => void
+  currentUser: CurrentUser | null
 }
 
-const entryTypes: Array<{ id: KnowledgeBankEntryType; label: string }> = [
-  { id: 'precedent', label: 'Precedents' },
-  { id: 'playbook', label: 'Playbooks' },
-  { id: 'matter_note', label: 'Matter notes' },
-  { id: 'partner_pref', label: 'Partner preferences' },
-  { id: 'style_guide', label: 'Style guides' },
-  { id: 'entity', label: 'Entities' },
-  { id: 'clause', label: 'Clauses' },
+const entryTypes: Array<{ id: KnowledgeBankEntryType; label: string; description: string }> = [
+  { id: 'knowledge_bank', label: 'Knowledge Bank', description: 'Playbooks, precedents, templates, and formats' },
+  { id: 'style_guide', label: 'Style Guide', description: 'Writing standards, partner preferences, and formatting rules' },
+  { id: 'action', label: 'Action', description: 'Soft-skill guides, wellness resources, and advice content' },
 ]
 
 const scopeLabels: Record<KnowledgeBankScope, string> = {
@@ -67,11 +68,20 @@ const scopeLabels: Record<KnowledgeBankScope, string> = {
   private: 'Private',
 }
 
+function canWrite(user: CurrentUser | null) {
+  return user?.isAdmin || user?.firmRole === 'partner' || user?.firmRole === 'senior_associate'
+}
+
 export function KnowledgeBankPanel({
   matters,
   selectedMatterId,
   onMatterChange,
+  currentUser,
 }: KnowledgeBankPanelProps) {
+  const isWriter = canWrite(currentUser)
+  const canCreateFirmWide =
+    currentUser?.isAdmin === true || currentUser?.firmRole === 'partner'
+  const canViewAudit = canCreateFirmWide
   const queryClient = useQueryClient()
   const { current, selectKnowledgeBank } = useViewStore()
   const selectedEntryId = current.view === 'knowledge_bank' ? current.entryId : null
@@ -84,20 +94,29 @@ export function KnowledgeBankPanel({
   const [isHelpOpen, setIsHelpOpen] = useState(false)
   const [isContextOpen, setIsContextOpen] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
+  const [backfillMessage, setBackfillMessage] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
 
   const entriesQuery = useQuery({
     queryKey: ['kbEntries'],
     queryFn: () => listKnowledgeBankEntries(),
+    refetchInterval: (query) => {
+      const data = query.state.data ?? []
+      return data.some((e) => e.status === 'processing') ? 3000 : false
+    },
   })
   const auditQuery = useQuery({
     queryKey: ['kbAudit'],
     queryFn: listKnowledgeBankAuditLog,
-    enabled: activeTab === 'audit',
+    enabled: canViewAudit && activeTab === 'audit',
   })
   const selectedEntryQuery = useQuery({
     queryKey: ['kbEntry', selectedEntryId],
     queryFn: () => getKnowledgeBankEntry(selectedEntryId!),
     enabled: !!selectedEntryId,
+    refetchInterval: (query) => {
+      return query.state.data?.status === 'processing' ? 3000 : false
+    },
   })
 
   const entries = useMemo(() => entriesQuery.data ?? [], [entriesQuery.data])
@@ -128,9 +147,30 @@ export function KnowledgeBankPanel({
     mutationFn: deleteKnowledgeBankEntry,
     onSuccess: () => {
       selectKnowledgeBank(null)
+      setMutationError(null)
       queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
       queryClient.invalidateQueries({ queryKey: ['kbAudit'] })
     },
+    onError: (error) => setMutationError(getErrorMessage(error)),
+  })
+
+  const backfillMutation = useMutation({
+    mutationFn: backfillKnowledgeBankEmbeddings,
+    onSuccess: ({ embeddedCount, normalizedScopeCount, remainingCount }) => {
+      const normalizedMessage =
+        normalizedScopeCount > 0 ? ` Normalized ${normalizedScopeCount} legacy scopes.` : ''
+      setBackfillMessage(
+        remainingCount > 0
+          ? `Indexed ${embeddedCount} entries.${normalizedMessage} ${remainingCount} remain; run repair again.`
+          : embeddedCount > 0
+            ? `Indexed ${embeddedCount} Knowledge Bank entries.${normalizedMessage}`
+            : normalizedScopeCount > 0
+              ? `The search index was complete.${normalizedMessage}`
+              : 'The Knowledge Bank search index is already complete.',
+      )
+      queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
+    },
+    onError: (error) => setBackfillMessage(getErrorMessage(error)),
   })
 
   function refreshKnowledgeBank() {
@@ -164,6 +204,24 @@ export function KnowledgeBankPanel({
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
+            {isWriter && (
+              <button
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs text-[#5a5a56] transition-colors hover:bg-[#f4f3ef] disabled:cursor-not-allowed disabled:text-[#aaa9a3]"
+                disabled={backfillMutation.isPending}
+                onClick={() => {
+                  setBackfillMessage(null)
+                  backfillMutation.mutate()
+                }}
+                title="Re-embed entries with missing or stale search vectors"
+                type="button"
+              >
+                <RefreshCcw
+                  size={13}
+                  className={backfillMutation.isPending ? 'animate-spin' : ''}
+                />
+                {backfillMutation.isPending ? 'Repairing...' : 'Repair search index'}
+              </button>
+            )}
             <select
               aria-label="Active matter"
               className="h-8 max-w-56 rounded-lg border border-black/10 bg-[#f4f3ef] px-2.5 text-xs text-[#5a5a56] outline-none focus:border-black/25"
@@ -177,13 +235,15 @@ export function KnowledgeBankPanel({
                 </option>
               ))}
             </select>
-            <button
-              className="h-8 rounded-lg px-2.5 text-xs text-[#5a5a56] transition-colors hover:bg-[#f4f3ef]"
-              onClick={() => setIsCreatingMatter(true)}
-              type="button"
-            >
-              New matter
-            </button>
+            {isWriter && (
+              <button
+                className="h-8 rounded-lg px-2.5 text-xs text-[#5a5a56] transition-colors hover:bg-[#f4f3ef]"
+                onClick={() => setIsCreatingMatter(true)}
+                type="button"
+              >
+                New matter
+              </button>
+            )}
             {!selectedEntryId && (
               <button
                 aria-label={isContextOpen ? 'Hide context panel' : 'Show context panel'}
@@ -195,16 +255,34 @@ export function KnowledgeBankPanel({
                 Context
               </button>
             )}
-            <button
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#0f0f0f] px-3 text-xs font-medium text-white transition-colors hover:bg-[#333]"
-              onClick={() => setIsCreatingEntry(true)}
-              type="button"
-            >
-              <Plus size={13} />
-              New entry
-            </button>
+            {isWriter && (
+              <button
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#0f0f0f] px-3 text-xs font-medium text-white transition-colors hover:bg-[#333]"
+                onClick={() => setIsCreatingEntry(true)}
+                type="button"
+              >
+                <Plus size={13} />
+                New entry
+              </button>
+            )}
           </div>
         </header>
+        {backfillMessage && (
+          <div className="border-b border-black/10 bg-[#f4f3ef] px-4 py-2 text-xs text-[#5a5a56] lg:px-5">
+            {backfillMessage}
+          </div>
+        )}
+        {(mutationError ||
+          entriesQuery.isError ||
+          selectedEntryQuery.isError ||
+          auditQuery.isError) && (
+          <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700 lg:px-5">
+            {mutationError ??
+              getErrorMessage(
+                entriesQuery.error ?? selectedEntryQuery.error ?? auditQuery.error,
+              )}
+          </div>
+        )}
 
         <div className="flex border-b border-black/10 bg-white px-4 lg:px-5">
           <button
@@ -218,27 +296,32 @@ export function KnowledgeBankPanel({
           >
             Library
           </button>
-          <button
-            className={`border-b-2 px-3 py-2.5 text-xs ${
-              activeTab === 'audit'
-                ? 'border-[#0f0f0f] font-medium text-[#0f0f0f]'
-                : 'border-transparent text-[#9a9a94]'
-            }`}
-            onClick={() => setActiveTab('audit')}
-            type="button"
-          >
-            Audit log
-          </button>
-          <div className="ml-auto flex items-center gap-1.5 text-[10px] text-[#9a9a94]">
-            <ShieldCheck size={12} />
-            Mock super-user mode
-          </div>
+          {canViewAudit && (
+            <button
+              className={`border-b-2 px-3 py-2.5 text-xs ${
+                activeTab === 'audit'
+                  ? 'border-[#0f0f0f] font-medium text-[#0f0f0f]'
+                  : 'border-transparent text-[#9a9a94]'
+              }`}
+              onClick={() => setActiveTab('audit')}
+              type="button"
+            >
+              Audit log
+            </button>
+          )}
+          {currentUser && (
+            <div className="ml-auto flex items-center gap-1.5 text-[10px] text-[#9a9a94]">
+              <ShieldCheck size={12} />
+              {currentUser.isAdmin ? 'Admin' : currentUser.firmRole.replace('_', ' ')}
+            </div>
+          )}
         </div>
 
         {activeTab === 'library' && selectedEntryId && selectedEntry ? (
           <KnowledgeBankReader
             entries={entries}
             entry={selectedEntry}
+            canEdit={isWriter}
             isDeleting={deleteMutation.isPending}
             onBack={() => selectKnowledgeBank(null)}
             onDelete={(entry) => {
@@ -292,7 +375,7 @@ export function KnowledgeBankPanel({
                 <input
                   className="h-9 w-full rounded-[10px] border border-black/10 bg-white pl-9 pr-3 text-xs outline-none placeholder:text-[#aaa9a3] focus:border-black/25"
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search precedents, playbooks, clauses, and style guides"
+                  placeholder="Search knowledge bank, style guides, and actions"
                   value={search}
                 />
               </div>
@@ -312,8 +395,8 @@ export function KnowledgeBankPanel({
                 </div>
               ) : (
                 <EmptyState
-                  action="Create first entry"
-                  onAction={() => setIsCreatingEntry(true)}
+                  action={isWriter ? 'Create first entry' : undefined}
+                  onAction={isWriter ? () => setIsCreatingEntry(true) : undefined}
                   title="No knowledge matches this view"
                 />
               )}
@@ -328,6 +411,7 @@ export function KnowledgeBankPanel({
         <aside className="hidden w-[295px] shrink-0 border-l border-black/10 bg-white xl:flex xl:flex-col">
           <EntryContextPanel
             entry={selectedEntry}
+            canEdit={isWriter}
             isDeleting={deleteMutation.isPending}
             onDelete={(entry) => {
               if (window.confirm(`Delete "${entry.title}" from the Knowledge Bank?`)) {
@@ -341,6 +425,7 @@ export function KnowledgeBankPanel({
 
       {isCreatingEntry && (
         <EntryFormDialog
+          canCreateFirmWide={canCreateFirmWide}
           matters={matters}
           selectedMatterId={selectedMatterId}
           onClose={() => {
@@ -427,6 +512,7 @@ function HelpStep({
 function KnowledgeBankReader({
   entries,
   entry,
+  canEdit,
   isDeleting,
   onBack,
   onDelete,
@@ -435,6 +521,7 @@ function KnowledgeBankReader({
 }: {
   entries: KnowledgeBankEntry[]
   entry: KnowledgeBankEntry
+  canEdit: boolean
   isDeleting: boolean
   onBack: () => void
   onDelete: (entry: KnowledgeBankEntry) => void
@@ -476,8 +563,8 @@ function KnowledgeBankReader({
   const knowledgeEntryIds = new Set(entries.map((item) => item.id))
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <main className="min-h-0 overflow-y-auto bg-white px-5 py-5 lg:px-8 lg:py-7">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
+      <main className="bg-white px-4 py-5 sm:px-5 lg:px-8 lg:py-7 xl:min-h-0 xl:overflow-y-auto">
         <article className="mx-auto max-w-4xl">
           <button
             className="mb-5 inline-flex items-center gap-1.5 text-xs font-medium text-[#777770] hover:text-[#0f0f0f]"
@@ -488,7 +575,7 @@ function KnowledgeBankReader({
             Back to Knowledge Bank
           </button>
 
-          {isEditing ? (
+          {canEdit && isEditing ? (
             <input
               className="w-full rounded-lg border border-black/15 px-3 py-2 text-2xl font-semibold outline-none focus:border-black/35"
               onChange={(event) => setDraftTitle(event.target.value)}
@@ -507,7 +594,7 @@ function KnowledgeBankReader({
           </div>
 
           <div className="mt-6 flex items-center gap-2">
-            {isEditing ? (
+            {canEdit && isEditing ? (
               <>
                 <button
                   className="rounded-lg px-3 py-2 text-xs text-[#5a5a56] hover:bg-[#f4f3ef]"
@@ -525,10 +612,11 @@ function KnowledgeBankReader({
                   {saveMutation.isPending ? 'Saving...' : 'Save'}
                 </button>
               </>
-            ) : (
+            ) : canEdit ? (
               <>
                 <button
-                  className="rounded-lg px-3 py-2 text-xs text-[#0f0f0f] hover:bg-[#f4f3ef]"
+                  className="rounded-lg px-3 py-2 text-xs text-[#0f0f0f] hover:bg-[#f4f3ef] disabled:opacity-40"
+                  disabled={entry.status === 'processing'}
                   onClick={startEditing}
                   type="button"
                 >
@@ -544,24 +632,54 @@ function KnowledgeBankReader({
                   {isDeleting ? 'Deleting...' : 'Delete'}
                 </button>
               </>
+            ) : (
+              <span className="text-xs text-[#8c8c86]">Read-only access</span>
             )}
           </div>
+          {saveMutation.isError && (
+            <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              {getErrorMessage(saveMutation.error)}
+            </div>
+          )}
 
           <div className="mt-10 rounded-md border border-black/10 bg-white px-6 py-7 shadow-[0_2px_12px_rgba(0,0,0,0.045)] sm:px-8 sm:py-9 lg:px-10">
-            {isEditing ? (
+            {entry.status === 'processing' ? (
+              <div className="flex items-center gap-3 text-sm text-[#666660]">
+                <span className="flex gap-1">
+                  {[0, 150, 300].map((d) => (
+                    <span
+                      key={d}
+                      className="inline-block h-2 w-2 animate-bounce rounded-full bg-[#9a9a94]"
+                      style={{ animationDelay: `${d}ms` }}
+                    />
+                  ))}
+                </span>
+                Summarising this document with DeepSeek Pro. This usually takes 30–60 seconds.
+              </div>
+            ) : entry.status === 'failed' ? (
+              <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                <p className="font-medium">Summary generation failed.</p>
+                {entry.errorMessage && (
+                  <p className="mt-1 text-xs leading-5 text-red-600">{entry.errorMessage}</p>
+                )}
+                <p className="mt-2 text-xs">
+                  Reopen the document in the Documents tab and click "Retry summary".
+                </p>
+              </div>
+            ) : isEditing ? (
               <textarea
                 className="min-h-[560px] w-full resize-y rounded-lg border border-black/15 bg-[#fcfcfa] px-4 py-3 font-mono text-sm leading-6 outline-none focus:border-black/35"
                 onChange={(event) => setDraftBody(event.target.value)}
                 value={draftBody}
               />
             ) : (
-              <MarkdownPreview markdown={entry.bodyMarkdown} />
+              <MarkdownContent markdown={entry.bodyMarkdown} className="text-base leading-8 text-[#292925]" />
             )}
           </div>
         </article>
       </main>
 
-      <aside className="min-h-0 overflow-y-auto border-t border-black/10 bg-[#f8f8f6] xl:border-l xl:border-t-0">
+      <aside className="border-t border-black/10 bg-[#f8f8f6] xl:min-h-0 xl:overflow-y-auto xl:border-l xl:border-t-0">
         <div className="space-y-6 p-4">
           <section>
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#777770]">
@@ -640,11 +758,17 @@ function EntryCard({
             <ChevronRight size={14} className="mt-0.5 shrink-0 text-[#aaa9a3]" />
           </div>
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#777770]">
-            {entry.bodyMarkdown}
+            {entry.status === 'processing'
+              ? 'Summarising document with DeepSeek Pro...'
+              : entry.status === 'failed'
+                ? entry.errorMessage ?? 'Summary generation failed.'
+                : entry.bodyMarkdown}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <Pill label={entry.entryType.replaceAll('_', ' ')} tone="neutral" />
             <Pill label={scopeLabels[entry.scope]} tone={scopeTone(entry.scope)} />
+            {entry.status === 'processing' && <Pill label="processing" tone="amber" />}
+            {entry.status === 'failed' && <Pill label="failed" tone="red" />}
             {entry.piiStatus !== 'clean' && (
               <Pill label={entry.piiStatus.replaceAll('_', ' ')} tone={piiTone(entry.piiStatus)} />
             )}
@@ -652,74 +776,6 @@ function EntryCard({
         </div>
       </div>
     </button>
-  )
-}
-
-function renderInline(text: string): ReactNode {
-  const parts = text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g)
-  return parts.map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={index}>{part.slice(1, -1)}</em>
-    }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code key={index} className="rounded bg-[#f1f1ee] px-1 font-mono text-[0.875em]">
-          {part.slice(1, -1)}
-        </code>
-      )
-    }
-    return part
-  })
-}
-
-function MarkdownPreview({ markdown }: { markdown: string }) {
-  const blocks = markdown.split(/\n{2,}/)
-  return (
-    <div className="space-y-6 text-base leading-8 text-[#292925]">
-      {blocks.map((block, index) => {
-        const trimmed = block.trim()
-        if (!trimmed) return null
-        if (trimmed === '---') return <hr key={index} className="border-black/10" />
-        if (trimmed.startsWith('### ')) {
-          return (
-            <h3 key={index} className="pt-2 text-xl font-semibold text-[#0f0f0f]">
-              {renderInline(trimmed.slice(4))}
-            </h3>
-          )
-        }
-        if (trimmed.startsWith('## ')) {
-          return (
-            <h2 key={index} className="pt-3 text-2xl font-semibold text-[#0f0f0f]">
-              {renderInline(trimmed.slice(3))}
-            </h2>
-          )
-        }
-        if (trimmed.startsWith('# ')) {
-          return (
-            <h1 key={index} className="text-3xl font-semibold text-[#0f0f0f]">
-              {renderInline(trimmed.slice(2))}
-            </h1>
-          )
-        }
-        if (trimmed.split('\n').every((line) => line.trim().startsWith('- '))) {
-          return (
-            <ul key={index} className="list-disc space-y-2 pl-6">
-              {trimmed.split('\n').map((line, lineIndex) => (
-                <li key={lineIndex}>{renderInline(line.trim().replace(/^- /, ''))}</li>
-              ))}
-            </ul>
-          )
-        }
-        return (
-          <p key={index} className="whitespace-pre-wrap">
-            {renderInline(trimmed)}
-          </p>
-        )
-      })}
-    </div>
   )
 }
 
@@ -736,11 +792,13 @@ function formatDateTime(value: string) {
 
 function EntryContextPanel({
   entry,
+  canEdit,
   isDeleting,
   onDelete,
   onUpdated,
 }: {
   entry: KnowledgeBankEntry | null
+  canEdit: boolean
   isDeleting: boolean
   onDelete: (entry: KnowledgeBankEntry) => void
   onUpdated: () => void
@@ -814,15 +872,17 @@ function EntryContextPanel({
             <Pill label={entry.entryType.replaceAll('_', ' ')} tone="neutral" />
             <h3 className="mt-2 text-sm font-semibold leading-5 text-[#0f0f0f]">{entry.title}</h3>
           </div>
-          <button
-            aria-label="Delete entry"
-            className="grid h-8 w-8 place-items-center rounded-lg text-[#9a9a94] hover:bg-[#fdeeed] hover:text-[#8a1f1f]"
-            disabled={isDeleting}
-            onClick={() => onDelete(entry)}
-            type="button"
-          >
-            <Trash2 size={14} />
-          </button>
+          {canEdit && (
+            <button
+              aria-label="Delete entry"
+              className="grid h-8 w-8 place-items-center rounded-lg text-[#9a9a94] hover:bg-[#fdeeed] hover:text-[#8a1f1f]"
+              disabled={isDeleting}
+              onClick={() => onDelete(entry)}
+              type="button"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
           <Pill label={scopeLabels[entry.scope]} tone={scopeTone(entry.scope)} />
@@ -832,7 +892,7 @@ function EntryContextPanel({
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {isEditing ? (
+        {canEdit && isEditing ? (
           <div className="space-y-3">
             <input
               className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-black/30"
@@ -861,7 +921,7 @@ function EntryContextPanel({
               </button>
             </div>
           </div>
-        ) : redaction ? (
+        ) : redaction && canEdit ? (
           <RedactionReview
             proposal={redaction}
             redactionDraft={redactionDraft || redaction.redactedContent}
@@ -891,7 +951,15 @@ function EntryContextPanel({
         )}
       </div>
 
+      {canEdit && (
       <footer className="border-t border-black/10 p-3">
+        {(updateMutation.isError || promoteMutation.isError || approveMutation.isError) && (
+          <div className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+            {getErrorMessage(
+              updateMutation.error ?? promoteMutation.error ?? approveMutation.error,
+            )}
+          </div>
+        )}
         {!redaction && (
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -926,6 +994,7 @@ function EntryContextPanel({
           </div>
         )}
       </footer>
+      )}
     </>
   )
 }
@@ -989,6 +1058,7 @@ function RedactionReview({
 }
 
 function EntryFormDialog({
+  canCreateFirmWide,
   matters,
   selectedMatterId,
   error,
@@ -996,6 +1066,7 @@ function EntryFormDialog({
   onCreated,
   onError,
 }: {
+  canCreateFirmWide: boolean
   matters: Matter[]
   selectedMatterId: string | null
   error: string | null
@@ -1005,8 +1076,10 @@ function EntryFormDialog({
 }) {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [entryType, setEntryType] = useState<KnowledgeBankEntryType>('matter_note')
-  const [scope, setScope] = useState<KnowledgeBankScope>(selectedMatterId ? 'matter' : 'firm_wide')
+  const [entryType, setEntryType] = useState<KnowledgeBankEntryType>('knowledge_bank')
+  const [scope, setScope] = useState<KnowledgeBankScope>(
+    selectedMatterId ? 'matter' : canCreateFirmWide ? 'firm_wide' : 'team',
+  )
   const [matterId, setMatterId] = useState(selectedMatterId ?? '')
   const [tags, setTags] = useState('')
 
@@ -1055,11 +1128,13 @@ function EntryFormDialog({
             onChange={(event) => setScope(event.target.value as KnowledgeBankScope)}
             value={scope}
           >
-            {(Object.keys(scopeLabels) as KnowledgeBankScope[]).map((item) => (
-              <option key={item} value={item}>
-                {scopeLabels[item]}
-              </option>
-            ))}
+            {(Object.keys(scopeLabels) as KnowledgeBankScope[])
+              .filter((item) => item !== 'firm_wide' || canCreateFirmWide)
+              .map((item) => (
+                <option key={item} value={item}>
+                  {scopeLabels[item]}
+                </option>
+              ))}
           </select>
         </div>
         {scope === 'matter' && (
@@ -1158,12 +1233,12 @@ function Dialog({
   onClose,
 }: {
   title: string
-  children: React.ReactNode
+  children: ReactNode
   onClose: () => void
 }) {
   return (
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/35 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-[14px] border border-black/10 bg-[#fafaf8] shadow-2xl">
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-[14px] border border-black/10 bg-[#fafaf8] shadow-2xl">
         <header className="flex items-center justify-between border-b border-black/10 px-5 py-4">
           <h3 className="text-sm font-semibold text-[#0f0f0f]">{title}</h3>
           <button
@@ -1303,10 +1378,9 @@ function EmptyState({
 }
 
 function typeTone(type: KnowledgeBankEntryType) {
-  if (type === 'precedent' || type === 'clause') return 'bg-[#e8f0fe] text-[#1a4a8a]'
-  if (type === 'style_guide' || type === 'partner_pref') return 'bg-[#eeecff] text-[#4a3db0]'
-  if (type === 'playbook') return 'bg-[#e8f5ee] text-[#1a6b4a]'
-  if (type === 'entity') return 'bg-[#fef3dc] text-[#8a5a00]'
+  if (type === 'knowledge_bank') return 'bg-[#e8f0fe] text-[#1a4a8a]'
+  if (type === 'style_guide') return 'bg-[#eeecff] text-[#4a3db0]'
+  if (type === 'action') return 'bg-[#e8f5ee] text-[#1a6b4a]'
   return 'bg-[#f4f3ef] text-[#5a5a56]'
 }
 
@@ -1331,4 +1405,8 @@ function formatDate(value: string) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Something went wrong.'
 }

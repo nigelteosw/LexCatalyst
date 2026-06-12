@@ -2,13 +2,14 @@ import { GoogleLogin } from '@react-oauth/google'
 
 interface LoginPageProps {
   onLoginSuccess: (credential: string) => void
+  onLoginError: (message: string) => void
   error?: string | null
 }
 
-export function LoginPage({ onLoginSuccess, error }: LoginPageProps) {
+export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProps) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f6f5f2] p-4 text-neutral-950">
-      <div className="w-full max-w-md space-y-8 rounded-2xl border border-neutral-200 bg-white p-10 shadow-sm">
+      <div className="min-w-0 w-full max-w-md space-y-8 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-10">
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-neutral-900">LexCatalyst</h1>
           <p className="mt-3 text-sm text-neutral-600">
@@ -22,7 +23,7 @@ export function LoginPage({ onLoginSuccess, error }: LoginPageProps) {
           </div>
         )}
 
-        <div className="mt-8 flex justify-center">
+        <div className="mt-8 flex min-w-0 justify-center overflow-hidden">
           <GoogleLogin
             onSuccess={(credentialResponse) => {
               if (credentialResponse.credential) {
@@ -30,11 +31,12 @@ export function LoginPage({ onLoginSuccess, error }: LoginPageProps) {
               }
             }}
             onError={() => {
-              console.error('Login Failed')
+              onLoginError('Google sign-in failed. Please try again.')
             }}
             useOneTap
             shape="rectangular"
             theme="outline"
+            width="240"
           />
         </div>
 

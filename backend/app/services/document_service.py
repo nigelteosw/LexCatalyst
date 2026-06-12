@@ -127,6 +127,57 @@ def get_user_document(db: Session, user_id: str, document_id: str) -> tuple[Docu
     return document, count
 
 
+def get_document_full_text(
+    db: Session,
+    *,
+    user_id: str,
+    document_id: str,
+    max_chars: int = 100_000,
+) -> tuple[Document, str] | None:
+    """Return the document and its full extracted text (joined chunks).
+
+    Truncates at `max_chars` to keep the LLM context manageable. Respects
+    document ownership — the user must own the document.
+    """
+    document = db.scalar(
+        select(Document).where(
+            Document.id == document_id,
+            Document.user_id == user_id,
+        )
+    )
+    if not document:
+        return None
+
+    chunks = list(
+        db.scalars(
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document.id)
+            .order_by(DocumentChunk.chunk_index)
+        )
+    )
+    if not chunks:
+        return document, ""
+
+    parts: list[str] = []
+    running = 0
+    truncated = False
+    for chunk in chunks:
+        block = chunk.text
+        if running + len(block) > max_chars:
+            remaining = max_chars - running
+            if remaining > 0:
+                parts.append(block[:remaining])
+            truncated = True
+            break
+        parts.append(block)
+        running += len(block)
+
+    body = "\n\n".join(parts)
+    if truncated:
+        body += "\n\n[Document truncated — call again with a more specific question or rely on the KB summary.]"
+    return document, body
+
+
 def delete_user_document(db: Session, user_id: str, document_id: str) -> bool:
     document = db.scalar(
         select(Document).where(

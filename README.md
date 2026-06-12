@@ -1,329 +1,292 @@
 # LexCatalyst
 
-LexCatalyst is a hackathon-oriented legal assistant for junior lawyers. The core demo path is simple: upload a legal document, extract and index its text, chat over the matter materials, save useful review memory, and surface one or two admin insights about repeated questions or missing playbooks.
+LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load for junior lawyers and improve efficiency for legal teams. It transforms raw legal documents into structured, searchable knowledge, provides matter-aware AI assistance, and tracks team wellbeing — anonymously.
 
-The project intentionally uses a boring Python-first stack so the team can spend time on the legal workflow instead of infrastructure.
+## Core Features
 
-## Product Scope
+### Knowledge & Documents
+- **Async Knowledge Bank ingestion**: Upload a PDF/DOCX and click "Add to Knowledge Bank". The backend schedules a background job that uses **DeepSeek Pro** to generate a comprehensive structured summary (What This Is / Key Points / Risk Flags / How to Use) with inline page citations. The summary is embedded via pgvector for semantic search. The UI polls every 3 seconds while `status="processing"`.
+- **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
+- **Drag-and-drop uploads**: Drop PDF/DOCX directly onto the Documents panel. OCR fallback via Tesseract for scanned PDFs.
+- **Semantic search**: pgvector cosine similarity over document chunks AND KB entries. Embeddings fingerprinted by content hash so they auto-refresh when content changes.
+- **Source citations**: Inline `[p.X]` references in KB summaries; full source-chunk attribution available via the Wiki feature.
 
-The MVP should prove this flow:
+### Agentic Chat
+- **ReAct agent loop** with cycle detection and forced-final-answer on max rounds. Tools:
+  - `search_documents` — semantic search over uploaded files
+  - `search_knowledge_bank` — search KB entries the user has access to
+  - `search_memories` — keyword search over personal memory
+  - `get_kb_entry` — fetch the full KB summary; returns `source_document_id` for chaining
+  - `read_document` — fetch the **full extracted text** of a document (up to 100KB) when the summary is insufficient
+- **Streaming SSE** with token-by-token output and per-tool step visualisation.
+- **Audit trail**: every KB read/write through the agent is logged in `kb_access_log`.
 
-1. A user signs up or logs in.
-2. The user uploads a PDF or DOCX for a matter.
-3. The backend extracts text, chunks it, embeds it, and marks the document ready.
-4. The user asks a matter-specific legal review question.
-5. The chat endpoint retrieves relevant document chunks, memories, and scoped Knowledge Bank entries.
-6. The answer includes document references or citations.
-7. The system suggests a useful personal or matter memory.
-8. The admin view shows one aggregated insight, such as repeated junior questions.
+### Birdie — Floating AI Mentor
+- A **draggable picture-in-picture widget** (320×480, fixed position, drag anywhere). Open via the "Birdie" pill in the chat header.
+- Tabs: **Ask** (live chat), **Review** (mentor cards), **Examples** (KB-backed), **Progress** (skills map).
+- Uses a dedicated `/birdie/stream` endpoint with a mentor-specific system prompt — separate agent from the main legal chat. Always runs on `deepseek-v4-flash` for snappy conversational replies.
+- Pulls firm KB context (RBAC-respecting) for grounded answers.
 
-Keep the demo narrow. Do not start with a broad admin dashboard or complex agent framework.
+### Wellbeing — Truly Anonymous Surveys
+- The `survey_responses` table **has no `user_id` column**. Anonymity is structural — not enforced by code that could be forgotten.
+- Partners/admins can create questions, view weekly aggregates, and toggle questions on/off.
+- All authenticated users can submit; results are weekly aggregates per question.
 
-## Stack
+### Actions — Task Delegation
+- Kanban-style board (To Do / In Progress / Review / Done) with priority pills.
+- **Partners and senior associates** can create and assign actions; assignee or assigner can update.
+- Filter by matter, edit through a detail dialog.
+
+### Role-Based Access Control
+- Three lawyer roles: **partner**, **senior_associate**, **associate**. Plus an `is_admin` flag for firm IT/ops (super-user bypass).
+- KB read/write enforced per-scope: `firm_wide` (partners only write), `team` (team members), `matter` (matter members), `private` (creator).
+- Settings panel lets the current user change their role for demo purposes.
+
+### Matters & Teams
+- Matter-scoped chat with encrypted `client_name` fields.
+- Team and matter memberships drive KB visibility.
+
+---
+
+## Tech Stack
 
 ### Frontend
-
-- React
-- Vite
-- TypeScript
-- Tailwind CSS
-
-Planned UI additions:
-
-- shadcn/ui
-- lucide-react
-- TanStack Router
-- TanStack Query
-- zod
-- react-hook-form
-
-Suggested routes:
-
-- `/login`
-- `/signup`
-- `/workspace`
-- `/chat`
-- `/documents`
-- `/knowledge-bank`
-- `/memories`
-- `/admin`
+- **React 19** + **TypeScript** + **Vite**
+- **Zustand** for view state, **TanStack Query v5** for server state (with `refetchInterval` polling while jobs are in `processing`)
+- **Tailwind CSS**
+- **react-markdown** + **remark-gfm** for KB summary rendering
+- **Server-Sent Events** for the streaming chat and Birdie agent
 
 ### Backend
+- **FastAPI** (Python 3.11+) with **BackgroundTasks** for the async KB ingestion pipeline
+- **SQLAlchemy 2.0** + **Alembic** migrations
+- **PostgreSQL** + **pgvector** (1536-dim cosine similarity)
+- **Tesseract** (via `pytesseract`) for OCR fallback on scanned PDFs
+- **Google OAuth2** + **JWT** auth; field-level Fernet encryption for `client_name`
 
-- FastAPI
-- Python
-- Uvicorn
-- SQLAlchemy
-- Postgres
-- DeepSeek via the OpenAI-compatible SDK
+### AI & Search
+- **DeepSeek V4 Pro** for KB summarisation (hardcoded — comprehensive, long-context)
+- **DeepSeek V4 Flash** for Birdie mentor chat (fast, conversational)
+- **DeepSeek V4 Flash/Pro** user-selectable for the main agent chat
+- **OpenAI `text-embedding-3-small`** (1536 dim) for both document chunks and KB entry summaries
+- **Cloudflare R2** for original document storage (optional — local disk fallback)
 
-Planned backend additions:
+---
 
-- Alembic
-- passlib[argon2]
-- PyJWT or python-jose
-- httpx
-- pypdf
-- python-docx
-
-The demo LLM provider is DeepSeek behind a provider abstraction. The default model is `deepseek-v4-pro` because the demo benefits from stronger legal reasoning. The chat navbar lets users switch each prompt between `deepseek-v4-pro` for deeper legal reasoning and `deepseek-v4-flash` for faster, lower-cost responses.
-
-### Data
-
-Use local Postgres through Docker Compose with pgvector enabled for document embeddings.
-
-Core tables to add:
-
-- `users`
-- `workspaces`
-- `workspace_members`
-- `matters`
-- `teams`
-- `team_members`
-- `matter_members`
-- `documents`
-- `document_chunks`
-- `kb_entries`
-- `kb_access_log`
-- `pii_redactions`
-- `memories`
-- `chat_threads`
-- `chat_messages`
-- `agent_traces`
-- `insights`
-
-Do not store uploaded PDFs or DOCX files directly in Postgres. Use local disk or a Railway volume for the demo, and Cloudflare R2 if object storage is needed.
-
-## Repo Layout
+## Repository Structure
 
 ```txt
 .
 ├── backend/
 │   ├── app/
-│   │   └── main.py
-│   ├── Makefile
+│   │   ├── main.py                            # API routes & SSE streaming
+│   │   ├── models.py                          # SQLAlchemy ORM
+│   │   ├── schemas.py                         # Pydantic request/response
+│   │   ├── dependencies.py                    # Auth + RBAC helpers
+│   │   ├── auth.py                            # Google OAuth + JWT
+│   │   ├── providers/                         # DeepSeek + OpenAI integrations
+│   │   └── services/
+│   │       ├── agent_service.py               # ReAct loop with cycle detection
+│   │       ├── birdie_service.py              # Mentor agent (separate prompt + endpoint)
+│   │       ├── chat_service.py                # Thread mgmt, history, summary
+│   │       ├── kb_ingestion_service.py        # Async Pro summarisation pipeline
+│   │       ├── knowledge_bank_service.py      # KB CRUD + RBAC scope filter
+│   │       ├── document_service.py            # Upload + full-text reader
+│   │       ├── ingestion_service.py           # PDF/DOCX extraction (OCR fallback)
+│   │       ├── action_service.py              # Task items with RBAC
+│   │       ├── survey_service.py              # Anonymous surveys + weekly aggregation
+│   │       ├── user_service.py                # Role updates
+│   │       ├── memory_service.py              # Personal memory store
+│   │       ├── organization_service.py        # Teams + matters
+│   │       ├── rag_service.py                 # Vector search over docs
+│   │       ├── wiki_service.py                # Wiki page generation
+│   │       ├── storage_service.py             # R2 / local file storage
+│   │       └── field_encryption.py            # Fernet encryption
+│   ├── migrations/versions/                   # 14 Alembic migrations
+│   ├── railway.toml                           # Auto-runs `alembic upgrade head`
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   ├── package.json
-│   └── bun.lock
-├── AGENTS.md
-├── plan.md
-└── README.md
+│   │   ├── App.tsx
+│   │   ├── components/
+│   │   │   ├── ChatPanel.tsx                  # Main agent chat with tool steps
+│   │   │   ├── BirdiePanel.tsx                # Floating PiP mentor
+│   │   │   ├── KnowledgeBankPanel.tsx         # KB browser + reader (polls during processing)
+│   │   │   ├── DocumentsPanel.tsx             # Drag-and-drop upload + "Add to KB"
+│   │   │   ├── ActionsPanel.tsx               # Kanban task board
+│   │   │   ├── WellbeingPanel.tsx             # Survey + partner aggregates
+│   │   │   ├── SettingsPanel.tsx              # Role management
+│   │   │   ├── WikiPanel.tsx, MemoriesPanel.tsx, Sidebar.tsx, ...
+│   │   │   └── MarkdownContent.tsx            # react-markdown renderer
+│   │   ├── store/viewStore.ts                 # Zustand routing
+│   │   ├── lib/api.ts                         # API client + SSE handling
+│   │   └── types/workspace.ts
+│   └── package.json
+└── docs/
+    ├── product-requirement.md                 # Whiteboard notes
+    └── rfc-react-agent-loop.md
 ```
+
+---
 
 ## Local Setup
 
-### Local Database
-
-Run Postgres locally with Docker Compose:
-
-```sh
-cp backend/.env.example backend/.env
-# Fill DEEPSEEK_API_KEY, OPENAI_API_KEY, and R2 credentials in backend/.env
+### 1. Database (Postgres + pgvector)
+```bash
 docker compose up -d
 ```
 
-Services:
-
-```txt
-Postgres: 127.0.0.1:5432
-```
-
-Stop the stack:
-
-```sh
-docker compose down
-```
-
-Delete the local Postgres volume and all local database data:
-
-```sh
-docker compose down -v
-```
-
-### Backend
-
-The backend runs locally from the Python virtual environment and connects to Docker Postgres through `127.0.0.1:5432`.
-
-Start Postgres first:
-
-```sh
-docker compose up -d
-```
-
-Then run the backend:
-
-```sh
+### 2. Backend
+```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-make install
-make migrate
-make dev
+pip install -r requirements.txt
+# Configure .env (see below)
+alembic upgrade head
+python -m uvicorn app.main:app --reload
 ```
 
-On a server, run `make migrate` or `.venv/bin/alembic upgrade head` as a release/startup step before starting Uvicorn. Alembic is the deploy migration path. The backend only runs `create_all()` on startup when `AUTO_CREATE_TABLES=true`, which should stay disabled in Railway.
-
-The backend runs on:
-
-```txt
-http://127.0.0.1:8000
+You also need **Tesseract** and **Poppler** on the system PATH for OCR / PDF→image conversion (already installed in the Railway image via `nixpacks.toml`):
+```bash
+# macOS
+brew install tesseract poppler
+# Debian/Ubuntu
+apt-get install tesseract-ocr poppler-utils
 ```
 
-Health check:
-
-```txt
-GET /health
-```
-
-### Frontend
-
-The frontend is its own local Vite app:
-
-```sh
+### 3. Frontend
+```bash
 cd frontend
-cp .env.example .env
-bun install
+bun install  # or npm install — picks up react-markdown + remark-gfm
 bun run dev
 ```
 
-Vite will print the local frontend URL. By default the frontend calls `http://127.0.0.1:8000`; override it with `VITE_API_URL` in `frontend/.env`.
+---
 
-## Environment
+## Environment Variables
 
-Create `backend/.env` for backend-only secrets.
+`backend/.env`:
 
-Expected variables:
-
-```txt
+```ini
 DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
-AUTO_CREATE_TABLES=false
+DEEPSEEK_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
 
-DEEPSEEK_API_KEY=...
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-pro
-DEEPSEEK_TEMPERATURE=0.2
-
-OPENAI_API_KEY=...
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-OPENAI_EMBEDDING_DIMENSIONS=1536
-
-CLOUDFLARE_R2_BUCKET_NAME=lexcatalyst
-CLOUDFLARE_R2_ENDPOINT_URL=https://aa1656cdf4783d312f507847447334cb.r2.cloudflarestorage.com
+# Optional — R2 falls back to local disk if unset
 CLOUDFLARE_R2_ACCESS_KEY_ID=...
 CLOUDFLARE_R2_SECRET_ACCESS_KEY=...
+CLOUDFLARE_R2_ENDPOINT_URL=...
+CLOUDFLARE_R2_BUCKET=...
+
+# Must be at least 32 chars; rotating this invalidates encrypted client_name fields
+JWT_SECRET_KEY=at_least_32_characters_long
 ```
 
-Only use synthetic or non-confidential documents for demos unless everyone understands which external model providers receive document text.
+---
 
-## Backend Route Plan
+## Roles & Permissions
 
-```txt
-POST /auth/signup
-POST /auth/login
-POST /auth/logout
-GET  /auth/me
+| Role | KB firm-wide write | Create matters | Create actions | Manage surveys | View survey results |
+|---|---|---|---|---|---|
+| `admin` (firm IT/ops) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `partner` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `senior_associate` | — | ✅ | ✅ | — | — |
+| `associate` | — | ✅ | — | — | — |
 
-POST /documents/upload
-GET  /documents
-GET  /documents/{document_id}
+KB scope visibility (read access):
+- `firm_wide` — every authenticated user
+- `team` — team members only
+- `matter` — matter members only
+- `private` — creator only
 
-GET  /teams
-GET  /matters
-POST /matters
-GET  /matters/{matter_id}
-PATCH /matters/{matter_id}
-GET  /matters/{matter_id}/members
-POST /matters/{matter_id}/members
-DELETE /matters/{matter_id}/members/{user_id}
+---
 
-GET    /kb/entries
-POST   /kb/entries
-POST   /kb/ingest/document/{document_id}
-GET    /kb/entries/{entry_id}
-GET    /kb/entries/{entry_id}/sources
-PATCH  /kb/entries/{entry_id}
-DELETE /kb/entries/{entry_id}
-POST   /kb/entries/{entry_id}/promote
-GET    /kb/entries/{entry_id}/redaction
-POST   /kb/entries/{entry_id}/approve-redaction
-GET    /audit-log
+## System Architecture
 
-POST /chat
-POST /chat/stream
-GET  /chat/threads
-GET  /chat/threads/{thread_id}/messages
+### Async KB Ingestion Pipeline
 
-POST /memories
-GET  /memories/search
-POST /memories/{memory_id}/promote
-
-GET  /admin/insights
+```
+[Upload PDF/DOCX]                          (sync, ~5s)
+       │
+       ▼
+[Extract text + chunk + embed chunks]
+       │
+       ▼
+[User clicks "Add to Knowledge Bank"]
+       │
+       ▼
+[create_pending_kb_entry]                  (sync, <100ms)
+       │   status="processing"
+       │   body=""
+       │   embedding=NULL
+       │
+       ├──► Return 202 Accepted to client
+       │
+       ▼
+[BackgroundTasks: process_kb_summary]      (async, 30–60s)
+       │   Opens fresh SessionLocal()
+       │   Loads up to 80 chunks (~240KB)
+       │   Calls DeepSeek Pro
+       │   Parses JSON → title + body
+       │   Computes embedding
+       │
+       ▼
+[status="ready"] or [status="failed"]
+       │
+       ▼
+Frontend polling (3s interval) picks up the new state.
 ```
 
-`POST /chat` and `POST /chat/stream` accept an optional `model` value:
+Retry: clicking "Retry summary" on a failed entry resets it back to `processing` and re-schedules the job.
 
-```txt
-deepseek-v4-pro
-deepseek-v4-flash
-```
+### ReAct Agent Loop
+1. **Build context** — `prepare_agent_context` injects memories + thread summary into the system prompt (NOT KB/docs — those come via tools).
+2. **Stream** — `provider.stream_with_tools` yields `token` and `tool_calls` events.
+3. **Execute** — each tool returns `(result_text, summary)`. RBAC and audit logging applied at the tool layer.
+4. **Cycle guard** — if a round's tool calls repeat a previous fingerprint, inject a "stop repeating" system message and short-circuit to the final answer.
+5. **Max rounds** — round MAX+1 disables tools entirely to force a text answer.
 
-`POST /chat` and `POST /chat/stream` also accept an optional `matter_id`. When provided,
-document retrieval and Knowledge Bank context are restricted to the active matter plus applicable
-team, firm-wide, and private entries.
+### Birdie — Stateless Mentor Agent
+- `/birdie/stream` is an endpoint distinct from `/chat/stream`. Client manages history.
+- System prompt: brief (3–5 sentences), legal hard skills + soft skills equally weighted, cites firm KB inline.
+- Reuses `search_kb_for_chat` so KB scope filtering still applies.
 
-All `/teams`, `/matters`, `/kb/*`, and `/audit-log` routes require the authenticated bearer token.
-The current hackathon build follows `docs/rfc-knowledge-bank.md` super-user mode: role and scope
-metadata are persisted, but all authenticated users can operate across the single demo firm.
-Production RBAC enforcement must be enabled before confidential client data is used.
+---
 
-Matter client names and retained original content in redaction records are encrypted at rest using
-an application key derived from `JWT_SECRET_KEY`. Changing that secret makes existing encrypted
-values unreadable, so production deployments must keep it stable and managed securely.
+## Post-Deploy Checklist
 
-## Backend Service Plan
+After pushing this branch:
 
-Prefer normal Python services before agent orchestration:
+| What | Where | Required? |
+|---|---|---|
+| Run migrations | Auto (Railway runs `alembic upgrade head && uvicorn ...`) | Auto |
+| Frontend deps install | `bun install` adds `react-markdown` + `remark-gfm` | Yes — happens at build |
+| Backend deps install | No new Python packages | n/a |
+| New env vars | None — DeepSeek Pro is hardcoded for KB summaries | n/a |
+| Existing KB entries | Get `status="ready"` automatically via the `server_default` | Auto |
+| Existing KB embeddings | `embedding_content_hash` is NULL until first refresh | Optional |
+| Repair search index | `POST /kb/backfill-embeddings` (or the "Repair search index" button) backfills missing hashes idempotently | Recommended once |
 
-```txt
-auth_service.py
-document_service.py
-ingestion_service.py
-embedding_service.py
-rag_service.py
-memory_service.py
-chat_service.py
-insight_service.py
-llm_provider.py
-embedding_provider.py
-```
+### What the migrations actually change
 
-Service functions can be shaped like tools without introducing MCP or a full agent framework:
+| Migration | Change | Destructive? |
+|---|---|---|
+| `d1e2f3a4b5c6` | Adds `users.is_admin`, creates `survey_questions`, `survey_responses`, `action_items` | No |
+| `e2f3a4b5c6d7` | Adds `kb_entries.embedding_content_hash` (nullable) | No |
+| `f3a4b5c6d7e8` | Adds `kb_entries.status` (default `ready`) and `kb_entries.error_message` | No |
 
-```py
-tools = {
-    "search_documents": search_documents,
-    "search_memories": search_memories,
-    "save_memory": save_memory,
-    "suggest_shared_memory": suggest_shared_memory,
-    "generate_insights": generate_insights,
-}
-```
+All three are **purely additive** — existing rows are populated via column defaults, and downgrades drop only what was added. Safe to deploy on a live DB without downtime.
 
-## Build Order
+### What to verify after deploy
+1. `/me` returns `firm_role` and `is_admin` for the logged-in user.
+2. Existing KB entries appear with no "processing" badge (they default to `status="ready"`).
+3. Uploading a new PDF and clicking "Add to Knowledge Bank" shows a "Summarising..." badge that flips to "Ready" within a minute.
+4. The Birdie button in the chat header opens the floating PiP — drag it around to confirm position state.
+5. Settings panel lets you switch roles; KB write buttons should hide/show accordingly.
 
-1. FastAPI app skeleton
-2. Postgres database connection
-3. DeepSeek chat endpoint with persisted chat threads
-4. User model and auth routes
-5. React login/signup flow
-6. Document upload endpoint
-7. PDF and DOCX text extraction
-8. Chunking and embeddings
-9. RAG search endpoint
-10. Memory suggestion and retrieval
-11. Admin insight page
-12. Deployment
+---
 
-The main demo is document upload plus useful chat. Build that before polishing secondary screens.
+## License
+Proprietary — Internal hackathon project.
