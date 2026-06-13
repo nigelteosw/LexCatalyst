@@ -30,6 +30,15 @@ These are deeper technical design docs written before implementation. They expla
 - [`rfc-semantic-document-search.md`](./rfc-semantic-document-search.md) — pgvector + chunking strategy
 - [`llm-wiki.md`](./llm-wiki.md) — Wiki feature reference
 
+## Plans (work not yet built)
+
+Per-feature implementation plans, each tied to an open TODO. These have enough detail to start coding from — schemas, migrations, file touchpoints, and verification steps — but no code has been written yet.
+
+- [`plans/wellbeing-questionnaire-monitor.md`](./plans/wellbeing-questionnaire-monitor.md) — Polish the weekly check-in and replace the partner Results tab with a richer monitor.
+- [`plans/kb-skills-rename.md`](./plans/kb-skills-rename.md) — Rename the third KB category from `action` to `skill`; introduce always-load skills.
+- [`plans/dream-agent.md`](./plans/dream-agent.md) — Memory consolidation agent (Dream button) that proposes additions, merges, updates, drops.
+- [`plans/pdf-viewer-comments.md`](./plans/pdf-viewer-comments.md) — Inline PDF drawer with matter-wide comments.
+
 ## Working notes
 
 - [`todo.md`](./todo.md) — Short-lived TODO list

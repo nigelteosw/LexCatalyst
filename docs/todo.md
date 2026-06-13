@@ -42,3 +42,26 @@
     1. The original document content.
     2. An LLM-summarized version containing all important points.
   - The summarized version should be the one added to the Knowledge Bank.
+
+---
+
+## Open features (planned, not yet built)
+
+Each item has a full implementation plan under `docs/plans/`. They're listed in the order I'd recommend shipping them.
+
+- [ ] **Wellbeing questionnaire polish + team monitor page** — Plan: [`docs/plans/wellbeing-questionnaire-monitor.md`](./plans/wellbeing-questionnaire-monitor.md)
+  - Polish the existing weekly check-in: progress indicator, draft auto-save, optional anonymous free-text comment per question.
+  - Replace the partner-only "Results" tab with a richer monitor: current-week category snapshots, multi-week trend lines, anonymous flag indicators, recent comments stream. Respect k-anonymity.
+
+- [ ] **Rename KB `action` type → `skill`** — Plan: [`docs/plans/kb-skills-rename.md`](./plans/kb-skills-rename.md)
+  - Reframe the third KB category as reusable hard-skill + soft-skill markdown blocks the agent can load into its context.
+  - Migration to rename existing rows; update enum literals across schemas, frontend types, and KB panel UI.
+
+- [ ] **Dream agent — memory consolidation** — Plan: [`docs/plans/dream-agent.md`](./plans/dream-agent.md)
+  - "Dream" button next to "+ Add memory" in the Memories panel.
+  - Dedicated agent (own system prompt, separate endpoint) that reviews recent chat history and proposes: new memories to add, duplicates to merge, contradictions to resolve, stale memories to drop.
+  - Returns a diff for the user to approve before any DB writes.
+
+- [ ] **PDF viewer + matter-wide comments** — Plan: [`docs/plans/pdf-viewer-comments.md`](./plans/pdf-viewer-comments.md)
+  - Clicking a document opens a right-side drawer with an embedded PDF viewer.
+  - Comments thread at the bottom, visible to anyone on the matter (or owner-only for `private` documents).
