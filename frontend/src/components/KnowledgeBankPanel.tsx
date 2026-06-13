@@ -229,9 +229,9 @@ export function KnowledgeBankPanel({
   }
 
   return (
-    <section className="flex h-full min-h-0 bg-[#fafaf8]">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 flex-wrap items-center gap-3 border-b border-black/10 bg-white px-4 py-2 lg:px-5">
+    <section className="flex h-full min-h-0 overflow-hidden bg-[#fafaf8]">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-black/10 bg-white px-4 py-2 lg:px-5">
           <div className="flex items-center gap-2">
             <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0f0f0f] text-white">
               <BookMarked size={16} />
@@ -625,7 +625,7 @@ function KnowledgeBankReader({
   const knowledgeEntryIds = new Set(entries.map((item) => item.id))
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
+    <div className="app-scroll-region flex min-h-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
       <main className="bg-white px-4 py-5 sm:px-5 lg:px-8 lg:py-7 xl:min-h-0 xl:overflow-y-auto">
         <article className="mx-auto max-w-4xl">
           <button
@@ -1346,9 +1346,7 @@ function AuditLogView({
                 <History size={14} />
               </div>
               <div className="min-w-0">
-                <div className="text-xs font-medium text-[#0f0f0f]">
-                  {row.action.replaceAll('_', ' ')}
-                </div>
+                <div className="text-xs font-medium text-[#0f0f0f]">Edit</div>
                 <div className="mt-0.5 truncate text-[10px] text-[#9a9a94]">
                   Entry {row.entryId ?? 'deleted'} · User {row.userId}
                 </div>

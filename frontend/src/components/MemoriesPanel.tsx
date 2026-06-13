@@ -121,8 +121,8 @@ export function MemoriesPanel() {
   ]
 
   return (
-    <section className="flex flex-col flex-1 min-h-0 bg-white lg:rounded-tl-2xl lg:border-t lg:border-l lg:border-neutral-200 lg:shadow-sm lg:my-2 lg:mr-2 overflow-hidden">
-      <header className="flex h-14 items-center justify-between border-b border-neutral-100 bg-white/80 backdrop-blur-md px-4 lg:px-6 sticky top-0 z-30">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white lg:my-2 lg:mr-2 lg:rounded-tl-2xl lg:border-l lg:border-t lg:border-neutral-200 lg:shadow-sm">
+      <header className="z-30 flex h-14 shrink-0 items-center justify-between border-b border-neutral-100 bg-white/80 px-4 backdrop-blur-md lg:px-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-neutral-900 text-white rounded-lg">
             <Brain size={18} />
@@ -139,7 +139,7 @@ export function MemoriesPanel() {
         </Button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+      <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6 lg:p-8">
         <div className="max-w-4xl mx-auto space-y-12">
           {error && (
             <div className="flex items-center gap-2 p-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl">

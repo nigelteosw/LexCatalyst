@@ -36,8 +36,8 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
   const visibleTab = isPartner ? activeTab : 'survey'
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[#fafaf8]">
-      <header className="flex min-h-14 flex-col items-stretch gap-2 border-b border-black/10 bg-white px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-0">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]">
+      <header className="flex min-h-14 shrink-0 flex-col items-stretch gap-2 border-b border-black/10 bg-white px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-0">
         <div className="flex items-center gap-2">
           <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0f0f0f] text-white">
             <ClipboardList size={16} />
@@ -67,7 +67,7 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
         </nav>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5 sm:p-7">
+      <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
         {visibleTab === 'survey' && <SurveyTab />}
         {visibleTab === 'results' && <ResultsTab />}
         {visibleTab === 'manage' && <ManageQuestionsTab />}

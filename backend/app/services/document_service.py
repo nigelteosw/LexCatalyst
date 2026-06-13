@@ -1,10 +1,10 @@
 import asyncio
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Document, DocumentChunk
+from app.models import Document, DocumentChunk, MatterMember
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
     IngestionError,
@@ -136,13 +136,24 @@ def get_document_full_text(
 ) -> tuple[Document, str] | None:
     """Return the document and its full extracted text (joined chunks).
 
-    Truncates at `max_chars` to keep the LLM context manageable. Respects
-    document ownership — the user must own the document.
+    Truncates at `max_chars` to keep the LLM context manageable. Access
+    is granted to the document owner OR to any member of the document's
+    matter — matches the KB visibility model, so a lawyer on a matter can
+    let the agent quote from a document a teammate uploaded.
     """
     document = db.scalar(
         select(Document).where(
             Document.id == document_id,
-            Document.user_id == user_id,
+            or_(
+                Document.user_id == user_id,
+                Document.matter_id.is_not(None)
+                & exists(
+                    select(MatterMember.id).where(
+                        MatterMember.matter_id == Document.matter_id,
+                        MatterMember.user_id == user_id,
+                    )
+                ),
+            ),
         )
     )
     if not document:

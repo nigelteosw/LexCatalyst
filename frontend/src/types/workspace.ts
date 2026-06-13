@@ -252,11 +252,12 @@ export type RedactionProposal = {
   redactedContent: string
 }
 
+// The audit log is edits-only (DB CHECK constraint enforces this).
+// Every row implicitly represents an edit, so there's no `action` field.
 export type KnowledgeBankAccessLog = {
   id: string
   entryId?: string | null
   userId: string
-  action: 'read' | 'write' | 'share' | 'redact_applied' | string
   contextMatterId?: string | null
   contextThreadId?: string | null
   ipAddress?: string | null

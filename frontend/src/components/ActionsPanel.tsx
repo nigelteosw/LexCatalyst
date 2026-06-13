@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { CheckSquare, ChevronRight, Plus, Tag, Users, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Check, CheckSquare, ChevronRight, Pencil, Plus, Tag, Users, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createActionItem,
@@ -21,6 +21,8 @@ type ActionsPanelProps = {
   matters: Matter[]
   currentUser: CurrentUser | null
 }
+
+const ACTIONS_QUERY_KEY = ['actions'] as const
 
 const statusColumns: Array<{ id: ActionStatus; label: string }> = [
   { id: 'pending', label: 'To do' },
@@ -54,59 +56,122 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
   const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
 
+  // Single keyed query — filters are applied in memory below. This is
+  // what makes filter chips feel instant.
   const actionsQuery = useQuery({
-    queryKey: ['actions', { matterFilter, assigneeFilter, tagFilter }],
-    queryFn: () =>
-      listActionItems({
-        matterId: matterFilter ?? undefined,
-        assigneeId: assigneeFilter ?? undefined,
-        tag: tagFilter ?? undefined,
-      }),
+    queryKey: ACTIONS_QUERY_KEY,
+    queryFn: listActionItems,
+    // 30s — the board rarely changes on a sub-second cadence and we'd
+    // rather not bombard the API on every panel mount.
+    staleTime: 30_000,
   })
 
+  // Firm roster changes infrequently; cache aggressively.
   const usersQuery = useQuery({
     queryKey: ['firmUsers'],
     queryFn: listFirmUsers,
+    staleTime: 5 * 60_000,
   })
 
-  const items = actionsQuery.data ?? []
+  const allItems = actionsQuery.data ?? []
   const users = usersQuery.data ?? []
+
+  // Distinct tags from the full dataset (not filtered) so chips don't
+  // disappear when their column empties.
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>()
+    for (const item of allItems) item.tags.forEach((t) => tags.add(t))
+    return Array.from(tags).sort((a, b) => a.localeCompare(b))
+  }, [allItems])
+
+  // Client-side filtering. With the bounded page (<= 500) this is O(n)
+  // over a few hundred items at most — well under a millisecond.
+  const filteredItems = useMemo(() => {
+    return allItems.filter((item) => {
+      if (matterFilter && item.matterId !== matterFilter) return false
+      if (assigneeFilter && item.assigneeId !== assigneeFilter) return false
+      if (tagFilter) {
+        const wanted = tagFilter.toLowerCase()
+        if (!item.tags.some((t) => t.toLowerCase() === wanted)) return false
+      }
+      return true
+    })
+  }, [allItems, matterFilter, assigneeFilter, tagFilter])
+
+  const grouped = useMemo(() => {
+    const buckets: Record<ActionStatus, ActionItem[]> = {
+      pending: [], in_progress: [], review: [], done: [],
+    }
+    for (const item of filteredItems) buckets[item.status].push(item)
+    return buckets
+  }, [filteredItems])
+
+  // Shared optimistic-update helper: write the patch into the cache,
+  // return a rollback function for onError.
+  function applyOptimistic(id: string, patch: Partial<ActionItem>): ActionItem[] | undefined {
+    const previous = queryClient.getQueryData<ActionItem[]>(ACTIONS_QUERY_KEY)
+    if (!previous) return undefined
+    queryClient.setQueryData<ActionItem[]>(
+      ACTIONS_QUERY_KEY,
+      previous.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    )
+    return previous
+  }
 
   const updateMutation = useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof updateActionItem>[1] }) =>
       updateActionItem(id, patch),
-    onSuccess: (updated) => {
+    onMutate: async ({ id, patch }) => {
+      await queryClient.cancelQueries({ queryKey: ACTIONS_QUERY_KEY })
+      const previous = applyOptimistic(id, {
+        status: patch.status,
+        priority: patch.priority,
+        assigneeId: patch.assigneeId,
+        matterId: patch.matterId,
+        tags: patch.tags,
+      } as Partial<ActionItem>)
+      setSelectedItem((current) =>
+        current?.id === id ? { ...current, ...(patch as Partial<ActionItem>) } : current,
+      )
       setMutationError(null)
-      setSelectedItem((current) => (current?.id === updated.id ? updated : current))
-      queryClient.invalidateQueries({ queryKey: ['actions'] })
+      return { previous }
     },
-    onError: (error) => setMutationError(getErrorMessage(error)),
+    onError: (error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(ACTIONS_QUERY_KEY, context.previous)
+      setMutationError(getErrorMessage(error))
+    },
+    onSuccess: (updated) => {
+      // Reconcile with the server's canonical version (timestamps, joined
+      // assignee/assigner expansions, normalised tags).
+      queryClient.setQueryData<ActionItem[]>(ACTIONS_QUERY_KEY, (curr) =>
+        curr?.map((item) => (item.id === updated.id ? updated : item)) ?? curr,
+      )
+      setSelectedItem((current) => (current?.id === updated.id ? updated : current))
+    },
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteActionItem,
-    onSuccess: () => {
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ACTIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<ActionItem[]>(ACTIONS_QUERY_KEY)
+      if (previous) {
+        queryClient.setQueryData<ActionItem[]>(
+          ACTIONS_QUERY_KEY,
+          previous.filter((item) => item.id !== id),
+        )
+      }
       setSelectedItem(null)
       setMutationError(null)
-      queryClient.invalidateQueries({ queryKey: ['actions'] })
+      return { previous }
     },
-    onError: (error) => setMutationError(getErrorMessage(error)),
+    onError: (error, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(ACTIONS_QUERY_KEY, context.previous)
+      setMutationError(getErrorMessage(error))
+    },
   })
 
-  const grouped = statusColumns.reduce<Record<ActionStatus, ActionItem[]>>(
-    (acc, col) => {
-      acc[col.id] = items.filter((item) => item.status === col.id)
-      return acc
-    },
-    { pending: [], in_progress: [], review: [], done: [] },
-  )
-
-  // Distinct tags currently on the board, alphabetised, for the filter chip row.
-  const availableTags = useMemo(() => {
-    const tags = new Set<string>()
-    for (const item of items) item.tags.forEach((t) => tags.add(t))
-    return Array.from(tags).sort((a, b) => a.localeCompare(b))
-  }, [items])
+  const isInitialLoading = actionsQuery.isPending
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-[#fafaf8]">
@@ -205,8 +270,8 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
       )}
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden">
-        {actionsQuery.isLoading ? (
-          <div className="text-sm text-[#8c8c86]">Loading board...</div>
+        {isInitialLoading ? (
+          <BoardSkeleton />
         ) : actionsQuery.isError ? (
           <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
             {getErrorMessage(actionsQuery.error)}
@@ -245,9 +310,12 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           users={users}
           selectedMatterId={matterFilter}
           onClose={() => setIsCreating(false)}
-          onCreated={() => {
+          onCreated={(newItem) => {
             setIsCreating(false)
-            queryClient.invalidateQueries({ queryKey: ['actions'] })
+            queryClient.setQueryData<ActionItem[]>(
+              ACTIONS_QUERY_KEY,
+              (prev) => (prev ? [newItem, ...prev] : [newItem]),
+            )
           }}
         />
       )}
@@ -270,6 +338,36 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
         />
       )}
     </section>
+  )
+}
+
+function BoardSkeleton() {
+  return (
+    <>
+      {statusColumns.map((col) => (
+        <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="h-3 w-16 rounded bg-[#eeecea]" />
+            <div className="h-4 w-6 rounded-full bg-[#eeecea]" />
+          </div>
+          <div className="flex flex-1 flex-col gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div
+                key={i}
+                className="animate-pulse rounded-[12px] border border-black/10 bg-white p-3.5"
+              >
+                <div className="h-3 w-3/4 rounded bg-[#eeecea]" />
+                <div className="mt-2 h-2.5 w-1/2 rounded bg-[#f4f3ef]" />
+                <div className="mt-3 flex gap-1.5">
+                  <div className="h-3 w-12 rounded-full bg-[#f4f3ef]" />
+                  <div className="h-3 w-16 rounded-full bg-[#f4f3ef]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
   )
 }
 
@@ -354,6 +452,25 @@ function ActionDetailDialog({
   const canMove = manager || isAssignee
   const [tagDraft, setTagDraft] = useState('')
 
+  // Inline title / description editors. Managers click the pencil to
+  // enter edit mode; the local draft is reset whenever the underlying
+  // item changes so successive opens of different cards don't share
+  // state.
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(item.title)
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [descriptionDraft, setDescriptionDraft] = useState(item.description ?? '')
+
+  useEffect(() => {
+    setTitleDraft(item.title)
+    setEditingTitle(false)
+  }, [item.id, item.title])
+
+  useEffect(() => {
+    setDescriptionDraft(item.description ?? '')
+    setEditingDescription(false)
+  }, [item.id, item.description])
+
   function addTag() {
     const next = tagDraft.trim()
     if (!next) return
@@ -369,14 +486,83 @@ function ActionDetailDialog({
     onUpdate({ tags: item.tags.filter((t) => t !== tag) })
   }
 
+  function commitTitle() {
+    const next = titleDraft.trim()
+    if (!next || next === item.title) {
+      setEditingTitle(false)
+      setTitleDraft(item.title)
+      return
+    }
+    onUpdate({ title: next })
+    setEditingTitle(false)
+  }
+
+  function commitDescription() {
+    const next = descriptionDraft.trim()
+    const current = item.description ?? ''
+    if (next === current) {
+      setEditingDescription(false)
+      return
+    }
+    onUpdate({ description: next || null })
+    setEditingDescription(false)
+  }
+
   return (
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/35 p-4 backdrop-blur-sm">
       <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[14px] border border-black/10 bg-[#fafaf8] shadow-2xl">
-        <header className="flex items-center justify-between border-b border-black/10 px-5 py-4">
-          <h3 className="text-sm font-semibold text-[#0f0f0f]">{item.title}</h3>
+        <header className="flex items-start justify-between gap-3 border-b border-black/10 px-5 py-4">
+          <div className="min-w-0 flex-1">
+            {editingTitle ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-black/35"
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commitTitle()
+                    }
+                    if (e.key === 'Escape') {
+                      setTitleDraft(item.title)
+                      setEditingTitle(false)
+                    }
+                  }}
+                  onBlur={commitTitle}
+                  value={titleDraft}
+                  maxLength={200}
+                />
+                <button
+                  aria-label="Save title"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[#1a6b4a] hover:bg-[#e8f5ee]"
+                  disabled={isUpdating}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={commitTitle}
+                  type="button"
+                >
+                  <Check size={13} />
+                </button>
+              </div>
+            ) : (
+              <div className="group flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-[#0f0f0f]">{item.title}</h3>
+                {manager && (
+                  <button
+                    aria-label="Edit title"
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#9a9a94] opacity-0 transition-opacity hover:bg-[#f4f3ef] hover:text-[#5a5a56] group-hover:opacity-100"
+                    onClick={() => setEditingTitle(true)}
+                    type="button"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           <button
             aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-lg text-[#8c8c86] hover:bg-[#eeecea]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#8c8c86] hover:bg-[#eeecea]"
             onClick={onClose}
             type="button"
           >
@@ -384,9 +570,68 @@ function ActionDetailDialog({
           </button>
         </header>
         <div className="space-y-4 p-5">
-          {item.description && (
-            <p className="text-sm leading-6 text-[#5a5a56]">{item.description}</p>
-          )}
+          {/* Description (editable for managers) */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+                Description
+              </span>
+              {manager && !editingDescription && (
+                <button
+                  className="inline-flex items-center gap-1 text-[10px] font-medium text-[#5a5a56] hover:text-[#0f0f0f]"
+                  onClick={() => setEditingDescription(true)}
+                  type="button"
+                >
+                  <Pencil size={10} />
+                  {item.description ? 'Edit' : 'Add'}
+                </button>
+              )}
+            </div>
+            {editingDescription ? (
+              <div className="space-y-2">
+                <textarea
+                  autoFocus
+                  className="w-full resize-y rounded-lg border border-black/15 bg-white px-3 py-2 text-xs leading-5 outline-none focus:border-black/35"
+                  onChange={(e) => setDescriptionDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setDescriptionDraft(item.description ?? '')
+                      setEditingDescription(false)
+                    }
+                  }}
+                  placeholder="What needs to happen here?"
+                  rows={4}
+                  value={descriptionDraft}
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    className="rounded-lg px-3 py-1.5 text-xs text-[#5a5a56] hover:bg-[#f4f3ef]"
+                    onClick={() => {
+                      setDescriptionDraft(item.description ?? '')
+                      setEditingDescription(false)
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-xs font-medium text-white disabled:bg-[#aaa9a3]"
+                    disabled={isUpdating}
+                    onClick={commitDescription}
+                    type="button"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : item.description ? (
+              <p className="whitespace-pre-wrap text-sm leading-6 text-[#5a5a56]">
+                {item.description}
+              </p>
+            ) : (
+              <p className="text-xs text-[#aaa9a3]">No description.</p>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
@@ -576,7 +821,7 @@ function CreateActionDialog({
   users: FirmUser[]
   selectedMatterId: string | null
   onClose: () => void
-  onCreated: () => void
+  onCreated: (item: ActionItem) => void
 }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')

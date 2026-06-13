@@ -8,7 +8,7 @@ interface LoginPageProps {
 
 export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f6f5f2] p-4 text-neutral-950">
+    <div className="app-scroll-region flex h-full min-h-0 items-center justify-center overflow-y-auto bg-[#f6f5f2] p-4 text-neutral-950">
       <div className="min-w-0 w-full max-w-md space-y-8 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-10">
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-neutral-900">LexCatalyst</h1>

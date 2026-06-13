@@ -208,7 +208,6 @@ type BackendKnowledgeBankAccessLog = {
   id: string
   kb_entry_id: string | null
   user_id: string
-  action: string
   context_matter_id: string | null
   context_thread_id: string | null
   ip_address: string | null
@@ -915,7 +914,6 @@ export async function listKnowledgeBankAuditLog(): Promise<KnowledgeBankAccessLo
     id: row.id,
     entryId: row.kb_entry_id,
     userId: row.user_id,
-    action: row.action,
     contextMatterId: row.context_matter_id,
     contextThreadId: row.context_thread_id,
     ipAddress: row.ip_address,
@@ -1158,19 +1156,10 @@ function mapActionItem(item: BackendActionItem): ActionItem {
   }
 }
 
-export async function listActionItems(params?: {
-  matterId?: string
-  status?: ActionStatus
-  assigneeId?: string
-  tag?: string
-}): Promise<ActionItem[]> {
-  const search = new URLSearchParams()
-  if (params?.matterId) search.set('matter_id', params.matterId)
-  if (params?.status) search.set('item_status', params.status)
-  if (params?.assigneeId) search.set('assignee_id', params.assigneeId)
-  if (params?.tag) search.set('tag', params.tag)
-  const suffix = search.toString() ? `?${search}` : ''
-  const items = await request<BackendActionItem[]>(`/actions${suffix}`)
+export async function listActionItems(): Promise<ActionItem[]> {
+  // The board is fetched whole (capped at 500 by the backend) and filtered
+  // client-side so tag/assignee chips don't trigger a roundtrip.
+  const items = await request<BackendActionItem[]>('/actions')
   return items.map(mapActionItem)
 }
 

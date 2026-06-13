@@ -47,13 +47,14 @@ export function ChatPanel({
   const canSubmit = prompt.trim().length > 0 && !isLoading
   const canUpload = !isUploadingFile
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isNearBottomRef = useRef(true)
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = scrollContainerRef.current
+    if (!container) return
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
   }
 
   const handleScroll = () => {
@@ -88,7 +89,11 @@ export function ChatPanel({
 
   return (
     <section aria-label="Chat" className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
-      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-6">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="app-scroll-region flex min-h-0 flex-1 flex-col overflow-y-auto pt-4 sm:pt-6"
+      >
         <div className="mx-auto w-full max-w-3xl px-4 md:px-6">
           {messages.length > 0 ? (
             <div className="space-y-8 pb-12">
@@ -105,7 +110,6 @@ export function ChatPanel({
                   }
                 />
               ))}
-              <div ref={messagesEndRef} />
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
@@ -123,7 +127,7 @@ export function ChatPanel({
         </div>
       </div>
 
-      <div className="border-t border-neutral-100 bg-white/95 p-4 md:p-6 lg:pb-8">
+      <div className="shrink-0 border-t border-neutral-100 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6 lg:pb-8">
         <form
           className="mx-auto max-w-3xl"
           onSubmit={onSubmit}
@@ -169,7 +173,7 @@ export function ChatPanel({
                 ref={textareaRef}
                 aria-label={inputLabel}
                 rows={1}
-                className="min-h-[48px] max-h-48 flex-1 resize-none bg-transparent px-1 py-3 text-sm leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
+                className="min-h-[48px] max-h-48 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-3 text-sm leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault()

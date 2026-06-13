@@ -493,7 +493,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-dvh bg-[#fcfcfb] text-neutral-900 overflow-hidden">
+    <div className="flex h-dvh min-h-0 w-full overflow-hidden overscroll-none bg-[#fcfcfb] text-neutral-900">
       <Sidebar
         isOpen={isSidebarOpen}
         matters={matters}
@@ -516,7 +516,7 @@ function App() {
         />
       </Suspense>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white lg:my-2 lg:mr-2 lg:rounded-tl-2xl lg:border-l lg:border-t lg:border-neutral-200 lg:shadow-sm">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white lg:my-2 lg:mr-2 lg:rounded-tl-2xl lg:border-l lg:border-t lg:border-neutral-200 lg:shadow-sm">
         {current.view !== 'chat' && (
           <header className="flex h-12 shrink-0 items-center gap-3 border-b border-neutral-100 px-3 lg:hidden">
             <Button
@@ -552,7 +552,7 @@ function App() {
         )}
 
         <Suspense fallback={<PanelLoading />}>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {current.view === 'memories' ? (
             <MemoriesPanel />
           ) : current.view === 'documents' ? (
@@ -574,7 +574,7 @@ function App() {
             <SettingsPanel currentUser={currentUser} />
           ) : (
             <>
-              <header className="sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-neutral-100 bg-white/80 px-4 py-2 backdrop-blur-md lg:px-6">
+              <header className="z-30 flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-neutral-100 bg-white/80 px-4 py-2 backdrop-blur-md lg:px-6">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <Button
                     aria-label="Open menu"

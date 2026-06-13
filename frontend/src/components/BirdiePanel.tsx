@@ -114,7 +114,7 @@ export function BirdiePanel({ isOpen, onToggle, matterId }: BirdiePanelProps) {
 
   return (
     <div
-      className="fixed inset-x-2 bottom-2 z-[60] flex h-[min(75dvh,34rem)] select-none flex-col overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl max-sm:!left-2 max-sm:!right-2 max-sm:!top-auto sm:inset-auto sm:h-[480px] sm:w-[320px]"
+      className="fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[60] flex h-[min(75dvh,34rem)] max-h-[calc(100dvh-1rem)] select-none flex-col overflow-hidden overscroll-none rounded-2xl border border-black/10 bg-white shadow-2xl max-sm:!left-2 max-sm:!right-2 max-sm:!top-auto sm:inset-auto sm:h-[480px] sm:w-[320px]"
       style={{ left: pos.x, top: pos.y }}
     >
       <header
@@ -179,7 +179,7 @@ function BirdiePanelBody({ matterId }: { matterId: string | null }) {
 
 function ReviewTab() {
   return (
-    <div className="h-full overflow-y-auto p-3 space-y-2.5">
+    <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-2.5">
       {STARTER_CARDS.map((card) => (
         <ReviewCard key={card.id} card={card} />
       ))}
@@ -239,7 +239,7 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-3 space-y-4">
+    <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-4">
       {styleGuides.length > 0 && (
         <section>
           <div className="mb-2 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
@@ -316,11 +316,14 @@ function AskTab({ matterId }: { matterId: string | null }) {
   const [prompt, setPrompt] = useState('')
   const [isResponding, setIsResponding] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = scrollContainerRef.current
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+    }
   }, [messages])
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -378,7 +381,10 @@ function AskTab({ matterId }: { matterId: string | null }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div
+        ref={scrollContainerRef}
+        className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-3"
+      >
         {messages.length === 0 ? (
           <div className="space-y-2">
             <div className="mb-1 text-[10px] text-[#9a9a94]">Try asking</div>
@@ -423,7 +429,6 @@ function AskTab({ matterId }: { matterId: string | null }) {
             {error && (
               <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">{error}</div>
             )}
-            <div ref={messagesEndRef} />
           </div>
         )}
       </div>
@@ -431,7 +436,7 @@ function AskTab({ matterId }: { matterId: string | null }) {
       <div className="shrink-0 border-t border-black/10 p-2.5">
         <div className="flex items-end gap-2 rounded-[10px] border border-black/15 bg-[#f4f3ef] px-3 py-2 focus-within:border-black/30 focus-within:bg-white">
           <textarea
-            className="max-h-20 flex-1 resize-none bg-transparent text-[12px] leading-5 text-[#0f0f0f] outline-none placeholder:text-[#aaa9a3]"
+            className="max-h-20 flex-1 resize-none overflow-y-auto bg-transparent text-[12px] leading-5 text-[#0f0f0f] outline-none placeholder:text-[#aaa9a3]"
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -476,7 +481,7 @@ function ProgressTab() {
   ]
 
   return (
-    <div className="h-full overflow-y-auto p-3 space-y-4">
+    <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-4">
       <div className="rounded-[10px] border border-black/10 bg-[#f4f3ef] px-3 py-2.5 text-[11.5px] leading-5 text-[#5a5a56]">
         Based on your questions and drafts. Updates as you work — a learning map, not a performance report.
       </div>

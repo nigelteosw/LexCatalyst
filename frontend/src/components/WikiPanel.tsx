@@ -144,8 +144,8 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
   }
 
   return (
-    <section className="flex h-full flex-col bg-white">
-      <header className="flex h-14 items-center justify-between border-b border-neutral-100 px-4 lg:px-6">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-100 px-4 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-neutral-900">Lex-Wiki</h2>
@@ -165,7 +165,7 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[280px_minmax(0,1fr)_320px] lg:overflow-hidden">
+      <div className="app-scroll-region flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[280px_minmax(0,1fr)_320px] lg:overflow-hidden">
         <aside className="border-b border-neutral-100 lg:min-h-0 lg:border-b-0 lg:border-r">
           <div className="border-b border-neutral-100 p-3">
             <input

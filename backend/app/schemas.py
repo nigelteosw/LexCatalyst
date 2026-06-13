@@ -357,10 +357,12 @@ class RedactionProposalResponse(BaseModel):
 
 
 class KnowledgeBankAccessLogResponse(BaseModel):
+    """Audit log entry. Only edit events are recorded (CHECK-constrained
+    at the DB level), so there's no `action` field — every row is an edit
+    by definition."""
     id: str
     kb_entry_id: str | None = None
     user_id: str
-    action: str
     context_matter_id: str | None = None
     context_thread_id: str | None = None
     ip_address: str | None = None

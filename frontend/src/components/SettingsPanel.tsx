@@ -54,8 +54,8 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
   })
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[#fafaf8]">
-      <header className="flex min-h-14 items-center gap-2 border-b border-black/10 bg-white px-5">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]">
+      <header className="flex min-h-14 shrink-0 items-center gap-2 border-b border-black/10 bg-white px-5">
         <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0f0f0f] text-white">
           <Settings size={16} />
         </div>
@@ -65,7 +65,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5 sm:p-8">
+      <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-8">
         <div className="mx-auto max-w-2xl">
           <div className="mb-6 rounded-xl border border-black/10 bg-white p-4">
             <div className="flex items-center gap-3">

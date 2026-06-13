@@ -161,8 +161,8 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
   }
 
   return (
-    <section className="flex h-full flex-col bg-white">
-      <header className="flex h-14 items-center justify-between border-b border-neutral-100 px-4 lg:px-6">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-100 px-4 lg:px-6">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-neutral-900">Documents</h2>
           <p className="text-xs text-neutral-500">Upload PDF or DOCX files for semantic chat search.</p>
@@ -173,7 +173,7 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
         </Button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 lg:px-6">
+      <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
         <div className="mb-5">
           {/* Drop zone */}
           <label

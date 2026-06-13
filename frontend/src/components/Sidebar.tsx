@@ -111,7 +111,7 @@ export function Sidebar({
       {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-neutral-900/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 overscroll-none bg-neutral-900/50 backdrop-blur-sm lg:hidden"
           onClick={onClose}
         />
       )}
@@ -119,7 +119,7 @@ export function Sidebar({
       {/* Sidebar Container */}
       <aside
         ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-[#0f0f0f] text-[#fafaf8] transition-transform duration-300 lg:relative lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-[#0f0f0f] text-[#fafaf8] transition-transform duration-300 lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{ width: `${width}px` }}
@@ -233,7 +233,7 @@ export function Sidebar({
           {/* Past Chats List */}
           <nav
             aria-label="Recent chats"
-            className="lex-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-2"
+            className="app-scroll-region lex-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-2"
           >
             {matters.length > 0 && (
               <>
@@ -296,7 +296,7 @@ export function Sidebar({
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="flex items-center gap-2 border-t border-white/[0.08] px-2.5 py-2.5">
+          <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.08] px-2.5 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
             <button
               className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               onClick={() => {

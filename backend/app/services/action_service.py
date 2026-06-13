@@ -15,6 +15,11 @@ from app.dependencies import is_senior_or_above
 from app.models import ActionItem, User
 from app.schemas import ActionItemCreate, ActionItemUpdate
 
+# Bounded fetch so the list endpoint can't run away. A typical legal team
+# has well under this many open tickets; if a real firm needs more we'd
+# add cursor pagination.
+DEFAULT_LIMIT = 500
+
 
 def _action_query():
     return select(ActionItem).options(
@@ -28,30 +33,23 @@ def list_action_items(
     *,
     matter_id: str | None = None,
     status: str | None = None,
-    assignee_id: str | None = None,
-    tag: str | None = None,
+    limit: int = DEFAULT_LIMIT,
 ) -> list[ActionItem]:
-    """List all action items in the firm with optional filters.
+    """List action items in the firm.
 
-    Filters are stackable. None of them are RBAC; the board is visible to
-    every authenticated user by design.
+    Only matter and status are SQL-filtered because both are indexed and
+    bound the rows well. Assignee and tag filters are applied client-side
+    once the bounded page is in memory — the board is small enough that
+    in-browser filtering feels instant, and skipping the roundtrip is
+    what makes filter chips snappy.
     """
     stmt = _action_query()
     if matter_id:
         stmt = stmt.where(ActionItem.matter_id == matter_id)
     if status:
         stmt = stmt.where(ActionItem.status == status)
-    if assignee_id:
-        stmt = stmt.where(ActionItem.assignee_id == assignee_id)
-
-    items = list(db.scalars(stmt.order_by(desc(ActionItem.created_at))))
-    if tag:
-        wanted = tag.strip().lower()
-        items = [
-            item for item in items
-            if any(t.lower() == wanted for t in (item.tags or []))
-        ]
-    return items
+    stmt = stmt.order_by(desc(ActionItem.created_at)).limit(limit)
+    return list(db.scalars(stmt))
 
 
 def get_action_item(db: Session, item_id: str) -> ActionItem | None:
