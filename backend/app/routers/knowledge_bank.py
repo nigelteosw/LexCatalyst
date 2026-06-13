@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import (
-    can_create_firm_wide,
     get_current_user,
+    require_kb_owner,
     require_kb_read,
     require_kb_write,
     require_partner_or_admin,
@@ -35,6 +35,7 @@ from app.schemas import (
 from app.services.kb_ingestion_service import create_pending_kb_entry
 from app.services.knowledge_bank_service import (
     KnowledgeBankError,
+    KnowledgeBankScopeError,
     approve_redaction,
     backfill_missing_kb_embeddings,
     build_kb_graph,
@@ -113,14 +114,11 @@ async def post_kb_entry(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
-    if schema.scope == "firm_wide" and not can_create_firm_wide(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only partners can create firm-wide entries",
-        )
     try:
         entry = await create_kb_entry(db, user=current_user, schema=schema)
         return KnowledgeBankEntryResponse.model_validate(entry)
+    except KnowledgeBankScopeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KnowledgeBankError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
@@ -239,6 +237,7 @@ def kb_entry_sources(
     entry = get_kb_entry(db, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+    require_kb_read(db, current_user, entry)
     return [
         build_wiki_source_response(source)
         for source in list_wiki_page_sources(db, user_id=current_user.id, page_id=entry.id)
@@ -255,11 +254,17 @@ async def patch_kb_entry(
     existing = get_kb_entry(db, entry_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
-    require_kb_write(db, current_user, existing)
+    classification_fields = {"scope", "team_id", "matter_id"}
+    if classification_fields.intersection(schema.model_fields_set):
+        require_kb_owner(current_user, existing)
+    else:
+        require_kb_write(db, current_user, existing)
     try:
         entry = await update_kb_entry(
             db, user=current_user, entry_id=entry_id, schema=schema,
         )
+    except KnowledgeBankScopeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KnowledgeBankError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
@@ -298,6 +303,10 @@ async def promote_kb_entry_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> RedactionProposalResponse:
+    existing = get_kb_entry(db, entry_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+    require_kb_owner(current_user, existing)
     try:
         entry, redaction = await promote_kb_entry(
             db, user=current_user, entry_id=entry_id, target_scope=schema.target_scope,
@@ -327,6 +336,7 @@ def kb_redaction_detail(
     redaction = get_redaction_proposal(db, entry_id)
     if not entry or not redaction:
         raise HTTPException(status_code=404, detail="Redaction proposal not found")
+    require_kb_read(db, current_user, entry)
     return RedactionProposalResponse(
         entry=KnowledgeBankEntryResponse.model_validate(entry),
         redacted_fields=redaction.redacted_fields,
@@ -345,6 +355,10 @@ async def approve_kb_redaction(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
+    existing = get_kb_entry(db, entry_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Pending redaction not found")
+    require_kb_owner(current_user, existing)
     try:
         entry = await approve_redaction(
             db, user=current_user, entry_id=entry_id, schema=schema,

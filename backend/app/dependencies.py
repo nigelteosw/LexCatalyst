@@ -73,8 +73,6 @@ def _is_team_member(db: Session, user_id: str, team_id: str) -> bool:
 
 
 def check_kb_read(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
-    if user.is_admin:
-        return True
     if entry.scope == "firm_wide":
         return True
     if entry.scope == "private":
@@ -88,6 +86,8 @@ def check_kb_read(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
 
 def check_kb_write(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
     if user.is_admin:
+        return True
+    if entry.created_by == user.id:
         return True
     if entry.scope == "firm_wide":
         return user.firm_role in PARTNER_ROLES
@@ -110,5 +110,9 @@ def require_kb_write(db: Session, user: User, entry: KnowledgeBankEntry) -> None
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
-def can_create_firm_wide(user: User) -> bool:
-    return is_partner_or_admin(user)
+def require_kb_owner(user: User, entry: KnowledgeBankEntry) -> None:
+    if entry.created_by != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the entry owner can change its access scope",
+        )

@@ -80,6 +80,13 @@ const scopeLabels: Record<KnowledgeBankScope, string> = {
   private: 'Private',
 }
 
+const scopeDescriptions: Record<KnowledgeBankScope, string> = {
+  firm_wide: 'Visible to everyone in the firm.',
+  team: 'Visible to everyone in the selected team.',
+  matter: 'Visible only to people with access to the selected matter.',
+  private: 'Visible only to you.',
+}
+
 function canWrite(user: CurrentUser | null) {
   return user?.isAdmin || user?.firmRole === 'partner' || user?.firmRole === 'senior_associate'
 }
@@ -371,8 +378,10 @@ export function KnowledgeBankPanel({
           <KnowledgeBankReader
             entries={entries}
             entry={selectedEntry}
-            canEdit={isWriter}
+            canEdit={isWriter || selectedEntry.createdBy === currentUser?.id}
+            canChangeScope={selectedEntry.createdBy === currentUser?.id}
             isDeleting={deleteMutation.isPending}
+            matters={matters}
             onBack={() => selectKnowledgeBank(null)}
             onDelete={(entry) => {
               if (window.confirm(`Delete "${entry.title}" from the Knowledge Bank?`)) {
@@ -473,8 +482,10 @@ export function KnowledgeBankPanel({
         <aside className="hidden w-[295px] shrink-0 border-l border-black/10 bg-white xl:flex xl:flex-col">
           <EntryContextPanel
             entry={selectedEntry}
-            canEdit={isWriter}
+            canEdit={isWriter || selectedEntry?.createdBy === currentUser?.id}
+            canChangeScope={selectedEntry?.createdBy === currentUser?.id}
             isDeleting={deleteMutation.isPending}
+            matters={matters}
             onDelete={(entry) => {
               if (window.confirm(`Delete "${entry.title}" from the Knowledge Bank?`)) {
                 deleteMutation.mutate(entry.id)
@@ -487,7 +498,6 @@ export function KnowledgeBankPanel({
 
       {isCreatingEntry && (
         <EntryFormDialog
-          canCreateFirmWide={canCreateFirmWide}
           matters={matters}
           selectedMatterId={selectedMatterId}
           onClose={() => {
@@ -575,7 +585,9 @@ function KnowledgeBankReader({
   entries,
   entry,
   canEdit,
+  canChangeScope,
   isDeleting,
+  matters,
   onBack,
   onDelete,
   onSelectEntry,
@@ -584,7 +596,9 @@ function KnowledgeBankReader({
   entries: KnowledgeBankEntry[]
   entry: KnowledgeBankEntry
   canEdit: boolean
+  canChangeScope: boolean
   isDeleting: boolean
+  matters: Matter[]
   onBack: () => void
   onDelete: (entry: KnowledgeBankEntry) => void
   onSelectEntry: (entryId: string) => void
@@ -654,6 +668,16 @@ function KnowledgeBankReader({
             <span>Added {formatDateTime(entry.createdAt)}</span>
             <span>Latest edit {formatDateTime(entry.updatedAt)}</span>
           </div>
+          {canChangeScope && (
+            <div className="mt-4">
+              <ScopeAccessEditor
+                key={entry.id}
+                entry={entry}
+                matters={matters}
+                onUpdated={onUpdated}
+              />
+            </div>
+          )}
 
           <div className="mt-6 flex items-center gap-2">
             {canEdit && isEditing ? (
@@ -791,6 +815,118 @@ function KnowledgeBankReader({
   )
 }
 
+function ScopeAccessEditor({
+  entry,
+  matters,
+  onUpdated,
+  compact = false,
+}: {
+  entry: KnowledgeBankEntry
+  matters: Matter[]
+  onUpdated: () => void
+  compact?: boolean
+}) {
+  const queryClient = useQueryClient()
+  const [isOpen, setIsOpen] = useState(false)
+  const [scope, setScope] = useState<KnowledgeBankScope>(entry.scope)
+  const [matterId, setMatterId] = useState(entry.matterId ?? '')
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      updateKnowledgeBankEntry(entry.id, {
+        scope,
+        matterId: scope === 'matter' ? matterId : null,
+        teamId: null,
+      }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['kbEntry', entry.id], updated)
+      setIsOpen(false)
+      onUpdated()
+    },
+  })
+
+  function openEditor() {
+    setScope(entry.scope)
+    setMatterId(entry.matterId ?? '')
+    setIsOpen(true)
+  }
+
+  if (!isOpen) {
+    return (
+      <button
+        className={`inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white text-xs font-medium text-[#5a5a56] hover:border-black/20 hover:bg-[#f7f6f3] ${
+          compact ? 'px-2.5 py-1.5' : 'px-3 py-2'
+        }`}
+        onClick={openEditor}
+        type="button"
+      >
+        <ShieldCheck size={13} />
+        Change access
+      </button>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-black/10 bg-[#f8f8f6] p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8c8c86]">
+        Agent access
+      </div>
+      <select
+        aria-label="Knowledge Bank access scope"
+        className="mt-2 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs outline-none focus:border-black/30"
+        onChange={(event) => setScope(event.target.value as KnowledgeBankScope)}
+        value={scope}
+      >
+        {(Object.keys(scopeLabels) as KnowledgeBankScope[]).map((item) => (
+          <option key={item} value={item}>
+            {scopeLabels[item]}
+          </option>
+        ))}
+      </select>
+      {scope === 'matter' && (
+        <select
+          aria-label="Matter for Knowledge Bank access"
+          className="mt-2 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs outline-none focus:border-black/30"
+          onChange={(event) => setMatterId(event.target.value)}
+          value={matterId}
+        >
+          <option value="">Select matter</option>
+          {matters.map((matter) => (
+            <option key={matter.id} value={matter.id}>
+              {matter.caseNumber} · {matter.title}
+            </option>
+          ))}
+        </select>
+      )}
+      <p className="mt-2 text-[11px] leading-5 text-[#777770]">
+        {scopeDescriptions[scope]} The agent applies this classification to every search.
+      </p>
+      {mutation.isError && (
+        <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+          {getErrorMessage(mutation.error)}
+        </div>
+      )}
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          className="rounded-lg px-3 py-1.5 text-xs text-[#6f6f69] hover:bg-white"
+          onClick={() => setIsOpen(false)}
+          type="button"
+        >
+          Cancel
+        </button>
+        <button
+          className="rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-xs font-medium text-white disabled:bg-[#aaa9a3]"
+          disabled={mutation.isPending || (scope === 'matter' && !matterId)}
+          onClick={() => mutation.mutate()}
+          type="button"
+        >
+          {mutation.isPending ? 'Saving...' : 'Save access'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function EntryCard({
   entry,
   isSelected,
@@ -855,13 +991,17 @@ function formatDateTime(value: string) {
 function EntryContextPanel({
   entry,
   canEdit,
+  canChangeScope,
   isDeleting,
+  matters,
   onDelete,
   onUpdated,
 }: {
   entry: KnowledgeBankEntry | null
   canEdit: boolean
+  canChangeScope: boolean
   isDeleting: boolean
+  matters: Matter[]
   onDelete: (entry: KnowledgeBankEntry) => void
   onUpdated: () => void
 }) {
@@ -951,6 +1091,17 @@ function EntryContextPanel({
           <Pill label={entry.piiStatus.replaceAll('_', ' ')} tone={piiTone(entry.piiStatus)} />
           <Pill label={`v${entry.version}`} tone="neutral" />
         </div>
+        {canChangeScope && (
+          <div className="mt-3">
+            <ScopeAccessEditor
+              key={entry.id}
+              entry={entry}
+              matters={matters}
+              onUpdated={onUpdated}
+              compact
+            />
+          </div>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -1035,7 +1186,7 @@ function EntryContextPanel({
             >
               Edit
             </button>
-            {entry.scope === 'matter' || entry.scope === 'team' ? (
+            {canChangeScope && (entry.scope === 'matter' || entry.scope === 'team') ? (
               <button
                 className="rounded-lg bg-[#0f0f0f] px-3 py-2 text-xs text-white hover:bg-[#333]"
                 disabled={promoteMutation.isPending}
@@ -1120,7 +1271,6 @@ function RedactionReview({
 }
 
 function EntryFormDialog({
-  canCreateFirmWide,
   matters,
   selectedMatterId,
   error,
@@ -1128,7 +1278,6 @@ function EntryFormDialog({
   onCreated,
   onError,
 }: {
-  canCreateFirmWide: boolean
   matters: Matter[]
   selectedMatterId: string | null
   error: string | null
@@ -1140,7 +1289,7 @@ function EntryFormDialog({
   const [body, setBody] = useState('')
   const [entryType, setEntryType] = useState<KnowledgeBankEntryType>('knowledge_bank')
   const [scope, setScope] = useState<KnowledgeBankScope>(
-    selectedMatterId ? 'matter' : canCreateFirmWide ? 'firm_wide' : 'team',
+    selectedMatterId ? 'matter' : 'private',
   )
   const [matterId, setMatterId] = useState(selectedMatterId ?? '')
   const [tags, setTags] = useState('')
@@ -1190,15 +1339,14 @@ function EntryFormDialog({
             onChange={(event) => setScope(event.target.value as KnowledgeBankScope)}
             value={scope}
           >
-            {(Object.keys(scopeLabels) as KnowledgeBankScope[])
-              .filter((item) => item !== 'firm_wide' || canCreateFirmWide)
-              .map((item) => (
-                <option key={item} value={item}>
-                  {scopeLabels[item]}
-                </option>
-              ))}
+            {(Object.keys(scopeLabels) as KnowledgeBankScope[]).map((item) => (
+              <option key={item} value={item}>
+                {scopeLabels[item]}
+              </option>
+            ))}
           </select>
         </div>
+        <p className="text-[11px] leading-5 text-[#777770]">{scopeDescriptions[scope]}</p>
         {scope === 'matter' && (
           <select
             className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs"

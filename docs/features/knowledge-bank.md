@@ -56,6 +56,10 @@ Simplified from a 7-type taxonomy to the categories lawyers actually use:
 | `matter` | Matter members | Matter members |
 | `private` | The creator only | The creator only |
 
+The entry creator owns its classification and can change it after creation. Changing to `team`
+or `matter` requires access to that target team or matter. The backend normalises irrelevant
+foreign keys when the scope changes and applies the same visibility filter to agent retrieval.
+
 ### Async ingestion (the "Add to Knowledge Bank" pipeline)
 
 A user uploads a 50-page document. They click "Add to Knowledge Bank". A typical legal doc takes 30–60 seconds to summarise comprehensively. We don't want them waiting.
@@ -110,11 +114,10 @@ This is the difference between a knowledge bank and a folder of PDFs: the agent 
 
 ## Roles & permissions
 
-- **Partner / admin**: create firm-wide entries, edit/delete any entry they can read.
-- **Senior associate**: create team/matter/private entries.
-- **Associate**: create matter/private entries.
-
-A junior can never accidentally make a partner-preferences entry firm-visible — the route returns 403.
+- The creator can edit/delete their entry and change its classification.
+- Partners/admins can edit firm-wide entries.
+- Team and matter collaborators retain the existing content permissions for entries they can access.
+- Only the creator can change `scope`, `team_id`, or `matter_id`.
 
 ## Limitations
 

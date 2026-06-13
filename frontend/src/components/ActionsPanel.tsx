@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Check, CheckSquare, ChevronRight, Pencil, Plus, Tag, Users, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -73,7 +73,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
     staleTime: 5 * 60_000,
   })
 
-  const allItems = actionsQuery.data ?? []
+  const allItems = useMemo(() => actionsQuery.data ?? [], [actionsQuery.data])
   const users = usersQuery.data ?? []
 
   // Distinct tags from the full dataset (not filtered) so chips don't
@@ -461,15 +461,16 @@ function ActionDetailDialog({
   const [editingDescription, setEditingDescription] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState(item.description ?? '')
 
-  useEffect(() => {
+  // Adjust state when the item changes without using useEffect to avoid
+  // cascading renders (react-hooks/set-state-in-effect).
+  const [prevItem, setPrevItem] = useState(item)
+  if (item.id !== prevItem.id || item.title !== prevItem.title || item.description !== prevItem.description) {
+    setPrevItem(item)
     setTitleDraft(item.title)
     setEditingTitle(false)
-  }, [item.id, item.title])
-
-  useEffect(() => {
     setDescriptionDraft(item.description ?? '')
     setEditingDescription(false)
-  }, [item.id, item.description])
+  }
 
   function addTag() {
     const next = tagDraft.trim()

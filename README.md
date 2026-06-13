@@ -190,7 +190,7 @@ JWT_SECRET_KEY=at_least_32_characters_long
 
 ## Roles & Permissions
 
-| Role | KB firm-wide write | Create matters | Create actions | Manage surveys | View survey results |
+| Role | Manage any firm-wide entry | Create matters | Create actions | Manage surveys | View survey results |
 |---|---|---|---|---|---|
 | `admin` (firm IT/ops) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `partner` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -202,6 +202,10 @@ KB scope visibility (read access):
 - `team` — team members only
 - `matter` — matter members only
 - `private` — creator only
+
+The creator remains the entry owner and can change its classification between all four scopes.
+The backend validates team and matter membership before applying the change, and every agent KB
+search uses the same scope predicate as the direct KB API.
 
 Optimized KB read routes, all requiring Bearer authentication:
 

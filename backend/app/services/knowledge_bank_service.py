@@ -33,6 +33,54 @@ class KnowledgeBankError(Exception):
     pass
 
 
+class KnowledgeBankScopeError(KnowledgeBankError):
+    pass
+
+
+def _resolve_scope_targets(
+    db: Session,
+    *,
+    user: User,
+    scope: str,
+    team_id: str | None,
+    matter_id: str | None,
+) -> tuple[str | None, str | None]:
+    if scope in {"firm_wide", "private"}:
+        return None, None
+
+    if scope == "team":
+        resolved_team_id = team_id or user.default_team_id
+        if not resolved_team_id:
+            raise KnowledgeBankScopeError("Select a team for team access")
+        is_member = db.scalar(
+            select(TeamMember.id).where(
+                TeamMember.team_id == resolved_team_id,
+                TeamMember.user_id == user.id,
+            )
+        )
+        if not is_member:
+            raise KnowledgeBankScopeError("You do not have access to that team")
+        return resolved_team_id, None
+
+    if scope == "matter":
+        if not matter_id:
+            raise KnowledgeBankScopeError("Select a matter for matter access")
+        matter = db.get(Matter, matter_id)
+        if not matter:
+            raise KnowledgeBankScopeError("Matter not found")
+        is_member = db.scalar(
+            select(MatterMember.id).where(
+                MatterMember.matter_id == matter.id,
+                MatterMember.user_id == user.id,
+            )
+        )
+        if not is_member:
+            raise KnowledgeBankScopeError("You do not have access to that matter")
+        return matter.team_id, matter.id
+
+    raise KnowledgeBankScopeError("Invalid Knowledge Bank scope")
+
+
 def _entry_embedding_text(entry: KnowledgeBankEntry) -> str:
     return f"{entry.title}\n\n{entry.body_markdown}".strip()[:MAX_EMBEDDING_TEXT_CHARS]
 
@@ -182,9 +230,6 @@ def build_kb_graph(
 
 def _user_kb_scope_filter(user: User):
     """Build a WHERE clause that limits results to entries the user can read."""
-    if user.is_admin:
-        return None
-
     return or_(
         KnowledgeBankEntry.scope == "firm_wide",
         (KnowledgeBankEntry.scope == "team")
@@ -336,11 +381,16 @@ async def create_kb_entry(
     user: User,
     schema: KnowledgeBankEntryCreate,
 ) -> KnowledgeBankEntry:
-    matter = db.get(Matter, schema.matter_id) if schema.matter_id else None
-    team_id = schema.team_id or (matter.team_id if matter else user.default_team_id)
+    team_id, matter_id = _resolve_scope_targets(
+        db,
+        user=user,
+        scope=schema.scope,
+        team_id=schema.team_id,
+        matter_id=schema.matter_id,
+    )
     entry = KnowledgeBankEntry(
         team_id=team_id,
-        matter_id=schema.matter_id,
+        matter_id=matter_id,
         scope=schema.scope,
         entry_type=schema.entry_type,
         title=schema.title,
@@ -488,6 +538,21 @@ async def update_kb_entry(
     if not entry:
         return None
     updates = schema.model_dump(exclude_unset=True)
+    classification_fields = {"scope", "team_id", "matter_id"}
+    if classification_fields.intersection(schema.model_fields_set):
+        if entry.created_by != user.id:
+            raise KnowledgeBankScopeError("Only the entry owner can change its access scope")
+        target_scope = updates.get("scope", entry.scope)
+        target_team_id, target_matter_id = _resolve_scope_targets(
+            db,
+            user=user,
+            scope=target_scope,
+            team_id=updates.get("team_id", entry.team_id),
+            matter_id=updates.get("matter_id", entry.matter_id),
+        )
+        updates["scope"] = target_scope
+        updates["team_id"] = target_team_id
+        updates["matter_id"] = target_matter_id
     changed = any(getattr(entry, field) != value for field, value in updates.items())
     if not changed:
         return get_kb_entry(db, entry.id)
@@ -716,6 +781,10 @@ async def search_kb_for_chat(
     matter_id: str | None,
     limit: int = 6,
 ) -> list[KnowledgeBankEntry]:
+    user = db.get(User, user_id)
+    if not user:
+        return []
+
     try:
         query_embedding = (await embed_texts([query]))[0]
     except EmbeddingError as exc:
@@ -726,49 +795,27 @@ async def search_kb_for_chat(
         KnowledgeBankEntry.embedding.is_not(None),
         KnowledgeBankEntry.embedding_content_hash.is_not(None),
     )
+    scope_filter = _user_kb_scope_filter(user)
+    if scope_filter is not None:
+        base = base.where(scope_filter)
 
     if matter_id:
-        matter = db.get(Matter, matter_id)
-        team_id = matter.team_id if matter else None
-        clean_or_redacted = KnowledgeBankEntry.pii_status.in_(["clean", "redacted"])
-        allowed_scope = [
-            KnowledgeBankEntry.scope == "firm_wide",
-            (KnowledgeBankEntry.scope == "matter")
-            & (KnowledgeBankEntry.matter_id == matter_id),
-            (KnowledgeBankEntry.scope == "private")
-            & (KnowledgeBankEntry.created_by == user_id),
-        ]
-        if team_id:
-            allowed_scope.append(
-                (KnowledgeBankEntry.scope == "team")
-                & (KnowledgeBankEntry.team_id == team_id)
-            )
         base = base.where(
             or_(
-                clean_or_redacted & or_(*allowed_scope),
-                (KnowledgeBankEntry.pii_status == "flagged")
-                & or_(
-                    (KnowledgeBankEntry.scope == "matter")
-                    & (KnowledgeBankEntry.matter_id == matter_id),
-                    (KnowledgeBankEntry.scope == "private")
-                    & (KnowledgeBankEntry.created_by == user_id),
-                ),
+                KnowledgeBankEntry.scope != "matter",
+                KnowledgeBankEntry.matter_id == matter_id,
             )
         )
     else:
-        base = base.where(
-            or_(
-                KnowledgeBankEntry.pii_status.in_(["clean", "redacted"])
-                & or_(
-                    KnowledgeBankEntry.scope == "firm_wide",
-                    (KnowledgeBankEntry.scope == "private")
-                    & (KnowledgeBankEntry.created_by == user_id),
-                ),
-                (KnowledgeBankEntry.pii_status == "flagged")
-                & (KnowledgeBankEntry.scope == "private")
-                & (KnowledgeBankEntry.created_by == user_id),
-            )
+        base = base.where(KnowledgeBankEntry.scope != "matter")
+
+    base = base.where(
+        or_(
+            KnowledgeBankEntry.pii_status.in_(["clean", "redacted"]),
+            (KnowledgeBankEntry.pii_status == "flagged")
+            & KnowledgeBankEntry.scope.in_(["matter", "private"]),
         )
+    )
 
     if query_embedding is not None:
         distance = KnowledgeBankEntry.embedding.cosine_distance(query_embedding).label("distance")

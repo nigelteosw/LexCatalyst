@@ -60,8 +60,8 @@ This matches how legal knowledge actually flows:
 | **KB list** | `list_kb_entries` adds a scope-filter WHERE clause built from the user's team and matter memberships. Users literally cannot retrieve entries they don't have access to. |
 | **KB write** | `require_kb_write` on PATCH/DELETE routes. Hidden from the UI as well, but the route enforces. |
 | **KB read (specific)** | `require_kb_read` on the detail route — even if the user knows the UUID, the route returns 403. |
-| **Firm-wide create** | `can_create_firm_wide` — must be partner or admin. |
-| **Agent tool calls** | `get_kb_entry` in `agent_service.py` calls `check_kb_read` before returning the body. An LLM that hallucinates a UUID cannot fetch private content. |
+| **Scope changes** | `require_kb_owner` permits only the creator to change `scope`, `team_id`, or `matter_id`; the service then validates target membership. |
+| **Agent tool calls** | Semantic search reuses `_user_kb_scope_filter`, and `get_kb_entry` calls `check_kb_read`. An LLM that hallucinates a UUID cannot fetch private content. |
 | **Survey results** | `require_partner_or_admin`. |
 | **Action creation** | `is_senior_or_above`. |
 | **Action delete** | Assigner or admin only. |
@@ -75,7 +75,7 @@ This matches how legal knowledge actually flows:
 | **Admin flag, not "admin" role** | Admins are humans with their own firm_role. An admin partner is `is_admin=true` AND `firm_role="partner"`. Means we never have to ask "which is more powerful, admin or partner?" |
 | **No team-level write restriction beyond membership** | Inside a team, anyone can edit team-scope entries. Lawyers self-police; we don't model "team lead" as a distinct permission tier. |
 | **Settings panel for self-service role change** | This is a hackathon demo. Real production deployment would source role from the identity provider (Okta, Google Workspace groups). For now, the user can switch roles in `/settings` to demo the permission flows. |
-| **All KB writes audited** | `kb_access_log` records every read, write, share, and redact event. Auditable trail for compliance review. |
+| **All KB edits audited** | `kb_access_log` records edit, share, and redact changes without logging reads. |
 
 ## How it works
 
@@ -104,6 +104,9 @@ get_or_create_user
         │
         ├── For KB write:
         │     require_kb_write(db, user, entry) → 403 if denied
+        │
+        ├── For KB scope change:
+        │     require_kb_owner(user, entry) → validate target team/matter
         │
         └── For agent tool:
               check_kb_read returns bool
