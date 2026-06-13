@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CheckSquare, ChevronRight, Plus } from 'lucide-react'
+import { CheckSquare, ChevronRight, Plus, Tag } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteActionItem,
