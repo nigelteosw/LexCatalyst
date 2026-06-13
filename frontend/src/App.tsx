@@ -425,15 +425,35 @@ function App() {
 
   async function handleDeleteMessage(messageId: string) {
     // Optimistic UI removal; restore on failure.
-    const previous = messages
-    setMessages((current) => current.filter((m) => m.id !== messageId))
+    const messageQueryKey = ['messages', threadId] as const
+    const previousServerMessages =
+      queryClient.getQueryData<Message[]>(messageQueryKey)
+    const previousActiveStream = activeStream
+
+    if (threadId) {
+      queryClient.setQueryData<Message[]>(messageQueryKey, (current = []) =>
+        current.filter((message) => message.id !== messageId),
+      )
+    }
+    setActiveStream((stream) =>
+      stream
+        ? {
+            ...stream,
+            messages: stream.messages.filter((message) => message.id !== messageId),
+          }
+        : stream,
+    )
+
     try {
       await deleteChatMessage(messageId)
       if (threadId) {
         queryClient.invalidateQueries({ queryKey: ['messages', threadId] })
       }
     } catch (caughtError) {
-      setMessages(previous)
+      if (threadId && previousServerMessages) {
+        queryClient.setQueryData(messageQueryKey, previousServerMessages)
+      }
+      setActiveStream(previousActiveStream)
       setError(getErrorMessage(caughtError))
     }
   }
