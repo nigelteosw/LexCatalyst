@@ -29,5 +29,23 @@ def create_db_tables() -> None:
     if engine.dialect.name == "postgresql":
         with engine.begin() as connection:
             connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
 
     Base.metadata.create_all(bind=engine)
+
+    if engine.dialect.name == "postgresql":
+        # GIN trigram indexes accelerate ILIKE '%term%' substring searches
+        # on the wiki and KB keyword fallback paths. Without them those
+        # queries fall back to seq scans as tables grow.
+        with engine.begin() as connection:
+            for stmt in (
+                "CREATE INDEX IF NOT EXISTS ix_wiki_pages_title_trgm "
+                "ON wiki_pages USING gin (title gin_trgm_ops)",
+                "CREATE INDEX IF NOT EXISTS ix_wiki_pages_body_trgm "
+                "ON wiki_pages USING gin (body_markdown gin_trgm_ops)",
+                "CREATE INDEX IF NOT EXISTS ix_kb_entries_title_trgm "
+                "ON kb_entries USING gin (title gin_trgm_ops)",
+                "CREATE INDEX IF NOT EXISTS ix_kb_entries_body_trgm "
+                "ON kb_entries USING gin (body_markdown gin_trgm_ops)",
+            ):
+                connection.execute(text(stmt))

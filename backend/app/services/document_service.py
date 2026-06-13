@@ -1,9 +1,10 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.database import SessionLocal
 from app.models import Document, DocumentChunk, MatterMember
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
@@ -13,24 +14,32 @@ from app.services.ingestion_service import (
     extract_text_blocks,
     validate_supported_document,
 )
-from app.services.storage_service import StorageError, upload_document_file
-from app.services.storage_service import delete_document_file
+from app.services.storage_service import (
+    StorageError,
+    delete_document_file,
+    download_document_file,
+    upload_document_file,
+)
 
 MAX_ERROR_LENGTH = 1000
+STALE_CLAIM_AFTER = timedelta(minutes=30)
 
 
 class DocumentProcessingError(RuntimeError):
     pass
 
 
-async def ingest_uploaded_document(
+async def create_pending_document(
     db: Session,
     *,
     user_id: str,
     filename: str,
     content_type: str,
     file_bytes: bytes,
+    matter_id: str | None = None,
+    team_id: str | None = None,
 ) -> Document:
+    """Store an upload and enqueue durable document processing."""
     validate_supported_document(filename, content_type)
 
     document = Document(
@@ -38,6 +47,8 @@ async def ingest_uploaded_document(
         filename=filename,
         content_type=content_type,
         status="uploaded",
+        matter_id=matter_id,
+        team_id=team_id,
     )
     db.add(document)
     db.commit()
@@ -55,39 +66,12 @@ async def ingest_uploaded_document(
         )
         document.storage_key = storage_key
         document.status = "processing"
-        document.updated_at = datetime.now(UTC)
-        db.commit()
-        db.refresh(document)
-
-        blocks = await asyncio.to_thread(extract_text_blocks, file_bytes, filename, content_type)
-        chunks = chunk_text_blocks(blocks, filename=filename)
-        embeddings = await embed_texts([chunk.text for chunk in chunks])
-
-        for chunk, embedding in zip(chunks, embeddings, strict=True):
-            db.add(
-                DocumentChunk(
-                    document_id=document.id,
-                    chunk_index=chunk.chunk_index,
-                    text=chunk.text,
-                    embedding=embedding,
-                    page_number=chunk.page_number,
-                    citation_label=chunk.citation_label,
-                )
-            )
-
-        document.status = "ready"
-        document.error_message = None
+        document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(document)
         return document
-    except (
-        StorageError,
-        IngestionError,
-        EmbeddingError,
-        DocumentProcessingError,
-        ValueError,
-    ) as exc:
+    except (StorageError, ValueError) as exc:
         db.rollback()
         document = db.get(Document, document_id)
         if document:
@@ -100,7 +84,136 @@ async def ingest_uploaded_document(
         raise
 
 
-def list_user_documents(db: Session, user_id: str) -> list[tuple[Document, int]]:
+def claim_pending_document(db: Session) -> str | None:
+    """Atomically claim one queued document, including stale jobs."""
+    stale_before = datetime.now(UTC) - STALE_CLAIM_AFTER
+    document_id = db.scalar(
+        select(Document.id)
+        .where(
+            Document.status == "processing",
+            or_(
+                Document.processing_started_at.is_(None),
+                Document.processing_started_at < stale_before,
+            ),
+        )
+        .order_by(Document.created_at)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    if not document_id:
+        return None
+
+    db.execute(
+        update(Document)
+        .where(Document.id == document_id)
+        .values(
+            processing_started_at=datetime.now(UTC),
+            processing_attempts=Document.processing_attempts + 1,
+        )
+    )
+    db.commit()
+    return document_id
+
+
+async def process_document(document_id: str) -> None:
+    """Download, extract, embed, and persist one claimed document."""
+    metadata_db = SessionLocal()
+    try:
+        document = metadata_db.get(Document, document_id)
+        if not document or document.status != "processing":
+            return
+        storage_key = document.storage_key
+        filename = document.filename
+        content_type = document.content_type
+    finally:
+        metadata_db.close()
+
+    if not storage_key:
+        _mark_document_failed(document_id, "Document has no stored file.")
+        return
+
+    try:
+        file_bytes = await asyncio.to_thread(
+            download_document_file,
+            storage_key,
+        )
+        blocks = await asyncio.to_thread(
+            extract_text_blocks,
+            file_bytes,
+            filename,
+            content_type,
+        )
+        chunks = chunk_text_blocks(blocks, filename=filename)
+        embeddings = await embed_texts([chunk.text for chunk in chunks])
+    except (
+        StorageError,
+        IngestionError,
+        EmbeddingError,
+        DocumentProcessingError,
+        ValueError,
+    ) as exc:
+        _mark_document_failed(document_id, str(exc))
+        return
+    except Exception as exc:  # noqa: BLE001 - worker must record terminal failures
+        _mark_document_failed(document_id, f"Unexpected error: {exc}")
+        return
+
+    db = SessionLocal()
+    try:
+        document = db.get(Document, document_id)
+        if not document or document.status != "processing":
+            return
+
+        # A stale job may be reclaimed after a worker restart. Replacing chunks
+        # keeps processing idempotent if a previous attempt reached this stage.
+        db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+        db.add_all(
+            [
+                DocumentChunk(
+                    document_id=document.id,
+                    chunk_index=chunk.chunk_index,
+                    text=chunk.text,
+                    embedding=embedding,
+                    page_number=chunk.page_number,
+                    citation_label=chunk.citation_label,
+                )
+                for chunk, embedding in zip(chunks, embeddings, strict=True)
+            ]
+        )
+        document.status = "ready"
+        document.error_message = None
+        document.processing_started_at = None
+        document.updated_at = datetime.now(UTC)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - persist worker failures
+        db.rollback()
+        _mark_document_failed(document_id, f"Document persistence failed: {exc}")
+    finally:
+        db.close()
+
+
+def _mark_document_failed(document_id: str, message: str) -> None:
+    db = SessionLocal()
+    try:
+        document = db.get(Document, document_id)
+        if not document:
+            return
+        document.status = "failed"
+        document.error_message = message[:MAX_ERROR_LENGTH]
+        document.processing_started_at = None
+        document.updated_at = datetime.now(UTC)
+        db.commit()
+    finally:
+        db.close()
+
+
+def list_user_documents(
+    db: Session,
+    user_id: str,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[tuple[Document, int]]:
     chunk_count = func.count(DocumentChunk.id).label("chunk_count")
     stmt = (
         select(Document, chunk_count)
@@ -108,6 +221,8 @@ def list_user_documents(db: Session, user_id: str) -> list[tuple[Document, int]]
         .where(Document.user_id == user_id)
         .group_by(Document.id)
         .order_by(Document.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     return [(document, count) for document, count in db.execute(stmt).all()]
 

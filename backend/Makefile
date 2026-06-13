@@ -1,4 +1,4 @@
-.PHONY: dev install migration migrate
+.PHONY: dev worker install migration migrate
 
 PYTHON := $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else echo python; fi)
 PIP := $(shell if [ -x .venv/bin/pip ]; then echo .venv/bin/pip; else echo pip; fi)
@@ -7,6 +7,9 @@ ALEMBIC := $(shell if [ -x .venv/bin/alembic ]; then echo .venv/bin/alembic; els
 
 dev:
 	$(UVICORN) app.main:app --reload --host 127.0.0.1 --port 8000
+
+worker:
+	$(PYTHON) -m app.worker
 
 install:
 	$(PIP) install -r requirements.txt

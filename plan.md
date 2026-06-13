@@ -232,17 +232,17 @@ Do not store raw files directly in Postgres.
 
 Do not make document ingestion fully synchronous.
 
-For the hackathon, use a simple background task:
+Use the database-backed worker:
 
 ```txt
-FastAPI BackgroundTasks
+python -m app.worker
 ```
 
-If that becomes unreliable, move to:
-
-```txt
-RQ + Redis
-```
+The upload request stores the original in R2 and creates a durable
+`processing` document row. The worker claims jobs with `FOR UPDATE SKIP
+LOCKED`, reclaims stale jobs after restarts, and performs extraction, OCR,
+chunking, and embedding outside the web process. The same worker service also
+processes Knowledge Bank summaries.
 
 Document statuses:
 

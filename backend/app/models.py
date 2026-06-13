@@ -77,6 +77,7 @@ class ChatThread(Base):
     )
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_up_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
     matter_id: Mapped[str | None] = mapped_column(
         ForeignKey("matters.id", ondelete="SET NULL"),
         index=True,
@@ -202,6 +203,11 @@ class Document(Base):
         index=True,
         nullable=True,
     )
+    processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    processing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -708,6 +714,27 @@ class SurveyResponse(Base):
     )
 
     question: Mapped[SurveyQuestion] = relationship(back_populates="responses")
+
+
+class DreamJob(Base):
+    __tablename__ = "dream_jobs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="processing")
+    proposal_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped[User] = relationship()
 
 
 class ActionItem(Base):

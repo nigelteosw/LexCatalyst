@@ -14,7 +14,7 @@ from app.services.knowledge_bank_service import (
 from app.services.memory_service import list_memories
 from app.services.rag_service import search_documents
 
-MAX_TOOL_ROUNDS = 8
+MAX_TOOL_ROUNDS = 4
 MAX_MEMORY_RESULTS = 6
 MAX_KB_BODY_PREVIEW = 2000
 
@@ -219,9 +219,7 @@ async def _execute_tool(
     if name == "search_memories":
         query = str(args.get("query", "")).strip().lower()
         memories = list_memories(db, user_id=user.id)
-        relevant = [
-            m for m in memories if not query or query in m.content.lower()
-        ][:MAX_MEMORY_RESULTS]
+        relevant = [m for m in memories if not query or query in m.content.lower()]
         if not relevant:
             return "No relevant memories found.", "no results"
         body = "\n".join(f"[{m.category}] {m.content}" for m in relevant)

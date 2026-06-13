@@ -70,6 +70,25 @@ def upload_document_file(
     return storage_key
 
 
+def download_document_file(storage_key: str) -> bytes:
+    settings = get_settings()
+    if not settings.cloudflare_r2_bucket_name:
+        raise StorageError("Missing R2 configuration: CLOUDFLARE_R2_BUCKET_NAME")
+
+    try:
+        response = r2_client().get_object(
+            Bucket=settings.cloudflare_r2_bucket_name,
+            Key=storage_key,
+        )
+        body = response["Body"]
+        try:
+            return body.read()
+        finally:
+            body.close()
+    except (BotoCoreError, ClientError, KeyError, OSError) as exc:
+        raise StorageError(f"R2 download failed: {exc}") from exc
+
+
 def delete_document_file(storage_key: str | None) -> None:
     if not storage_key:
         return

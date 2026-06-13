@@ -1,2 +1,2 @@
 [deploy]
-startCommand = "python -m app.kb_worker"
+startCommand = "python -m app.worker"

@@ -5,7 +5,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ## Core Features
 
 ### Knowledge & Documents
-- **Async Knowledge Bank ingestion**: Upload a PDF/DOCX and click "Add to Knowledge Bank". A dedicated Railway worker claims the durable Postgres job and uses **DeepSeek Pro** to generate a structured summary with inline page citations. The UI polls only lightweight status rows while `status="processing"`.
+- **Async document and Knowledge Bank ingestion**: Uploads return after R2 storage with `status="processing"`. A Railway worker claims durable Postgres jobs for extraction, OCR, embeddings, and optional **DeepSeek Pro** Knowledge Bank summaries.
 - **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
 - **Drag-and-drop uploads**: Drop PDF/DOCX directly onto the Documents panel. OCR fallback via Tesseract for scanned PDFs.
 - **Semantic search**: pgvector cosine similarity over document chunks AND KB entries. Embeddings fingerprinted by content hash so they auto-refresh when content changes.
@@ -105,24 +105,24 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 │   │       └── field_encryption.py            # Fernet encryption
 │   ├── migrations/versions/                   # 14 Alembic migrations
 │   ├── railway.toml                           # Auto-runs `alembic upgrade head`
-│   ├── railway.worker.toml                    # Dedicated KB worker service
+│   ├── railway.worker.toml                    # Document + KB worker service
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx
-│   │   ├── components/
-│   │   │   ├── ChatPanel.tsx                  # Main agent chat with tool steps
-│   │   │   ├── BirdiePanel.tsx                # Floating PiP mentor
-│   │   │   ├── KnowledgeBankPanel.tsx         # KB browser + reader (polls during processing)
-│   │   │   ├── DocumentsPanel.tsx             # Drag-and-drop upload + "Add to KB"
-│   │   │   ├── ActionsPanel.tsx               # Kanban task board
-│   │   │   ├── WellbeingPanel.tsx             # Survey + partner aggregates
-│   │   │   ├── SettingsPanel.tsx              # Role management
-│   │   │   ├── WikiPanel.tsx, MemoriesPanel.tsx, Sidebar.tsx, ...
-│   │   │   └── MarkdownContent.tsx            # react-markdown renderer
-│   │   ├── store/viewStore.ts                 # Zustand routing
-│   │   ├── lib/api.ts                         # API client + SSE handling
-│   │   └── types/workspace.ts
+│   │   ├── app/                               # App shell and Zustand navigation state
+│   │   ├── features/                          # Domain-owned screens and components
+│   │   │   ├── chat/                          # Main agent chat with tool steps
+│   │   │   ├── knowledge-bank/                # KB browser, filters, reader, forms
+│   │   │   ├── documents/                     # Upload and ingestion status
+│   │   │   ├── actions/                       # Kanban task board
+│   │   │   ├── memories/                      # Memory CRUD and Dream review
+│   │   │   ├── wiki/                          # Wiki editor and graph
+│   │   │   └── ...                            # Auth, Birdie, settings, wellbeing
+│   │   └── shared/
+│   │       ├── api/api.ts                     # API client and SSE handling
+│   │       ├── lib/                           # Shared async/error helpers
+│   │       ├── types/workspace.ts             # Cross-feature domain types
+│   │       └── ui/                            # Button, Dialog, badges, Markdown
 │   └── package.json
 └── docs/
     ├── product-requirement.md                 # Whiteboard notes
@@ -147,6 +147,14 @@ pip install -r requirements.txt
 # Configure .env (see below)
 alembic upgrade head
 python -m uvicorn app.main:app --reload
+```
+
+Run the durable background worker in a second terminal:
+
+```bash
+cd backend
+source .venv/bin/activate
+make worker
 ```
 
 You also need **Tesseract** and **Poppler** on the system PATH for OCR / PDF→image conversion (already installed in the Railway image via `nixpacks.toml`):
@@ -218,13 +226,27 @@ Optimized KB read routes, all requiring Bearer authentication:
 
 ## System Architecture
 
-### Async KB Ingestion Pipeline
+### Async Document and KB Ingestion Pipeline
 
 ```
-[Upload PDF/DOCX]                          (sync, ~5s)
+[Upload PDF/DOCX]                          (request)
        │
        ▼
-[Extract text + chunk + embed chunks]
+[Validate + store original in R2]
+       │   document.status="processing"
+       │
+       ├──► Return 202 Accepted to client
+       │
+       ▼
+[Combined Railway worker]                 (async)
+       │   Claims document rows with SKIP LOCKED
+       │   Reclaims stale jobs after restarts
+       │   Downloads original from R2
+       │   Extracts text; OCRs scanned PDFs
+       │   Chunks + embeds extracted text
+       │
+       ▼
+[document.status="ready" or "failed"]
        │
        ▼
 [User clicks "Add to Knowledge Bank"]
@@ -238,7 +260,7 @@ Optimized KB read routes, all requiring Bearer authentication:
        ├──► Return 202 Accepted to client
        │
        ▼
-[Dedicated Railway KB worker]             (async)
+[Combined Railway worker]                 (async)
        │   Claims queued rows from Postgres
        │   Reclaims stale jobs after restarts
        │   Samples up to 32 chunks (~58KB)
@@ -250,8 +272,9 @@ Optimized KB read routes, all requiring Bearer authentication:
 [status="ready"] or [status="failed"]
        │
        ▼
-Frontend polls `/kb/entries/status` for processing IDs only, then refreshes
-the affected page or detail after a terminal state.
+Frontend polls `GET /documents` while a document is processing. It polls
+`/kb/entries/status` for processing KB IDs only, then refreshes the affected
+page or detail after a terminal state.
 ```
 
 Retry: clicking "Retry summary" resets a failed entry to `processing`; the
@@ -290,7 +313,7 @@ Cloudflare treats it as an npm project and runs `npm ci` before the build comman
 | What | Where | Required? |
 |---|---|---|
 | Run migrations | Auto (Railway runs `alembic upgrade head && uvicorn ...`) | Auto |
-| KB worker | Create a second Railway service using `/backend/railway.worker.toml`; the web service owns migrations | Required |
+| Background worker | Create a second Railway service using `/backend/railway.worker.toml`; it processes both documents and KB entries, while the web service owns migrations | Required |
 | Frontend deps install | `bun install` adds `react-markdown` + `remark-gfm` | Yes — happens at build |
 | Backend deps install | No new Python packages | n/a |
 | New env vars | `BUN_VERSION=1.3.11` in Cloudflare Pages | Recommended |
@@ -308,6 +331,7 @@ Cloudflare treats it as an npm project and runs `npm ci` before the build comman
 | `a4b5c6d7e8f9` | Adds worker claim fields and KB read-path indexes | No |
 | `g4b5c6d7e8f9` | Adds tags to action items | No |
 | `h5c6d7e8f9a0` | Keeps only KB edit audit rows and enforces the edit-only constraint | Yes, removes non-edit audit history |
+| `i6d7e8f9a0b1` | Adds durable document-worker claim fields and queue index | No |
 
 `h5c6d7e8f9a0` intentionally removes historical read/share/redaction audit rows.
 Knowledge and document records are unaffected.
@@ -315,10 +339,11 @@ Knowledge and document records are unaffected.
 ### What to verify after deploy
 1. `/me` returns `firm_role` and `is_admin` for the logged-in user.
 2. Existing KB entries appear with no "processing" badge (they default to `status="ready"`).
-3. The Railway KB worker logs `Knowledge Bank worker started`.
-4. Uploading a new PDF and clicking "Add to Knowledge Bank" shows a "Summarising..." badge that flips to "Ready".
-5. The Birdie button in the chat header opens the floating PiP — drag it around to confirm position state.
-6. Settings panel lets you switch roles; KB write buttons should hide/show accordingly.
+3. The Railway worker logs `LexCatalyst worker started`.
+4. Uploading a new PDF returns with `processing`, then flips to `ready` after extraction and embedding.
+5. Clicking "Add to Knowledge Bank" shows a "Summarising..." badge that flips to "Ready".
+6. The Birdie button in the chat header opens the floating PiP — drag it around to confirm position state.
+7. Settings panel lets you switch roles; KB write buttons should hide/show accordingly.
 
 ---
 

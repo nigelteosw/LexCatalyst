@@ -186,6 +186,9 @@ def _entry_query():
     )
 
 
+MAX_KB_GRAPH_NODES = 500
+
+
 def build_kb_graph(
     db: Session,
     *,
@@ -201,7 +204,11 @@ def build_kb_graph(
     scope_filter = _user_kb_scope_filter(user)
     if scope_filter is not None:
         stmt = stmt.where(scope_filter)
-    entries = list(db.execute(stmt.order_by(desc(KnowledgeBankEntry.updated_at))).mappings())
+    entries = list(
+        db.execute(
+            stmt.order_by(desc(KnowledgeBankEntry.updated_at)).limit(MAX_KB_GRAPH_NODES)
+        ).mappings()
+    )
     entry_ids = {entry["id"] for entry in entries}
     nodes = [
         {

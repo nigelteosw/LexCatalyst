@@ -75,6 +75,8 @@ def list_wiki_pages(
     user_id: str,
     status: str | None = None,
     page_type: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
 ) -> list[WikiPage]:
     base_filter = (
         WikiPage.owner_user_id == user_id
@@ -90,7 +92,7 @@ def list_wiki_pages(
         stmt = stmt.where(WikiPage.status == status)
     if page_type:
         stmt = stmt.where(WikiPage.page_type == page_type)
-    stmt = stmt.order_by(desc(WikiPage.updated_at))
+    stmt = stmt.order_by(desc(WikiPage.updated_at)).offset(offset).limit(limit)
     return list(db.scalars(stmt))
 
 
@@ -240,6 +242,8 @@ def list_wiki_page_sources(
     *,
     user_id: str,
     page_id: str,
+    limit: int = 200,
+    offset: int = 0,
 ) -> list[WikiPageSource]:
     page = get_wiki_page(db, user_id=user_id, page_id=page_id)
     if not page:
@@ -249,6 +253,8 @@ def list_wiki_page_sources(
         .options(joinedload(WikiPageSource.chunk))
         .where(WikiPageSource.page_id == page_id)
         .order_by(WikiPageSource.created_at)
+        .offset(offset)
+        .limit(limit)
     )
     return list(db.scalars(stmt))
 
@@ -290,8 +296,12 @@ def format_wiki_context(pages: list[WikiPage]) -> str:
     return "\n\n".join(blocks)
 
 
+MAX_GRAPH_NODES = 500
+MAX_GRAPH_EDGES = 2000
+
+
 def build_wiki_graph(db: Session, *, user_id: str) -> dict[str, list[dict[str, str | None]]]:
-    pages = list_wiki_pages(db, user_id=user_id)
+    pages = list_wiki_pages(db, user_id=user_id, limit=MAX_GRAPH_NODES)
     page_ids = {page.id for page in pages}
     nodes = [
         {
@@ -307,9 +317,13 @@ def build_wiki_graph(db: Session, *, user_id: str) -> dict[str, list[dict[str, s
     if not page_ids:
         return {"nodes": nodes, "edges": edges}
 
-    stmt = select(WikiLink).where(
-        WikiLink.source_page_id.in_(page_ids),
-        or_(WikiLink.target_page_id.is_(None), WikiLink.target_page_id.in_(page_ids)),
+    stmt = (
+        select(WikiLink)
+        .where(
+            WikiLink.source_page_id.in_(page_ids),
+            or_(WikiLink.target_page_id.is_(None), WikiLink.target_page_id.in_(page_ids)),
+        )
+        .limit(MAX_GRAPH_EDGES)
     )
     for link in db.scalars(stmt):
         if not link.target_page_id:

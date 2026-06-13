@@ -1,6 +1,6 @@
 """Wiki page CRUD, ingestion, and graph."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -91,12 +91,19 @@ def build_wiki_source_response(source) -> WikiPageSourceResponse:
 def wiki_pages(
     status: str | None = None,
     page_type: str | None = None,
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[WikiPageResponse]:
     try:
         pages = list_wiki_pages(
-            db, user_id=current_user.id, status=status, page_type=page_type,
+            db,
+            user_id=current_user.id,
+            status=status,
+            page_type=page_type,
+            limit=limit,
+            offset=offset,
         )
         return [build_wiki_page_response(page) for page in pages]
     except SQLAlchemyError as exc:
@@ -206,6 +213,8 @@ async def ingest_document_wiki_page(
 @router.get("/wiki/pages/{page_id}/sources", response_model=list[WikiPageSourceResponse])
 def wiki_page_sources(
     page_id: str,
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[WikiPageSourceResponse]:
@@ -213,7 +222,9 @@ def wiki_page_sources(
         page = get_wiki_page(db, user_id=current_user.id, page_id=page_id)
         if not page:
             raise HTTPException(status_code=404, detail="Wiki page not found")
-        sources = list_wiki_page_sources(db, user_id=current_user.id, page_id=page_id)
+        sources = list_wiki_page_sources(
+            db, user_id=current_user.id, page_id=page_id, limit=limit, offset=offset,
+        )
     except HTTPException:
         raise
     except SQLAlchemyError as exc:

@@ -25,9 +25,13 @@ Answer clearly and conservatively. If the question needs document evidence, say 
 Use the provided document context when it is relevant.
 Do not invent citations or claim to have read uploaded documents unless the context is provided."""
 
+_MAX_MEMORIES_IN_PROMPT = 10
+
 # Summarise older messages once the thread exceeds this count, keeping the most recent window verbatim.
 _RECENT_LIMIT = 20
 _SUMMARISE_THRESHOLD = _RECENT_LIMIT  # start summarising once we exceed the recent window
+# Only re-generate the summary when this many new messages have been archived since the last run.
+_RESUMMARY_THRESHOLD = 5
 
 
 def make_thread_title(message: str) -> str:
@@ -144,9 +148,19 @@ async def _generate_summary(older_messages: list[ChatMessage]) -> str | None:
 
 
 async def _maybe_refresh_summary(db: Session, thread: ChatThread) -> None:
-    """Regenerate and persist the thread summary when the history exceeds the recent window."""
+    """Regenerate and persist the thread summary when enough new messages have been archived.
+
+    Only triggers when the number of archived messages (total minus recent window) has grown
+    by at least _RESUMMARY_THRESHOLD since the last summarization run, preventing a full LLM
+    call on every turn in long threads.
+    """
     total = _count_messages(db, thread.id)
-    if total <= _SUMMARISE_THRESHOLD:
+    archived = total - _RECENT_LIMIT
+    if archived <= 0:
+        return
+
+    last_archived = thread.summary_up_to or 0
+    if archived - last_archived < _RESUMMARY_THRESHOLD:
         return
 
     all_messages = _get_all_messages(db, thread.id)
@@ -154,6 +168,7 @@ async def _maybe_refresh_summary(db: Session, thread: ChatThread) -> None:
     summary = await _generate_summary(older)
     if summary:
         thread.summary = summary
+        thread.summary_up_to = archived
         db.commit()
 
 
@@ -265,7 +280,7 @@ async def create_chat_response(
         thread.matter_id = matter_id
     active_matter_id = matter_id if matter_id is not None else thread.matter_id
     history = get_recent_messages(db, thread.id)
-    memories = list_memories(db, user_id=user_id)
+    memories = list_memories(db, user_id=user_id, limit=_MAX_MEMORIES_IN_PROMPT)
     wiki_pages = safe_search_wiki_pages(db, user_id=user_id, query=user_message)
     kb_entries, document_results = await asyncio.gather(
         search_kb_for_chat(db, user_id=user_id, query=user_message, matter_id=active_matter_id),
@@ -329,7 +344,7 @@ async def create_chat_request(
         thread.matter_id = matter_id
     active_matter_id = matter_id if matter_id is not None else thread.matter_id
     history = get_recent_messages(db, thread.id)
-    memories = list_memories(db, user_id=user_id)
+    memories = list_memories(db, user_id=user_id, limit=_MAX_MEMORIES_IN_PROMPT)
     wiki_pages = safe_search_wiki_pages(db, user_id=user_id, query=user_message)
     kb_entries, document_results = await asyncio.gather(
         search_kb_for_chat(db, user_id=user_id, query=user_message, matter_id=active_matter_id),
@@ -384,7 +399,7 @@ async def prepare_agent_context(
     active_matter_id = matter_id if matter_id is not None else thread.matter_id
 
     history = get_recent_messages(db, thread.id)
-    memories = list_memories(db, user_id=user_id)
+    memories = list_memories(db, user_id=user_id, limit=_MAX_MEMORIES_IN_PROMPT)
 
     add_message(db, thread_id=thread.id, role="user", content=user_message)
     thread.updated_at = datetime.now(UTC)
@@ -428,16 +443,15 @@ async def prepare_agent_context(
     return thread, messages, selected_model
 
 
-async def save_assistant_response(
+async def persist_assistant_message(
     db: Session,
     *,
-    user_id: str,
     thread: ChatThread,
     content: str,
-    user_message: str | None = None,
     model: str | None = None,
     tool_steps: list | None = None,
 ) -> ChatMessage:
+    """Save the assistant message to DB only — no memory extraction or summarization."""
     selected_model = resolve_chat_model(model)
     assistant_message = add_message(
         db,
@@ -451,38 +465,97 @@ async def save_assistant_response(
     db.commit()
     db.refresh(assistant_message)
     db.refresh(thread)
-
-    if user_message:
-        candidates = await extract_memory_candidates(user_message, content)
-        save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
-
-    await _maybe_refresh_summary(db, thread)
-
     return assistant_message
 
 
-def list_threads(db: Session, user_id: str) -> list[ChatThread]:
+async def run_post_save_tasks(
+    db: Session,
+    *,
+    user_id: str,
+    thread: ChatThread,
+    assistant_message: ChatMessage,
+    user_message: str | None = None,
+) -> None:
+    """Run memory extraction and summarization after the response has been sent to the client."""
+    if user_message:
+        candidates = await extract_memory_candidates(user_message, assistant_message.content)
+        save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
+    await _maybe_refresh_summary(db, thread)
+
+
+async def save_assistant_response(
+    db: Session,
+    *,
+    user_id: str,
+    thread: ChatThread,
+    content: str,
+    user_message: str | None = None,
+    model: str | None = None,
+    tool_steps: list | None = None,
+) -> ChatMessage:
+    assistant_message = await persist_assistant_message(
+        db, thread=thread, content=content, model=model, tool_steps=tool_steps,
+    )
+    await run_post_save_tasks(
+        db, user_id=user_id, thread=thread,
+        assistant_message=assistant_message, user_message=user_message,
+    )
+    return assistant_message
+
+
+def list_threads(
+    db: Session,
+    user_id: str,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[ChatThread]:
     stmt = (
         select(ChatThread)
         .where(ChatThread.user_id == user_id)
         .order_by(desc(ChatThread.updated_at))
+        .offset(offset)
+        .limit(limit)
     )
     return list(db.scalars(stmt))
 
 
-def list_thread_messages(db: Session, thread_id: str, user_id: str) -> list[ChatMessage]:
+def list_thread_messages(
+    db: Session,
+    thread_id: str,
+    user_id: str,
+    *,
+    limit: int = 200,
+    before_message_id: str | None = None,
+) -> list[ChatMessage]:
+    """Return up to ``limit`` messages from a thread, oldest-first.
+
+    Defaults to the most recent ``limit`` messages (oldest within the page first).
+    Pass ``before_message_id`` to walk backwards: only messages strictly older
+    than that message are returned.
+    """
     thread_stmt = select(ChatThread).where(
         ChatThread.id == thread_id, ChatThread.user_id == user_id
     )
     if not db.scalar(thread_stmt):
         return []
 
-    stmt = (
-        select(ChatMessage)
-        .where(ChatMessage.thread_id == thread_id)
-        .order_by(ChatMessage.created_at)
-    )
-    return list(db.scalars(stmt))
+    stmt = select(ChatMessage).where(ChatMessage.thread_id == thread_id)
+    if before_message_id:
+        cursor = db.scalar(
+            select(ChatMessage.created_at).where(
+                ChatMessage.id == before_message_id,
+                ChatMessage.thread_id == thread_id,
+            )
+        )
+        if cursor is None:
+            return []
+        stmt = stmt.where(ChatMessage.created_at < cursor)
+
+    stmt = stmt.order_by(desc(ChatMessage.created_at)).limit(limit)
+    rows = list(db.scalars(stmt))
+    rows.reverse()
+    return rows
 
 
 def rename_thread(

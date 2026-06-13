@@ -41,11 +41,13 @@ def create_memory(db: Session, user_id: str, schema: MemoryCreate, confidence: f
     return memory
 
 
-def list_memories(db: Session, user_id: str, category: str | None = None) -> list[Memory]:
+def list_memories(db: Session, user_id: str, category: str | None = None, limit: int | None = None) -> list[Memory]:
     stmt = select(Memory).where(Memory.user_id == user_id)
     if category:
         stmt = stmt.where(Memory.category == category)
     stmt = stmt.order_by(desc(Memory.updated_at))
+    if limit is not None:
+        stmt = stmt.limit(limit)
     return list(db.scalars(stmt))
 
 
@@ -101,14 +103,25 @@ async def extract_memory_candidates(user_message: str, assistant_message: str) -
 
 
 def save_memory_candidates(
-    db: Session, 
-    user_id: str, 
-    thread_id: str, 
-    message_id: str, 
-    candidates: list[MemoryExtractionCandidate]
+    db: Session,
+    user_id: str,
+    thread_id: str,
+    message_id: str,
+    candidates: list[MemoryExtractionCandidate],
 ) -> list[Memory]:
+    if not candidates:
+        return []
+
+    existing = {
+        m.content.strip().lower()
+        for m in db.scalars(select(Memory).where(Memory.user_id == user_id))
+    }
+
     saved = []
     for candidate in candidates:
+        normalised = candidate.content.strip().lower()
+        if normalised in existing:
+            continue
         memory = Memory(
             user_id=user_id,
             category=candidate.category,
@@ -118,8 +131,9 @@ def save_memory_candidates(
             confidence=candidate.confidence,
         )
         db.add(memory)
+        existing.add(normalised)
         saved.append(memory)
-    
+
     if saved:
         db.commit()
         for s in saved:

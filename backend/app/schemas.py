@@ -198,6 +198,60 @@ class MemoryExtractionResult(BaseModel):
     memories: list[MemoryExtractionCandidate]
 
 
+class DreamAddition(BaseModel):
+    category: Literal["semantic", "procedural", "episodic"]
+    content: str = Field(min_length=1, max_length=5000)
+    reason: str = Field(max_length=1000)
+
+
+class DreamMerge(BaseModel):
+    replace_ids: list[str] = Field(min_length=2)
+    category: Literal["semantic", "procedural", "episodic"]
+    content: str = Field(min_length=1, max_length=5000)
+    reason: str = Field(max_length=1000)
+
+
+class DreamUpdate(BaseModel):
+    memory_id: str
+    content: str = Field(min_length=1, max_length=5000)
+    reason: str = Field(max_length=1000)
+
+
+class DreamDrop(BaseModel):
+    memory_id: str
+    reason: str = Field(max_length=1000)
+
+
+class DreamProposal(BaseModel):
+    additions: list[DreamAddition] = Field(default_factory=list)
+    merges: list[DreamMerge] = Field(default_factory=list)
+    updates: list[DreamUpdate] = Field(default_factory=list)
+    drops: list[DreamDrop] = Field(default_factory=list)
+    reviewed_message_count: int = 0
+
+
+class AcceptedDreamProposal(BaseModel):
+    additions: list[DreamAddition] = Field(default_factory=list)
+    merges: list[DreamMerge] = Field(default_factory=list)
+    updates: list[DreamUpdate] = Field(default_factory=list)
+    drops: list[DreamDrop] = Field(default_factory=list)
+
+
+class DreamApplyResult(BaseModel):
+    memories: list[MemoryResponse]
+    added: int
+    merged: int
+    updated: int
+    dropped: int
+
+
+class DreamJobStatus(BaseModel):
+    job_id: str
+    status: Literal["processing", "ready", "failed"]
+    proposal: DreamProposal | None = None
+    error_message: str | None = None
+
+
 class TeamResponse(BaseModel):
     id: str
     name: str

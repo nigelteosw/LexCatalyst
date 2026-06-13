@@ -2,15 +2,16 @@
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import User
+from app.models import ChatThread, User
 from app.providers.deepseek import DeepSeekError
 from app.providers.embedding_provider import EmbeddingError
 from app.schemas import (
@@ -27,8 +28,10 @@ from app.services.chat_service import (
     delete_thread,
     list_thread_messages,
     list_threads,
+    persist_assistant_message,
     prepare_agent_context,
     rename_thread,
+    run_post_save_tasks,
     save_assistant_response,
 )
 
@@ -119,12 +122,10 @@ async def chat_stream(
                 yield event("error", {"detail": "DeepSeek returned an empty response"})
                 return
 
-            assistant_message = await save_assistant_response(
+            assistant_message = await persist_assistant_message(
                 db,
-                user_id=current_user.id,
                 thread=thread,
                 content=assistant_content,
-                user_message=request.message,
                 model=selected_model,
                 tool_steps=tool_steps if tool_steps else None,
             )
@@ -135,6 +136,13 @@ async def chat_stream(
                     "message": ChatMessageResponse.model_validate(assistant_message).model_dump(mode="json"),
                     "model": assistant_message.model or selected_model,
                 },
+            )
+            await run_post_save_tasks(
+                db,
+                user_id=current_user.id,
+                thread=thread,
+                assistant_message=assistant_message,
+                user_message=request.message,
             )
         except DeepSeekError as exc:
             yield event("error", {"detail": str(exc)})
@@ -158,13 +166,15 @@ async def chat_stream(
 
 @router.get("/chat/threads", response_model=list[ChatThreadResponse])
 def chat_threads(
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[ChatThreadResponse]:
     try:
         return [
             ChatThreadResponse.model_validate(thread)
-            for thread in list_threads(db, current_user.id)
+            for thread in list_threads(db, current_user.id, limit=limit, offset=offset)
         ]
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc
@@ -173,16 +183,33 @@ def chat_threads(
 @router.get("/chat/threads/{thread_id}/messages", response_model=list[ChatMessageResponse])
 def chat_messages(
     thread_id: str,
+    limit: int = Query(default=200, ge=1, le=500),
+    before_message_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[ChatMessageResponse]:
     try:
-        messages = list_thread_messages(db, thread_id, current_user.id)
+        # Verify ownership separately so empty paginated responses don't 404.
+        thread_exists = db.scalar(
+            select(ChatThread.id).where(
+                ChatThread.id == thread_id,
+                ChatThread.user_id == current_user.id,
+            )
+        )
+        if not thread_exists:
+            raise HTTPException(status_code=404, detail="Chat thread not found")
+
+        messages = list_thread_messages(
+            db,
+            thread_id,
+            current_user.id,
+            limit=limit,
+            before_message_id=before_message_id,
+        )
+    except HTTPException:
+        raise
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc
-
-    if not messages:
-        raise HTTPException(status_code=404, detail="Chat thread not found")
 
     return [ChatMessageResponse.model_validate(message) for message in messages]
 
