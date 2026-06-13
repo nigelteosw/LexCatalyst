@@ -6,7 +6,6 @@ from fastapi import (
     File,
     HTTPException,
     Query,
-    Request,
     UploadFile,
     status,
 )
@@ -40,6 +39,7 @@ from app.schemas import (
     ChatResponse,
     ChatThreadResponse,
     ChatThreadUpdate,
+    FirmUserResponse,
     DocumentResponse,
     KnowledgeBankAccessLogResponse,
     KnowledgeBankBackfillResponse,
@@ -117,7 +117,6 @@ from app.services.knowledge_bank_service import (
     get_redaction_proposal,
     list_audit_log,
     list_kb_entries,
-    log_kb_access,
     promote_kb_entry,
     sync_linked_wiki_page_to_kb,
     update_kb_entry,
@@ -145,7 +144,7 @@ from app.services.wiki_service import (
     publish_wiki_page,
     update_wiki_page,
 )
-from app.services.user_service import update_user_role
+from app.services.user_service import list_firm_users, update_user_role
 from app.services.birdie_service import stream_birdie_response
 from app.services.survey_service import (
     create_survey_question,
@@ -240,6 +239,15 @@ def update_me(
         return UserResponse.model_validate(user)
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="User settings are unavailable") from exc
+
+
+@app.get("/users", response_model=list[FirmUserResponse])
+def firm_users(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> list[FirmUserResponse]:
+    """Roster of everyone in the firm. Powers assignee pickers."""
+    return [FirmUserResponse.model_validate(u) for u in list_firm_users(db)]
 
 
 @app.get("/health")
@@ -1117,9 +1125,6 @@ def kb_entry_statuses(
 @app.get("/kb/entries/{entry_id}", response_model=KnowledgeBankEntryResponse)
 def kb_entry_detail(
     entry_id: str,
-    request: Request,
-    context_matter_id: str | None = None,
-    context_thread_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
@@ -1128,15 +1133,6 @@ def kb_entry_detail(
         if not entry:
             raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
         require_kb_read(db, current_user, entry)
-        log_kb_access(
-            db,
-            user_id=current_user.id,
-            action="read",
-            entry_id=entry.id,
-            matter_id=context_matter_id,
-            thread_id=context_thread_id,
-            ip_address=request.client.host if request.client else None,
-        )
         return KnowledgeBankEntryResponse.model_validate(entry)
     except HTTPException:
         raise
@@ -1415,10 +1411,19 @@ def survey_results(
 def get_actions(
     matter_id: str | None = None,
     item_status: str | None = None,
+    assignee_id: str | None = None,
+    tag: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(get_current_user),
 ) -> list[ActionItemResponse]:
-    items = list_action_items(db, user=current_user, matter_id=matter_id, status=item_status)
+    # Firm-wide board: every authenticated user sees every action.
+    items = list_action_items(
+        db,
+        matter_id=matter_id,
+        status=item_status,
+        assignee_id=assignee_id,
+        tag=tag,
+    )
     return [ActionItemResponse.model_validate(item) for item in items]
 
 

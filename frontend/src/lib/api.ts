@@ -6,6 +6,7 @@ import type {
   ChatThread,
   CurrentUser,
   FirmRole,
+  FirmUser,
   KnowledgeBankAccessLog,
   KnowledgeBankEntry,
   KnowledgeBankEntryType,
@@ -1131,6 +1132,7 @@ type BackendActionItem = {
   due_date: string | null
   status: ActionStatus
   priority: ActionPriority
+  tags: string[]
   created_at: string
   updated_at: string
   assignee: BackendActionUser | null
@@ -1148,6 +1150,7 @@ function mapActionItem(item: BackendActionItem): ActionItem {
     dueDate: item.due_date,
     status: item.status,
     priority: item.priority,
+    tags: item.tags ?? [],
     createdAt: item.created_at,
     updatedAt: item.updated_at,
     assignee: item.assignee ? { id: item.assignee.id, fullName: item.assignee.full_name, email: item.assignee.email } : null,
@@ -1155,10 +1158,17 @@ function mapActionItem(item: BackendActionItem): ActionItem {
   }
 }
 
-export async function listActionItems(params?: { matterId?: string; status?: ActionStatus }): Promise<ActionItem[]> {
+export async function listActionItems(params?: {
+  matterId?: string
+  status?: ActionStatus
+  assigneeId?: string
+  tag?: string
+}): Promise<ActionItem[]> {
   const search = new URLSearchParams()
   if (params?.matterId) search.set('matter_id', params.matterId)
   if (params?.status) search.set('item_status', params.status)
+  if (params?.assigneeId) search.set('assignee_id', params.assigneeId)
+  if (params?.tag) search.set('tag', params.tag)
   const suffix = search.toString() ? `?${search}` : ''
   const items = await request<BackendActionItem[]>(`/actions${suffix}`)
   return items.map(mapActionItem)
@@ -1171,6 +1181,7 @@ export async function createActionItem(payload: {
   matterId?: string | null
   dueDate?: string | null
   priority?: ActionPriority
+  tags?: string[]
 }): Promise<ActionItem> {
   return mapActionItem(
     await request<BackendActionItem>('/actions', {
@@ -1182,6 +1193,7 @@ export async function createActionItem(payload: {
         matter_id: payload.matterId,
         due_date: payload.dueDate,
         priority: payload.priority ?? 'medium',
+        tags: payload.tags ?? [],
       }),
     }),
   )
@@ -1189,7 +1201,16 @@ export async function createActionItem(payload: {
 
 export async function updateActionItem(
   id: string,
-  payload: { title?: string; description?: string | null; assigneeId?: string | null; status?: ActionStatus; priority?: ActionPriority; dueDate?: string | null },
+  payload: {
+    title?: string
+    description?: string | null
+    assigneeId?: string | null
+    matterId?: string | null
+    status?: ActionStatus
+    priority?: ActionPriority
+    dueDate?: string | null
+    tags?: string[]
+  },
 ): Promise<ActionItem> {
   return mapActionItem(
     await request<BackendActionItem>(`/actions/${id}`, {
@@ -1198,9 +1219,11 @@ export async function updateActionItem(
         title: payload.title,
         description: payload.description,
         assignee_id: payload.assigneeId,
+        matter_id: payload.matterId,
         status: payload.status,
         priority: payload.priority,
         due_date: payload.dueDate,
+        tags: payload.tags,
       }),
     }),
   )
@@ -1208,6 +1231,25 @@ export async function updateActionItem(
 
 export async function deleteActionItem(id: string): Promise<void> {
   await request(`/actions/${id}`, { method: 'DELETE' })
+}
+
+// Firm directory
+
+type BackendFirmUser = {
+  id: string
+  full_name: string | null
+  email: string
+  firm_role: FirmRole
+}
+
+export async function listFirmUsers(): Promise<FirmUser[]> {
+  const users = await request<BackendFirmUser[]>('/users')
+  return users.map((u) => ({
+    id: u.id,
+    fullName: u.full_name,
+    email: u.email,
+    firmRole: u.firm_role,
+  }))
 }
 
 // Birdie mentor streaming

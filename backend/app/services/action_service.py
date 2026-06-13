@@ -1,7 +1,18 @@
-from sqlalchemy import desc, or_, select
+"""Firm-wide Jira-style action board.
+
+Visibility model:
+  - **List/read**: every authenticated user sees every action item. The
+    point of the board is workload transparency across the team.
+  - **Create / reassign / delete**: gated to seniors+ at the route layer.
+  - **Status update**: the assignee can move their own ticket through the
+    kanban; seniors+ can move any ticket.
+"""
+
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import ActionItem, MatterMember, User
+from app.dependencies import is_senior_or_above
+from app.models import ActionItem, User
 from app.schemas import ActionItemCreate, ActionItemUpdate
 
 
@@ -15,30 +26,32 @@ def _action_query():
 def list_action_items(
     db: Session,
     *,
-    user: User,
     matter_id: str | None = None,
     status: str | None = None,
+    assignee_id: str | None = None,
+    tag: str | None = None,
 ) -> list[ActionItem]:
-    if user.is_admin:
-        stmt = _action_query()
-    else:
-        user_matter_ids = list(
-            db.scalars(select(MatterMember.matter_id).where(MatterMember.user_id == user.id))
-        )
-        visible = [
-            ActionItem.assigner_id == user.id,
-            ActionItem.assignee_id == user.id,
-        ]
-        if user_matter_ids:
-            visible.append(ActionItem.matter_id.in_(user_matter_ids))
-        stmt = _action_query().where(or_(*visible))
+    """List all action items in the firm with optional filters.
 
+    Filters are stackable. None of them are RBAC; the board is visible to
+    every authenticated user by design.
+    """
+    stmt = _action_query()
     if matter_id:
         stmt = stmt.where(ActionItem.matter_id == matter_id)
     if status:
         stmt = stmt.where(ActionItem.status == status)
+    if assignee_id:
+        stmt = stmt.where(ActionItem.assignee_id == assignee_id)
 
-    return list(db.scalars(stmt.order_by(desc(ActionItem.created_at))))
+    items = list(db.scalars(stmt.order_by(desc(ActionItem.created_at))))
+    if tag:
+        wanted = tag.strip().lower()
+        items = [
+            item for item in items
+            if any(t.lower() == wanted for t in (item.tags or []))
+        ]
+    return items
 
 
 def get_action_item(db: Session, item_id: str) -> ActionItem | None:
@@ -59,6 +72,7 @@ def create_action_item(
         matter_id=schema.matter_id,
         due_date=schema.due_date,
         priority=schema.priority,
+        tags=_normalise_tags(schema.tags),
     )
     db.add(item)
     db.commit()
@@ -72,12 +86,36 @@ def update_action_item(
     item_id: str,
     schema: ActionItemUpdate,
 ) -> ActionItem | None:
+    """Update an action item.
+
+    - The assignee can update *only* the status field (kanban movement).
+    - Seniors+ and admins can update any field.
+    - Other users get a 403 (None return → caller maps to 404/403).
+    """
     item = db.get(ActionItem, item_id)
     if not item:
         return None
-    if not user.is_admin and item.assigner_id != user.id and item.assignee_id != user.id:
+
+    is_assignee = item.assignee_id == user.id
+    is_manager = is_senior_or_above(user)
+    if not (is_assignee or is_manager):
         return None
-    for field, value in schema.model_dump(exclude_unset=True).items():
+
+    payload = schema.model_dump(exclude_unset=True)
+
+    # An assignee who is not also a manager can only flip the status.
+    if is_assignee and not is_manager:
+        allowed_fields = {"status"}
+        rejected = set(payload) - allowed_fields
+        if rejected:
+            # Silently strip rather than 403; the kanban drag-and-drop
+            # only ever sends `status`, so this is a defensive guard.
+            payload = {k: v for k, v in payload.items() if k in allowed_fields}
+
+    if "tags" in payload:
+        payload["tags"] = _normalise_tags(payload["tags"] or [])
+
+    for field, value in payload.items():
         setattr(item, field, value)
     db.commit()
     return get_action_item(db, item.id)
@@ -87,8 +125,26 @@ def delete_action_item(db: Session, *, user: User, item_id: str) -> bool:
     item = db.get(ActionItem, item_id)
     if not item:
         return False
-    if not user.is_admin and item.assigner_id != user.id:
+    if not (is_senior_or_above(user) or user.is_admin):
         return False
     db.delete(item)
     db.commit()
     return True
+
+
+def _normalise_tags(tags: list[str]) -> list[str]:
+    """Trim, dedupe (case-insensitive), preserve insertion order."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for tag in tags:
+        if not isinstance(tag, str):
+            continue
+        cleaned = tag.strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+    return out

@@ -9,7 +9,6 @@ from app.providers.deepseek import DeepSeekProvider
 from app.services.document_service import get_document_full_text
 from app.services.knowledge_bank_service import (
     get_kb_entry,
-    log_kb_access,
     search_kb_for_chat,
 )
 from app.services.memory_service import list_memories
@@ -241,14 +240,6 @@ async def _execute_tool(
                 f"You do not have access to entry '{entry_id}'.",
                 "access denied",
             )
-        log_kb_access(
-            db,
-            user_id=user.id,
-            action="read",
-            entry_id=entry.id,
-            matter_id=matter_id,
-            commit=False,
-        )
         header = f"# {entry.title}\nType: {entry.entry_type} | Scope: {entry.scope}"
         if entry.source_document_id:
             header += f" | source_document_id: {entry.source_document_id}"

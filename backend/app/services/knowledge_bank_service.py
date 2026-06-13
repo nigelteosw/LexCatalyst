@@ -108,7 +108,6 @@ def log_kb_access(
     db: Session,
     *,
     user_id: str,
-    action: str,
     entry_id: str | None = None,
     matter_id: str | None = None,
     thread_id: str | None = None,
@@ -118,7 +117,7 @@ def log_kb_access(
     log = KnowledgeBankAccessLog(
         kb_entry_id=entry_id,
         user_id=user_id,
-        action=action,
+        action="edit",
         context_matter_id=matter_id,
         context_thread_id=thread_id,
         ip_address=ip_address,
@@ -358,7 +357,6 @@ async def create_kb_entry(
         log_kb_access(
             db,
             user_id=user.id,
-            action="write",
             entry_id=entry.id,
             matter_id=entry.matter_id,
             commit=False,
@@ -408,7 +406,6 @@ async def add_document_to_kb(
                 log_kb_access(
                     db,
                     user_id=user.id,
-                    action="write",
                     entry_id=existing.id,
                     matter_id=existing.matter_id,
                     commit=False,
@@ -443,7 +440,6 @@ async def add_document_to_kb(
         log_kb_access(
             db,
             user_id=user.id,
-            action="write",
             entry_id=entry.id,
             matter_id=entry.matter_id,
             commit=False,
@@ -509,7 +505,6 @@ async def update_kb_entry(
         log_kb_access(
             db,
             user_id=user.id,
-            action="write",
             entry_id=entry.id,
             matter_id=entry.matter_id,
             commit=False,
@@ -528,7 +523,6 @@ def delete_kb_entry(db: Session, *, user: User, entry_id: str) -> bool:
     log_kb_access(
         db,
         user_id=user.id,
-        action="write",
         entry_id=entry.id,
         matter_id=entry.matter_id,
         commit=False,
@@ -648,7 +642,6 @@ async def promote_kb_entry(
         log_kb_access(
             db,
             user_id=user.id,
-            action="share",
             entry_id=source.id,
             matter_id=source.matter_id,
             commit=False,
@@ -691,7 +684,6 @@ async def approve_redaction(
         log_kb_access(
             db,
             user_id=user.id,
-            action="redact_applied",
             entry_id=entry.id,
             commit=False,
         )
@@ -709,6 +701,7 @@ def get_redaction_proposal(db: Session, entry_id: str) -> PiiRedaction | None:
 def list_audit_log(db: Session, limit: int = 200) -> list[KnowledgeBankAccessLog]:
     stmt = (
         select(KnowledgeBankAccessLog)
+        .where(KnowledgeBankAccessLog.action == "edit")
         .order_by(desc(KnowledgeBankAccessLog.timestamp))
         .limit(limit)
     )

@@ -439,15 +439,18 @@ class ActionItemCreate(BaseModel):
     matter_id: str | None = None
     due_date: datetime | None = None
     priority: ActionPriority = "medium"
+    tags: list[str] = Field(default_factory=list, max_length=20)
 
 
 class ActionItemUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
     assignee_id: str | None = None
+    matter_id: str | None = None
     status: ActionStatus | None = None
     priority: ActionPriority | None = None
     due_date: datetime | None = None
+    tags: list[str] | None = Field(default=None, max_length=20)
 
 
 class ActionUserResponse(BaseModel):
@@ -468,9 +471,20 @@ class ActionItemResponse(BaseModel):
     due_date: datetime | None = None
     status: str
     priority: str
+    tags: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     assignee: ActionUserResponse | None = None
     assigner: ActionUserResponse | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class FirmUserResponse(BaseModel):
+    """Minimal user info for assignee pickers across the firm."""
+    id: str
+    full_name: str | None = None
+    email: str
+    firm_role: str
 
     model_config = {"from_attributes": True}

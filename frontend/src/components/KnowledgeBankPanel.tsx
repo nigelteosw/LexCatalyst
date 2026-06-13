@@ -1328,9 +1328,9 @@ function AuditLogView({
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
       <div className="mb-4">
-        <h3 className="text-base font-semibold text-[#0f0f0f]">Knowledge access log</h3>
+        <h3 className="text-base font-semibold text-[#0f0f0f]">Knowledge edit log</h3>
         <p className="mt-1 text-xs text-[#8c8c86]">
-          Read, write, share, and lawyer-approved redaction events.
+          Knowledge Bank edits by firm users.
         </p>
       </div>
       {isLoading ? (

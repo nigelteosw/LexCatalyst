@@ -206,10 +206,18 @@ export type ActionItem = {
   dueDate?: string | null
   status: ActionStatus
   priority: ActionPriority
+  tags: string[]
   createdAt: string
   updatedAt: string
   assignee?: ActionUser | null
   assigner?: ActionUser | null
+}
+
+export type FirmUser = {
+  id: string
+  fullName?: string | null
+  email: string
+  firmRole: FirmRole
 }
 
 export type KbEntryStatus = 'processing' | 'ready' | 'failed'

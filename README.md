@@ -19,7 +19,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
   - `get_kb_entry` — fetch the full KB summary; returns `source_document_id` for chaining
   - `read_document` — fetch the **full extracted text** of a document (up to 100KB) when the summary is insufficient
 - **Streaming SSE** with token-by-token output and per-tool step visualisation.
-- **Audit trail**: every KB read/write through the agent is logged in `kb_access_log`.
+- **Audit trail**: Knowledge Bank edits are logged in `kb_access_log`; reads are not recorded.
 
 ### Birdie — Floating AI Mentor
 - A **draggable picture-in-picture widget** (320×480, fixed position, drag anywhere). Open via the "Birdie" pill in the chat header.
@@ -207,7 +207,7 @@ Optimized KB read routes, all requiring Bearer authentication:
 
 - `GET /kb/entries?limit=30&offset=0` returns paginated summaries without vectors or full Markdown bodies.
 - `GET /kb/entries/status?ids=...` returns polling state only and does not write audit rows.
-- `GET /kb/entries/{id}` returns one full entry and records the user-visible read.
+- `GET /kb/entries/{id}` returns one full entry without creating an audit event.
 - `GET /kb/graph` returns a scope-filtered graph projection.
 
 ---
@@ -302,8 +302,11 @@ Cloudflare treats it as an npm project and runs `npm ci` before the build comman
 | `e2f3a4b5c6d7` | Adds `kb_entries.embedding_content_hash` (nullable) | No |
 | `f3a4b5c6d7e8` | Adds `kb_entries.status` (default `ready`) and `kb_entries.error_message` | No |
 | `a4b5c6d7e8f9` | Adds worker claim fields and KB read-path indexes | No |
+| `g4b5c6d7e8f9` | Adds tags to action items | No |
+| `h5c6d7e8f9a0` | Keeps only KB edit audit rows and enforces the edit-only constraint | Yes, removes non-edit audit history |
 
-All four are **purely additive** — existing rows are populated via column defaults, and downgrades drop only what was added. Safe to deploy without destructive data changes.
+`h5c6d7e8f9a0` intentionally removes historical read/share/redaction audit rows.
+Knowledge and document records are unaffected.
 
 ### What to verify after deploy
 1. `/me` returns `firm_role` and `is_admin` for the logged-in user.

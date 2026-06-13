@@ -2,7 +2,18 @@ from datetime import datetime
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, SmallInteger, String, Text, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import get_settings
@@ -577,6 +588,9 @@ class KnowledgeBankEntry(Base):
 
 class KnowledgeBankAccessLog(Base):
     __tablename__ = "kb_access_log"
+    __table_args__ = (
+        CheckConstraint("action = 'edit'", name="ck_kb_access_log_action_edit"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     kb_entry_id: Mapped[str | None] = mapped_column(
@@ -720,6 +734,7 @@ class ActionItem(Base):
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(24), index=True, nullable=False, default="pending")
     priority: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

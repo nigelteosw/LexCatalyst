@@ -103,7 +103,6 @@ def create_pending_kb_entry(
     log_kb_access(
         db,
         user_id=user.id,
-        action="write",
         entry_id=entry.id,
         matter_id=entry.matter_id,
         commit=False,
