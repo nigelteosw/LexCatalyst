@@ -4,8 +4,8 @@ import json
 import re
 from datetime import UTC, datetime
 
-from sqlalchemy import desc, or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import desc, exists, func, or_, select
+from sqlalchemy.orm import Session, defer, joinedload
 
 from app.models import (
     Document,
@@ -132,31 +132,48 @@ def log_kb_access(
 
 def _entry_query():
     return select(KnowledgeBankEntry).options(
+        defer(KnowledgeBankEntry.embedding),
+        defer(KnowledgeBankEntry.embedding_content_hash),
         joinedload(KnowledgeBankEntry.team),
         joinedload(KnowledgeBankEntry.matter).joinedload(Matter.team),
     )
 
 
-def build_kb_graph(db: Session) -> dict[str, list[dict[str, str | None]]]:
-    entries = list(db.scalars(select(KnowledgeBankEntry).order_by(desc(KnowledgeBankEntry.updated_at))))
-    entry_ids = {entry.id for entry in entries}
+def build_kb_graph(
+    db: Session,
+    *,
+    user: User,
+) -> dict[str, list[dict[str, str | None]]]:
+    stmt = select(
+        KnowledgeBankEntry.id,
+        KnowledgeBankEntry.title,
+        KnowledgeBankEntry.entry_type,
+        KnowledgeBankEntry.scope,
+        KnowledgeBankEntry.source_entry_id,
+    )
+    scope_filter = _user_kb_scope_filter(user)
+    if scope_filter is not None:
+        stmt = stmt.where(scope_filter)
+    entries = list(db.execute(stmt.order_by(desc(KnowledgeBankEntry.updated_at))).mappings())
+    entry_ids = {entry["id"] for entry in entries}
     nodes = [
         {
-            "id": entry.id,
-            "label": entry.title,
-            "type": entry.entry_type,
-            "status": entry.scope,
+            "id": entry["id"],
+            "label": entry["title"],
+            "type": entry["entry_type"],
+            "status": entry["scope"],
         }
         for entry in entries
     ]
     edges: list[dict[str, str | None]] = []
     for entry in entries:
-        if entry.source_entry_id and entry.source_entry_id in entry_ids:
+        source_entry_id = entry["source_entry_id"]
+        if source_entry_id and source_entry_id in entry_ids:
             edges.append(
                 {
-                    "id": f"{entry.source_entry_id}-{entry.id}",
-                    "source": entry.source_entry_id,
-                    "target": entry.id,
+                    "id": f"{source_entry_id}-{entry['id']}",
+                    "source": source_entry_id,
+                    "target": entry["id"],
                     "label": "derived",
                     "type": "derived",
                 }
@@ -164,60 +181,60 @@ def build_kb_graph(db: Session) -> dict[str, list[dict[str, str | None]]]:
     return {"nodes": nodes, "edges": edges}
 
 
-def _user_kb_scope_filter(db: Session, user: User):
+def _user_kb_scope_filter(user: User):
     """Build a WHERE clause that limits results to entries the user can read."""
     if user.is_admin:
         return None
 
-    user_team_ids = list(
-        db.scalars(select(TeamMember.team_id).where(TeamMember.user_id == user.id))
-    )
-    user_matter_ids = list(
-        db.scalars(select(MatterMember.matter_id).where(MatterMember.user_id == user.id))
-    )
-
-    allowed = [KnowledgeBankEntry.scope == "firm_wide"]
-
-    if user_team_ids:
-        allowed.append(
-            (KnowledgeBankEntry.scope == "team")
-            & KnowledgeBankEntry.team_id.in_(user_team_ids)
-        )
-    if user_matter_ids:
-        allowed.append(
-            (KnowledgeBankEntry.scope == "matter")
-            & KnowledgeBankEntry.matter_id.in_(user_matter_ids)
-        )
-    allowed.append(
+    return or_(
+        KnowledgeBankEntry.scope == "firm_wide",
+        (KnowledgeBankEntry.scope == "team")
+        & exists(
+            select(TeamMember.id).where(
+                TeamMember.team_id == KnowledgeBankEntry.team_id,
+                TeamMember.user_id == user.id,
+            )
+        ),
+        (KnowledgeBankEntry.scope == "matter")
+        & exists(
+            select(MatterMember.id).where(
+                MatterMember.matter_id == KnowledgeBankEntry.matter_id,
+                MatterMember.user_id == user.id,
+            )
+        ),
         (KnowledgeBankEntry.scope == "private")
-        & (KnowledgeBankEntry.created_by == user.id)
+        & (KnowledgeBankEntry.created_by == user.id),
     )
-    return or_(*allowed)
 
 
-def list_kb_entries(
-    db: Session,
+def _apply_kb_filters(
+    stmt,
     *,
     user: User,
-    scope: str | None = None,
-    entry_type: str | None = None,
-    matter_id: str | None = None,
-    team_id: str | None = None,
-    pii_status: str | None = None,
-    query: str | None = None,
-) -> list[KnowledgeBankEntry]:
-    stmt = _entry_query()
-
-    scope_filter = _user_kb_scope_filter(db, user)
+    scope: str | None,
+    entry_type: str | None,
+    matter_id: str | None,
+    context_matter_id: str | None,
+    team_id: str | None,
+    pii_status: str | None,
+    query: str | None,
+):
+    scope_filter = _user_kb_scope_filter(user)
     if scope_filter is not None:
         stmt = stmt.where(scope_filter)
-
     if scope:
         stmt = stmt.where(KnowledgeBankEntry.scope == scope)
     if entry_type:
         stmt = stmt.where(KnowledgeBankEntry.entry_type == entry_type)
     if matter_id:
         stmt = stmt.where(KnowledgeBankEntry.matter_id == matter_id)
+    if context_matter_id:
+        stmt = stmt.where(
+            or_(
+                KnowledgeBankEntry.scope != "matter",
+                KnowledgeBankEntry.matter_id == context_matter_id,
+            )
+        )
     if team_id:
         stmt = stmt.where(KnowledgeBankEntry.team_id == team_id)
     if pii_status:
@@ -230,7 +247,84 @@ def list_kb_entries(
                 KnowledgeBankEntry.body_markdown.ilike(pattern),
             )
         )
-    return list(db.scalars(stmt.order_by(desc(KnowledgeBankEntry.updated_at))))
+    return stmt
+
+
+def list_kb_entries(
+    db: Session,
+    *,
+    user: User,
+    scope: str | None = None,
+    entry_type: str | None = None,
+    matter_id: str | None = None,
+    context_matter_id: str | None = None,
+    team_id: str | None = None,
+    pii_status: str | None = None,
+    query: str | None = None,
+    limit: int = 30,
+    offset: int = 0,
+) -> tuple[list[dict], int | None]:
+    stmt = select(
+        KnowledgeBankEntry.id,
+        KnowledgeBankEntry.team_id,
+        KnowledgeBankEntry.matter_id,
+        KnowledgeBankEntry.source_entry_id,
+        KnowledgeBankEntry.source_document_id,
+        KnowledgeBankEntry.scope,
+        KnowledgeBankEntry.entry_type,
+        KnowledgeBankEntry.title,
+        func.substr(KnowledgeBankEntry.body_markdown, 1, 600).label("body_preview"),
+        KnowledgeBankEntry.tags,
+        KnowledgeBankEntry.pii_status,
+        KnowledgeBankEntry.status,
+        KnowledgeBankEntry.error_message,
+        KnowledgeBankEntry.created_by,
+        KnowledgeBankEntry.created_by_role,
+        KnowledgeBankEntry.version,
+        KnowledgeBankEntry.created_at,
+        KnowledgeBankEntry.updated_at,
+    )
+    stmt = _apply_kb_filters(
+        stmt,
+        user=user,
+        scope=scope,
+        entry_type=entry_type,
+        matter_id=matter_id,
+        context_matter_id=context_matter_id,
+        team_id=team_id,
+        pii_status=pii_status,
+        query=query,
+    )
+    rows = list(
+        db.execute(
+            stmt.order_by(desc(KnowledgeBankEntry.updated_at))
+            .limit(limit + 1)
+            .offset(offset)
+        ).mappings()
+    )
+    has_more = len(rows) > limit
+    return [dict(row) for row in rows[:limit]], offset + limit if has_more else None
+
+
+def get_kb_entry_statuses(
+    db: Session,
+    *,
+    user: User,
+    entry_ids: list[str],
+) -> list[dict]:
+    if not entry_ids:
+        return []
+    stmt = select(
+        KnowledgeBankEntry.id,
+        KnowledgeBankEntry.status,
+        KnowledgeBankEntry.error_message,
+        KnowledgeBankEntry.version,
+        KnowledgeBankEntry.updated_at,
+    ).where(KnowledgeBankEntry.id.in_(entry_ids[:100]))
+    scope_filter = _user_kb_scope_filter(user)
+    if scope_filter is not None:
+        stmt = stmt.where(scope_filter)
+    return [dict(row) for row in db.execute(stmt).mappings()]
 
 
 def get_kb_entry(db: Session, entry_id: str) -> KnowledgeBankEntry | None:

@@ -543,6 +543,11 @@ class KnowledgeBankEntry(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIMENSIONS), nullable=True)
     embedding_content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    processing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_by: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
@@ -559,6 +564,7 @@ class KnowledgeBankEntry(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
+        index=True,
         nullable=False,
     )
 

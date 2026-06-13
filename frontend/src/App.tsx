@@ -7,6 +7,7 @@ import { Button } from './components/Button'
 import { Sidebar } from './components/Sidebar'
 import { LoginPage } from './components/LoginPage'
 import {
+  deleteChatMessage,
   getCurrentUser,
   listChatThreads,
   listMatters,
@@ -422,6 +423,21 @@ function App() {
     setIsResponding(false)
   }
 
+  async function handleDeleteMessage(messageId: string) {
+    // Optimistic UI removal; restore on failure.
+    const previous = messages
+    setMessages((current) => current.filter((m) => m.id !== messageId))
+    try {
+      await deleteChatMessage(messageId)
+      if (threadId) {
+        queryClient.invalidateQueries({ queryKey: ['messages', threadId] })
+      }
+    } catch (caughtError) {
+      setMessages(previous)
+      setError(getErrorMessage(caughtError))
+    }
+  }
+
   function handleModelChange(model: ChatModel) {
     setSelectedModel(model)
     localStorage.setItem('chatModel', model)
@@ -645,6 +661,7 @@ function App() {
                 onPromptChange={setPrompt}
                 onStop={handleStopResponse}
                 onSubmit={handleSubmit}
+                onDeleteMessage={handleDeleteMessage}
                 placeholder="Type your legal question or request..."
                 prompt={prompt}
                 sendLabel="Send"

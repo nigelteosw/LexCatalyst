@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, FileText, RefreshCcw, Trash2, UploadCloud } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from './Button'
 import {
   deleteDocument,
   ingestDocumentToKnowledgeBank,
+  getKnowledgeBankEntryStatuses,
   listDocuments,
   listKnowledgeBankEntries,
   uploadDocument,
@@ -73,14 +74,34 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
   const knowledgeEntriesQuery = useQuery({
     queryKey: ['kbEntries'],
     queryFn: () => listKnowledgeBankEntries(),
-    refetchInterval: (query) => {
-      const entries = query.state.data ?? []
-      return entries.some((e) => e.status === 'processing') ? 3000 : false
-    },
   })
 
   const documents = documentsQuery.data ?? []
-  const knowledgeEntries = knowledgeEntriesQuery.data ?? []
+  const knowledgeEntries = useMemo(
+    () => knowledgeEntriesQuery.data ?? [],
+    [knowledgeEntriesQuery.data],
+  )
+  const processingEntryIds = useMemo(
+    () =>
+      knowledgeEntries
+        .filter((entry) => entry.status === 'processing')
+        .map((entry) => entry.id)
+        .sort(),
+    [knowledgeEntries],
+  )
+  const statusQuery = useQuery({
+    queryKey: ['kbEntryStatuses', processingEntryIds],
+    queryFn: () => getKnowledgeBankEntryStatuses(processingEntryIds),
+    enabled: processingEntryIds.length > 0,
+    refetchInterval: 3000,
+  })
+
+  useEffect(() => {
+    if ((statusQuery.data ?? []).some((entry) => entry.status !== 'processing')) {
+      queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
+    }
+  }, [queryClient, statusQuery.data])
+
   const isLoading = documentsQuery.isFetching || knowledgeEntriesQuery.isFetching
   const error =
     mutationError ??
@@ -115,8 +136,7 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
     setIngestingDocumentId(document.id)
     setMutationError(null)
     try {
-      // Fire-and-forget: the backend schedules a background summary job
-      // and returns a placeholder entry with status="processing".
+      // The API enqueues a durable processing row for the dedicated KB worker.
       await ingestDocumentToKnowledgeBank(document.id)
       queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
     } catch (err) {

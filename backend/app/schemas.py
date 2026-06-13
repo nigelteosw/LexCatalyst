@@ -61,6 +61,10 @@ class ChatResponse(BaseModel):
     model: str
 
 
+class ChatThreadUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+
+
 class DocumentResponse(BaseModel):
     id: str
     filename: str
@@ -292,6 +296,42 @@ class KnowledgeBankEntryResponse(BaseModel):
     matter: MatterResponse | None = None
 
     model_config = {"from_attributes": True}
+
+
+class KnowledgeBankEntrySummaryResponse(BaseModel):
+    id: str
+    team_id: str | None = None
+    matter_id: str | None = None
+    source_entry_id: str | None = None
+    source_document_id: str | None = None
+    scope: str
+    entry_type: str
+    title: str
+    body_preview: str
+    tags: list[str]
+    pii_status: str
+    status: str = "ready"
+    error_message: str | None = None
+    created_by: str
+    created_by_role: str
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class KnowledgeBankEntryPageResponse(BaseModel):
+    items: list[KnowledgeBankEntrySummaryResponse]
+    limit: int
+    offset: int
+    next_offset: int | None = None
+
+
+class KnowledgeBankEntryStatusResponse(BaseModel):
+    id: str
+    status: str
+    error_message: str | None = None
+    version: int
+    updated_at: datetime
 
 
 class KnowledgeBankBackfillResponse(BaseModel):

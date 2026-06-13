@@ -8,10 +8,15 @@ import {
   FileText,
   HeartPulse,
   LogOut,
+  MoreHorizontal,
+  Pencil,
   Plus,
   Settings,
+  Trash2,
   X,
 } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { deleteChatThread, renameChatThread } from '../lib/api'
 import type { ChatThread, Matter } from '../types/workspace'
 import { useViewStore } from '../store/viewStore'
 
@@ -270,40 +275,20 @@ export function Sidebar({
             </div>
             {threads.length > 0 ? (
               <div className="space-y-0.5">
-                {threads.map((thread, index) => {
-                  const isActive =
-                    current.view === 'chat' && thread.id === current.threadId
-                  return (
-                    <button
-                      key={thread.id}
-                      onClick={() => {
-                        selectThread(thread.id)
-                        closeMobile()
-                      }}
-                      className={`${sidebarActionClass} group py-1.5 ${
-                        isActive ? sidebarNavActiveClass : sidebarNavClass
-                      }`}
-                      type="button"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${threadDotClass(index)}`}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11.5px] font-normal">
-                          {thread.title}
-                        </span>
-                        <span
-                          className={`mt-0.5 block text-[9.5px] ${
-                            isActive ? 'text-white/45' : 'text-white/25 group-hover:text-white/40'
-                          }`}
-                        >
-                          {formatThreadDate(thread.updatedAt)}
-                        </span>
-                      </span>
-                    </button>
-                  )
-                })}
+                {threads.map((thread, index) => (
+                  <ThreadRow
+                    key={thread.id}
+                    thread={thread}
+                    isActive={
+                      current.view === 'chat' && thread.id === current.threadId
+                    }
+                    dotClass={threadDotClass(index)}
+                    onSelect={() => {
+                      selectThread(thread.id)
+                      closeMobile()
+                    }}
+                  />
+                ))}
               </div>
             ) : (
               <div className="px-2.5 py-3 text-[11px] text-white/30">No recent chats</div>
@@ -352,6 +337,176 @@ export function Sidebar({
         />
       </aside>
     </>
+  )
+}
+
+function ThreadRow({
+  thread,
+  isActive,
+  dotClass,
+  onSelect,
+}: {
+  thread: ChatThread
+  isActive: boolean
+  dotClass: string
+  onSelect: () => void
+}) {
+  const queryClient = useQueryClient()
+  const { current, startNewChat } = useViewStore()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [draftTitle, setDraftTitle] = useState(thread.title)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [menuOpen])
+
+  useEffect(() => {
+    if (isRenaming) inputRef.current?.focus()
+  }, [isRenaming])
+
+  const renameMutation = useMutation({
+    mutationFn: (title: string) => renameChatThread(thread.id, title),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ChatThread[]>(['threads'], (old) =>
+        old?.map((t) => (t.id === updated.id ? updated : t)) ?? [],
+      )
+      setIsRenaming(false)
+    },
+    onError: () => setDraftTitle(thread.title),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteChatThread(thread.id),
+    onSuccess: () => {
+      queryClient.setQueryData<ChatThread[]>(['threads'], (old) =>
+        old?.filter((t) => t.id !== thread.id) ?? [],
+      )
+      queryClient.removeQueries({ queryKey: ['messages', thread.id] })
+      // If the deleted thread was the active one, drop the user to a new chat
+      if (current.view === 'chat' && current.threadId === thread.id) {
+        startNewChat()
+      }
+    },
+  })
+
+  function commitRename() {
+    const next = draftTitle.trim()
+    if (!next || next === thread.title) {
+      setIsRenaming(false)
+      setDraftTitle(thread.title)
+      return
+    }
+    renameMutation.mutate(next)
+  }
+
+  function handleDelete() {
+    setMenuOpen(false)
+    if (window.confirm(`Delete "${thread.title}"? This cannot be undone.`)) {
+      deleteMutation.mutate()
+    }
+  }
+
+  return (
+    <div
+      className={`group relative flex items-center gap-1 rounded-[9px] pr-1 transition-colors ${
+        isActive ? 'bg-white/10' : 'hover:bg-white/[0.07]'
+      }`}
+    >
+      {isRenaming ? (
+        <div className="flex w-full items-center gap-2 px-3 py-1.5">
+          <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
+          <input
+            ref={inputRef}
+            className="min-w-0 flex-1 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[11.5px] text-white outline-none focus:border-white/45"
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename()
+              if (e.key === 'Escape') {
+                setIsRenaming(false)
+                setDraftTitle(thread.title)
+              }
+            }}
+            onBlur={commitRename}
+            value={draftTitle}
+            maxLength={160}
+          />
+        </div>
+      ) : (
+        <>
+          <button
+            onClick={onSelect}
+            className={`flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-3 py-1.5 text-left text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0f0f] ${
+              isActive ? 'text-white' : 'text-white/50 group-hover:text-white/85'
+            }`}
+            type="button"
+          >
+            <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[11.5px] font-normal">{thread.title}</span>
+              <span
+                className={`mt-0.5 block text-[9.5px] ${
+                  isActive ? 'text-white/45' : 'text-white/25 group-hover:text-white/40'
+                }`}
+              >
+                {formatThreadDate(thread.updatedAt)}
+              </span>
+            </span>
+          </button>
+          <button
+            aria-label={`Options for ${thread.title}`}
+            className={`grid h-6 w-6 shrink-0 place-items-center rounded-md text-white/35 transition-colors hover:bg-white/10 hover:text-white/80 ${
+              menuOpen ? 'bg-white/10 text-white/80' : 'opacity-0 group-hover:opacity-100'
+            }`}
+            onClick={(e) => {
+              e.stopPropagation()
+              setMenuOpen((open) => !open)
+            }}
+            type="button"
+          >
+            <MoreHorizontal size={13} />
+          </button>
+        </>
+      )}
+
+      {menuOpen && (
+        <div
+          ref={menuRef}
+          className="absolute right-1 top-full z-50 mt-1 min-w-[140px] overflow-hidden rounded-lg border border-white/10 bg-[#1a1a1a] py-1 shadow-xl"
+        >
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11.5px] text-white/80 hover:bg-white/[0.08] hover:text-white"
+            onClick={() => {
+              setMenuOpen(false)
+              setDraftTitle(thread.title)
+              setIsRenaming(true)
+            }}
+            type="button"
+          >
+            <Pencil size={12} />
+            Rename
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11.5px] text-red-300 hover:bg-red-500/15 hover:text-red-200"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+            type="button"
+          >
+            <Trash2 size={12} />
+            {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

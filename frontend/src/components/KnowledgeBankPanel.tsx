@@ -1,4 +1,10 @@
-import { type ReactNode, useMemo, useState } from 'react'
+import {
+  type ReactNode,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -20,7 +26,12 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   approveKnowledgeBankRedaction,
   backfillKnowledgeBankEmbeddings,
@@ -28,10 +39,11 @@ import {
   createMatter,
   deleteKnowledgeBankEntry,
   getKnowledgeBankEntry,
+  getKnowledgeBankEntryStatuses,
   getKbGraph,
   getRedactionProposal,
   listKnowledgeBankAuditLog,
-  listKnowledgeBankEntries,
+  listKnowledgeBankEntryPage,
   listKnowledgeBankEntrySources,
   promoteKnowledgeBankEntry,
   updateKnowledgeBankEntry,
@@ -96,14 +108,29 @@ export function KnowledgeBankPanel({
   const [formError, setFormError] = useState<string | null>(null)
   const [backfillMessage, setBackfillMessage] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const deferredSearch = useDeferredValue(search.trim())
 
-  const entriesQuery = useQuery({
-    queryKey: ['kbEntries'],
-    queryFn: () => listKnowledgeBankEntries(),
-    refetchInterval: (query) => {
-      const data = query.state.data ?? []
-      return data.some((e) => e.status === 'processing') ? 3000 : false
-    },
+  const entriesQuery = useInfiniteQuery({
+    queryKey: [
+      'kbEntries',
+      {
+        query: deferredSearch,
+        scope: scopeFilter,
+        type: typeFilter,
+        matterId: selectedMatterId,
+      },
+    ],
+    queryFn: ({ pageParam }) =>
+      listKnowledgeBankEntryPage({
+        query: deferredSearch || undefined,
+        scope: scopeFilter === 'all' ? undefined : scopeFilter,
+        entryType: typeFilter === 'all' ? undefined : typeFilter,
+        contextMatterId: selectedMatterId ?? undefined,
+        limit: 30,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
   })
   const auditQuery = useQuery({
     queryKey: ['kbAudit'],
@@ -114,28 +141,51 @@ export function KnowledgeBankPanel({
     queryKey: ['kbEntry', selectedEntryId],
     queryFn: () => getKnowledgeBankEntry(selectedEntryId!),
     enabled: !!selectedEntryId,
-    refetchInterval: (query) => {
-      return query.state.data?.status === 'processing' ? 3000 : false
-    },
   })
 
-  const entries = useMemo(() => entriesQuery.data ?? [], [entriesQuery.data])
+  const entries = useMemo(
+    () => entriesQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [entriesQuery.data],
+  )
+  const processingEntryIds = useMemo(() => {
+    const ids = new Set(
+      entries
+        .filter((entry) => entry.status === 'processing')
+        .map((entry) => entry.id),
+    )
+    if (selectedEntryQuery.data?.status === 'processing') {
+      ids.add(selectedEntryQuery.data.id)
+    }
+    return [...ids].sort()
+  }, [entries, selectedEntryQuery.data])
+  const statusQuery = useQuery({
+    queryKey: ['kbEntryStatuses', processingEntryIds],
+    queryFn: () => getKnowledgeBankEntryStatuses(processingEntryIds),
+    enabled: processingEntryIds.length > 0,
+    refetchInterval: 3000,
+  })
+
+  useEffect(() => {
+    const completed = (statusQuery.data ?? []).filter(
+      (entry) => entry.status !== 'processing',
+    )
+    if (completed.length === 0) return
+    queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
+    completed.forEach((entry) => {
+      queryClient.invalidateQueries({ queryKey: ['kbEntry', entry.id] })
+    })
+  }, [queryClient, statusQuery.data])
+
   const filteredEntries = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase()
     return entries.filter((entry) => {
       if (typeFilter !== 'all' && entry.entryType !== typeFilter) return false
       if (scopeFilter !== 'all' && entry.scope !== scopeFilter) return false
       if (selectedMatterId && entry.scope === 'matter' && entry.matterId !== selectedMatterId) {
         return false
       }
-      if (!normalizedSearch) return true
-      return (
-        entry.title.toLowerCase().includes(normalizedSearch) ||
-        entry.bodyMarkdown.toLowerCase().includes(normalizedSearch) ||
-        entry.tags.some((tag) => tag.toLowerCase().includes(normalizedSearch))
-      )
+      return true
     })
-  }, [entries, search, selectedMatterId, scopeFilter, typeFilter])
+  }, [entries, selectedMatterId, scopeFilter, typeFilter])
 
   const selectedEntry =
     selectedEntryQuery.data ??
@@ -383,15 +433,27 @@ export function KnowledgeBankPanel({
               {entriesQuery.isLoading ? (
                 <EmptyState title="Loading Knowledge Bank..." />
               ) : filteredEntries.length > 0 ? (
-                <div className="grid gap-3 xl:grid-cols-2">
-                  {filteredEntries.map((entry) => (
-                    <EntryCard
-                      key={entry.id}
-                      entry={entry}
-                      isSelected={selectedEntry?.id === entry.id}
-                      onClick={() => selectKnowledgeBank(entry.id)}
-                    />
-                  ))}
+                <div>
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {filteredEntries.map((entry) => (
+                      <EntryCard
+                        key={entry.id}
+                        entry={entry}
+                        isSelected={selectedEntry?.id === entry.id}
+                        onClick={() => selectKnowledgeBank(entry.id)}
+                      />
+                    ))}
+                  </div>
+                  {entriesQuery.hasNextPage && (
+                    <button
+                      className="mt-4 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-xs font-medium text-[#5a5a56] hover:border-black/20 disabled:opacity-50"
+                      disabled={entriesQuery.isFetchingNextPage}
+                      onClick={() => entriesQuery.fetchNextPage()}
+                      type="button"
+                    >
+                      {entriesQuery.isFetchingNextPage ? 'Loading...' : 'Load more'}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <EmptyState

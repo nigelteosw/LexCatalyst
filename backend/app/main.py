@@ -1,11 +1,11 @@
 import json
 
 from fastapi import (
-    BackgroundTasks,
     Depends,
     FastAPI,
     File,
     HTTPException,
+    Query,
     Request,
     UploadFile,
     status,
@@ -39,11 +39,15 @@ from app.schemas import (
     ChatRequest,
     ChatResponse,
     ChatThreadResponse,
+    ChatThreadUpdate,
     DocumentResponse,
     KnowledgeBankAccessLogResponse,
     KnowledgeBankBackfillResponse,
     KnowledgeBankEntryCreate,
+    KnowledgeBankEntryPageResponse,
     KnowledgeBankEntryResponse,
+    KnowledgeBankEntryStatusResponse,
+    KnowledgeBankEntrySummaryResponse,
     KnowledgeBankEntryUpdate,
     KnowledgeBankPromoteRequest,
     MatterCreate,
@@ -77,9 +81,12 @@ from app.schemas import (
 from app.services.agent_service import run_agent_loop
 from app.services.chat_service import (
     create_chat_response,
+    delete_message,
+    delete_thread,
     list_thread_messages,
     list_threads,
     prepare_agent_context,
+    rename_thread,
     save_assistant_response,
 )
 from app.services.document_service import (
@@ -97,7 +104,6 @@ from app.services.memory_service import (
 )
 from app.services.kb_ingestion_service import (
     create_pending_kb_entry,
-    process_kb_summary,
 )
 from app.services.knowledge_bank_service import (
     KnowledgeBankError,
@@ -107,6 +113,7 @@ from app.services.knowledge_bank_service import (
     create_kb_entry,
     delete_kb_entry,
     get_kb_entry,
+    get_kb_entry_statuses,
     get_redaction_proposal,
     list_audit_log,
     list_kb_entries,
@@ -766,6 +773,54 @@ def chat_messages(
     return [ChatMessageResponse.model_validate(message) for message in messages]
 
 
+@app.patch("/chat/threads/{thread_id}", response_model=ChatThreadResponse)
+def update_chat_thread(
+    thread_id: str,
+    schema: ChatThreadUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ChatThreadResponse:
+    try:
+        thread = rename_thread(
+            db, user_id=current_user.id, thread_id=thread_id, title=schema.title,
+        )
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc
+    if not thread:
+        raise HTTPException(status_code=404, detail="Chat thread not found")
+    return ChatThreadResponse.model_validate(thread)
+
+
+@app.delete("/chat/threads/{thread_id}")
+def delete_chat_thread(
+    thread_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    try:
+        ok = delete_thread(db, user_id=current_user.id, thread_id=thread_id)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc
+    if not ok:
+        raise HTTPException(status_code=404, detail="Chat thread not found")
+    return {"status": "ok"}
+
+
+@app.delete("/chat/messages/{message_id}")
+def delete_chat_message(
+    message_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    try:
+        ok = delete_message(db, user_id=current_user.id, message_id=message_id)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc
+    if not ok:
+        raise HTTPException(status_code=404, detail="Chat message not found")
+    return {"status": "ok"}
+
+
 # Memory Endpoints
 
 
@@ -903,38 +958,49 @@ def delete_matter_member(
 @app.get("/kb/graph", response_model=WikiGraphResponse)
 def kb_graph(
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> WikiGraphResponse:
-    graph = build_kb_graph(db)
+    graph = build_kb_graph(db, user=current_user)
     return WikiGraphResponse(
         nodes=[WikiGraphNode(**node) for node in graph["nodes"]],
         edges=[WikiGraphEdge(**edge) for edge in graph["edges"]],
     )
 
 
-@app.get("/kb/entries", response_model=list[KnowledgeBankEntryResponse])
+@app.get("/kb/entries", response_model=KnowledgeBankEntryPageResponse)
 def kb_entries(
     scope: str | None = None,
     entry_type: str | None = None,
     matter_id: str | None = None,
+    context_matter_id: str | None = None,
     team_id: str | None = None,
     pii_status: str | None = None,
     query: str | None = None,
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[KnowledgeBankEntryResponse]:
+) -> KnowledgeBankEntryPageResponse:
     try:
-        entries = list_kb_entries(
+        entries, next_offset = list_kb_entries(
             db,
             user=current_user,
             scope=scope,
             entry_type=entry_type,
             matter_id=matter_id,
+            context_matter_id=context_matter_id,
             team_id=team_id,
             pii_status=pii_status,
             query=query,
+            limit=limit,
+            offset=offset,
         )
-        return [KnowledgeBankEntryResponse.model_validate(entry) for entry in entries]
+        return KnowledgeBankEntryPageResponse(
+            items=[KnowledgeBankEntrySummaryResponse(**entry) for entry in entries],
+            limit=limit,
+            offset=offset,
+            next_offset=next_offset,
+        )
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
 
@@ -992,14 +1058,13 @@ async def backfill_kb_embeddings(
 )
 async def ingest_document_kb_entry(
     document_id: str,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
     """Kick off async summarization of a document into a KB entry.
 
     Returns a placeholder entry with `status="processing"` immediately. The
-    actual summarization runs in a background task using DeepSeek Pro and
+    actual summarization is claimed by the dedicated KB worker using DeepSeek Pro and
     flips the entry to `status="ready"` (or `"failed"`) when done.
     Clients should poll `GET /kb/entries/{id}` to observe completion.
     """
@@ -1024,12 +1089,29 @@ async def ingest_document_kb_entry(
             status_code=503, detail="Knowledge Bank is unavailable",
         ) from exc
 
-    if entry.status == "processing" and not entry.body_markdown:
-        # Only schedule if the entry actually needs processing. Re-clicking
-        # while a job is in flight is a no-op.
-        background_tasks.add_task(process_kb_summary, entry.id)
-
     return KnowledgeBankEntryResponse.model_validate(entry)
+
+
+@app.get(
+    "/kb/entries/status",
+    response_model=list[KnowledgeBankEntryStatusResponse],
+)
+def kb_entry_statuses(
+    ids: list[str] = Query(default_factory=list),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[KnowledgeBankEntryStatusResponse]:
+    try:
+        return [
+            KnowledgeBankEntryStatusResponse(**entry)
+            for entry in get_kb_entry_statuses(
+                db,
+                user=current_user,
+                entry_ids=ids,
+            )
+        ]
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
 
 
 @app.get("/kb/entries/{entry_id}", response_model=KnowledgeBankEntryResponse)

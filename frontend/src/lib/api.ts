@@ -174,6 +174,28 @@ type BackendKnowledgeBankEntry = {
   matter: BackendMatter | null
 }
 
+type BackendKnowledgeBankEntrySummary = Omit<
+  BackendKnowledgeBankEntry,
+  'body_markdown' | 'team' | 'matter'
+> & {
+  body_preview: string
+}
+
+type BackendKnowledgeBankEntryPage = {
+  items: BackendKnowledgeBankEntrySummary[]
+  limit: number
+  offset: number
+  next_offset: number | null
+}
+
+type BackendKnowledgeBankEntryStatus = {
+  id: string
+  status: KnowledgeBankEntry['status']
+  error_message: string | null
+  version: number
+  updated_at: string
+}
+
 type BackendRedactionProposal = {
   entry: BackendKnowledgeBankEntry
   redacted_fields: Record<string, string>
@@ -332,6 +354,33 @@ function mapKnowledgeBankEntry(entry: BackendKnowledgeBankEntry): KnowledgeBankE
   }
 }
 
+function mapKnowledgeBankEntrySummary(
+  entry: BackendKnowledgeBankEntrySummary,
+): KnowledgeBankEntry {
+  return {
+    id: entry.id,
+    teamId: entry.team_id,
+    matterId: entry.matter_id,
+    sourceEntryId: entry.source_entry_id,
+    sourceDocumentId: entry.source_document_id,
+    scope: entry.scope,
+    entryType: entry.entry_type,
+    title: entry.title,
+    bodyMarkdown: entry.body_preview,
+    tags: entry.tags,
+    piiStatus: entry.pii_status,
+    status: entry.status ?? 'ready',
+    errorMessage: entry.error_message,
+    createdBy: entry.created_by,
+    createdByRole: entry.created_by_role,
+    version: entry.version,
+    createdAt: entry.created_at,
+    updatedAt: entry.updated_at,
+    team: null,
+    matter: null,
+  }
+}
+
 function mapRedactionProposal(proposal: BackendRedactionProposal): RedactionProposal {
   return {
     entry: mapKnowledgeBankEntry(proposal.entry),
@@ -407,6 +456,22 @@ export async function listChatThreads(): Promise<ChatThread[]> {
 export async function listThreadMessages(threadId: string): Promise<Message[]> {
   const messages = await request<BackendMessage[]>(`/chat/threads/${threadId}/messages`)
   return messages.map(mapMessage)
+}
+
+export async function renameChatThread(threadId: string, title: string): Promise<ChatThread> {
+  const thread = await request<BackendThread>(`/chat/threads/${threadId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  })
+  return mapThread(thread)
+}
+
+export async function deleteChatThread(threadId: string): Promise<void> {
+  await request(`/chat/threads/${threadId}`, { method: 'DELETE' })
+}
+
+export async function deleteChatMessage(messageId: string): Promise<void> {
+  await request(`/chat/messages/${messageId}`, { method: 'DELETE' })
 }
 
 export async function listDocuments(): Promise<WorkspaceDocument[]> {
@@ -657,29 +722,57 @@ export async function createMatter(payload: {
   return mapMatter(matter)
 }
 
-export async function listKnowledgeBankEntries(params?: {
+export async function listKnowledgeBankEntryPage(params?: {
   scope?: KnowledgeBankScope
   entryType?: KnowledgeBankEntryType
   matterId?: string
+  contextMatterId?: string
   teamId?: string
   piiStatus?: KnowledgeBankEntry['piiStatus']
   query?: string
-}): Promise<KnowledgeBankEntry[]> {
+  limit?: number
+  offset?: number
+}): Promise<{
+  items: KnowledgeBankEntry[]
+  nextOffset: number | null
+}> {
   const search = new URLSearchParams()
   if (params?.scope) search.set('scope', params.scope)
   if (params?.entryType) search.set('entry_type', params.entryType)
   if (params?.matterId) search.set('matter_id', params.matterId)
+  if (params?.contextMatterId) search.set('context_matter_id', params.contextMatterId)
   if (params?.teamId) search.set('team_id', params.teamId)
   if (params?.piiStatus) search.set('pii_status', params.piiStatus)
   if (params?.query) search.set('query', params.query)
+  search.set('limit', String(params?.limit ?? 30))
+  search.set('offset', String(params?.offset ?? 0))
   const suffix = search.toString() ? `?${search}` : ''
-  const entries = await request<BackendKnowledgeBankEntry[]>(`/kb/entries${suffix}`)
-  return entries.map(mapKnowledgeBankEntry)
+  const page = await request<BackendKnowledgeBankEntryPage>(`/kb/entries${suffix}`)
+  return {
+    items: page.items.map(mapKnowledgeBankEntrySummary),
+    nextOffset: page.next_offset,
+  }
+}
+
+export async function listKnowledgeBankEntries(
+  params?: Omit<Parameters<typeof listKnowledgeBankEntryPage>[0], 'limit' | 'offset'>,
+): Promise<KnowledgeBankEntry[]> {
+  return (await listKnowledgeBankEntryPage({ ...params, limit: 100, offset: 0 })).items
 }
 
 export async function getKnowledgeBankEntry(id: string): Promise<KnowledgeBankEntry> {
   return mapKnowledgeBankEntry(
     await request<BackendKnowledgeBankEntry>(`/kb/entries/${id}`),
+  )
+}
+
+export async function getKnowledgeBankEntryStatuses(
+  ids: string[],
+): Promise<BackendKnowledgeBankEntryStatus[]> {
+  const search = new URLSearchParams()
+  ids.slice(0, 100).forEach((id) => search.append('ids', id))
+  return request<BackendKnowledgeBankEntryStatus[]>(
+    `/kb/entries/status?${search.toString()}`,
   )
 }
 

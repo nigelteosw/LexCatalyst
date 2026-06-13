@@ -15,9 +15,65 @@ from app.services.knowledge_bank_service import (
 from app.services.memory_service import list_memories
 from app.services.rag_service import search_documents
 
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 8
 MAX_MEMORY_RESULTS = 6
 MAX_KB_BODY_PREVIEW = 2000
+
+# DeepSeek Pro occasionally emits its native tool-call markup as content
+# tokens instead of through the OpenAI-style `tool_calls` delta. We must
+# strip these from anything we stream to the user.
+_DSML_START_TOKEN = "<｜｜DSML｜｜"   # "<｜｜DSML｜｜"
+_DSML_END_TOKEN = "</｜｜DSML｜｜tool_calls>"  # "</｜｜DSML｜｜tool_calls>"
+# Hold back a small tail so that a marker split across two chunks gets
+# caught. The longest marker we need to recognise is ~30 chars.
+_DSML_TAIL_HOLD = 32
+
+
+class _DsmlStripper:
+    """Streaming filter that suppresses DeepSeek's inline tool-call markup."""
+
+    def __init__(self) -> None:
+        self._buf = ""
+        self._in_dsml = False
+
+    def feed(self, token: str) -> str:
+        self._buf += token
+        out = ""
+
+        while True:
+            if self._in_dsml:
+                end = self._buf.find(_DSML_END_TOKEN)
+                if end < 0:
+                    # Still inside DSML; drop everything.
+                    self._buf = ""
+                    return out
+                # Consume up to and including the end marker.
+                self._buf = self._buf[end + len(_DSML_END_TOKEN):]
+                self._in_dsml = False
+                continue
+
+            start = self._buf.find(_DSML_START_TOKEN)
+            if start >= 0:
+                out += self._buf[:start]
+                self._buf = self._buf[start:]
+                self._in_dsml = True
+                continue
+
+            # Not in DSML and no start marker visible. Flush everything
+            # except a small trailing buffer so a marker that spans
+            # chunks doesn't slip through.
+            if len(self._buf) > _DSML_TAIL_HOLD:
+                out += self._buf[:-_DSML_TAIL_HOLD]
+                self._buf = self._buf[-_DSML_TAIL_HOLD:]
+            return out
+
+    def flush(self) -> str:
+        if self._in_dsml:
+            self._buf = ""
+            return ""
+        out = self._buf
+        self._buf = ""
+        return out
 
 TOOLS: list[dict] = [
     {
@@ -272,24 +328,33 @@ async def run_agent_loop(
             current_messages.append({
                 "role": "system",
                 "content": (
-                    "You have used the maximum number of tool-call rounds. "
-                    "Provide your final answer now based on what you have gathered."
+                    "You have gathered enough information. Write the complete "
+                    "final answer for the user now, using ordinary prose. "
+                    "Do NOT attempt any further tool calls and do NOT output "
+                    "tool-call syntax. The tools are no longer available."
                 ),
             })
 
         accumulated_tool_calls: list[dict] = []
         assistant_reasoning = ""
         assistant_content: str | None = None
+        stripper = _DsmlStripper()
 
         async for event_type, event_data in provider.stream_with_tools(
             current_messages, tools, model=model,
         ):
             if event_type == "token":
-                yield ("token", {"content": event_data})
+                clean = stripper.feed(event_data)
+                if clean:
+                    yield ("token", {"content": clean})
             elif event_type == "tool_calls":
                 accumulated_tool_calls = event_data["tool_calls"]
                 assistant_reasoning = event_data["reasoning_content"]
                 assistant_content = event_data["content"]
+
+        tail = stripper.flush()
+        if tail:
+            yield ("token", {"content": tail})
 
         if not accumulated_tool_calls:
             return

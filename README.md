@@ -5,7 +5,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ## Core Features
 
 ### Knowledge & Documents
-- **Async Knowledge Bank ingestion**: Upload a PDF/DOCX and click "Add to Knowledge Bank". The backend schedules a background job that uses **DeepSeek Pro** to generate a comprehensive structured summary (What This Is / Key Points / Risk Flags / How to Use) with inline page citations. The summary is embedded via pgvector for semantic search. The UI polls every 3 seconds while `status="processing"`.
+- **Async Knowledge Bank ingestion**: Upload a PDF/DOCX and click "Add to Knowledge Bank". A dedicated Railway worker claims the durable Postgres job and uses **DeepSeek Pro** to generate a structured summary with inline page citations. The UI polls only lightweight status rows while `status="processing"`.
 - **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
 - **Drag-and-drop uploads**: Drop PDF/DOCX directly onto the Documents panel. OCR fallback via Tesseract for scanned PDFs.
 - **Semantic search**: pgvector cosine similarity over document chunks AND KB entries. Embeddings fingerprinted by content hash so they auto-refresh when content changes.
@@ -52,13 +52,13 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 
 ### Frontend
 - **React 19** + **TypeScript** + **Vite**
-- **Zustand** for view state, **TanStack Query v5** for server state (with `refetchInterval` polling while jobs are in `processing`)
+- **Zustand** for view state, **TanStack Query v5** for paginated server state and lightweight job-status polling
 - **Tailwind CSS**
 - **react-markdown** + **remark-gfm** for KB summary rendering
 - **Server-Sent Events** for the streaming chat and Birdie agent
 
 ### Backend
-- **FastAPI** (Python 3.11+) with **BackgroundTasks** for the async KB ingestion pipeline
+- **FastAPI** (Python 3.12) plus a database-backed KB worker process
 - **SQLAlchemy 2.0** + **Alembic** migrations
 - **PostgreSQL** + **pgvector** (1536-dim cosine similarity)
 - **Tesseract** (via `pytesseract`) for OCR fallback on scanned PDFs
@@ -80,6 +80,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                            # API routes & SSE streaming
+│   │   ├── kb_worker.py                       # Durable KB ingestion worker
 │   │   ├── models.py                          # SQLAlchemy ORM
 │   │   ├── schemas.py                         # Pydantic request/response
 │   │   ├── dependencies.py                    # Auth + RBAC helpers
@@ -89,7 +90,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 │   │       ├── agent_service.py               # ReAct loop with cycle detection
 │   │       ├── birdie_service.py              # Mentor agent (separate prompt + endpoint)
 │   │       ├── chat_service.py                # Thread mgmt, history, summary
-│   │       ├── kb_ingestion_service.py        # Async Pro summarisation pipeline
+│   │       ├── kb_ingestion_service.py        # Worker claim + Pro summarisation
 │   │       ├── knowledge_bank_service.py      # KB CRUD + RBAC scope filter
 │   │       ├── document_service.py            # Upload + full-text reader
 │   │       ├── ingestion_service.py           # PDF/DOCX extraction (OCR fallback)
@@ -104,6 +105,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 │   │       └── field_encryption.py            # Fernet encryption
 │   ├── migrations/versions/                   # 14 Alembic migrations
 │   ├── railway.toml                           # Auto-runs `alembic upgrade head`
+│   ├── railway.worker.toml                    # Dedicated KB worker service
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -201,6 +203,13 @@ KB scope visibility (read access):
 - `matter` — matter members only
 - `private` — creator only
 
+Optimized KB read routes, all requiring Bearer authentication:
+
+- `GET /kb/entries?limit=30&offset=0` returns paginated summaries without vectors or full Markdown bodies.
+- `GET /kb/entries/status?ids=...` returns polling state only and does not write audit rows.
+- `GET /kb/entries/{id}` returns one full entry and records the user-visible read.
+- `GET /kb/graph` returns a scope-filtered graph projection.
+
 ---
 
 ## System Architecture
@@ -225,9 +234,10 @@ KB scope visibility (read access):
        ├──► Return 202 Accepted to client
        │
        ▼
-[BackgroundTasks: process_kb_summary]      (async, 30–60s)
-       │   Opens fresh SessionLocal()
-       │   Loads up to 80 chunks (~240KB)
+[Dedicated Railway KB worker]             (async)
+       │   Claims queued rows from Postgres
+       │   Reclaims stale jobs after restarts
+       │   Samples up to 32 chunks (~58KB)
        │   Calls DeepSeek Pro
        │   Parses JSON → title + body
        │   Computes embedding
@@ -236,10 +246,12 @@ KB scope visibility (read access):
 [status="ready"] or [status="failed"]
        │
        ▼
-Frontend polling (3s interval) picks up the new state.
+Frontend polls `/kb/entries/status` for processing IDs only, then refreshes
+the affected page or detail after a terminal state.
 ```
 
-Retry: clicking "Retry summary" on a failed entry resets it back to `processing` and re-schedules the job.
+Retry: clicking "Retry summary" resets a failed entry to `processing`; the
+worker claims it without relying on the web process.
 
 ### ReAct Agent Loop
 1. **Build context** — `prepare_agent_context` injects memories + thread summary into the system prompt (NOT KB/docs — those come via tools).
@@ -274,6 +286,7 @@ Cloudflare treats it as an npm project and runs `npm ci` before the build comman
 | What | Where | Required? |
 |---|---|---|
 | Run migrations | Auto (Railway runs `alembic upgrade head && uvicorn ...`) | Auto |
+| KB worker | Create a second Railway service using `/backend/railway.worker.toml`; the web service owns migrations | Required |
 | Frontend deps install | `bun install` adds `react-markdown` + `remark-gfm` | Yes — happens at build |
 | Backend deps install | No new Python packages | n/a |
 | New env vars | `BUN_VERSION=1.3.11` in Cloudflare Pages | Recommended |
@@ -288,15 +301,17 @@ Cloudflare treats it as an npm project and runs `npm ci` before the build comman
 | `d1e2f3a4b5c6` | Adds `users.is_admin`, creates `survey_questions`, `survey_responses`, `action_items` | No |
 | `e2f3a4b5c6d7` | Adds `kb_entries.embedding_content_hash` (nullable) | No |
 | `f3a4b5c6d7e8` | Adds `kb_entries.status` (default `ready`) and `kb_entries.error_message` | No |
+| `a4b5c6d7e8f9` | Adds worker claim fields and KB read-path indexes | No |
 
-All three are **purely additive** — existing rows are populated via column defaults, and downgrades drop only what was added. Safe to deploy on a live DB without downtime.
+All four are **purely additive** — existing rows are populated via column defaults, and downgrades drop only what was added. Safe to deploy without destructive data changes.
 
 ### What to verify after deploy
 1. `/me` returns `firm_role` and `is_admin` for the logged-in user.
 2. Existing KB entries appear with no "processing" badge (they default to `status="ready"`).
-3. Uploading a new PDF and clicking "Add to Knowledge Bank" shows a "Summarising..." badge that flips to "Ready" within a minute.
-4. The Birdie button in the chat header opens the floating PiP — drag it around to confirm position state.
-5. Settings panel lets you switch roles; KB write buttons should hide/show accordingly.
+3. The Railway KB worker logs `Knowledge Bank worker started`.
+4. Uploading a new PDF and clicking "Add to Knowledge Bank" shows a "Summarising..." badge that flips to "Ready".
+5. The Birdie button in the chat header opens the floating PiP — drag it around to confirm position state.
+6. Settings panel lets you switch roles; KB write buttons should hide/show accordingly.
 
 ---
 

@@ -483,3 +483,53 @@ def list_thread_messages(db: Session, thread_id: str, user_id: str) -> list[Chat
         .order_by(ChatMessage.created_at)
     )
     return list(db.scalars(stmt))
+
+
+def rename_thread(
+    db: Session, *, user_id: str, thread_id: str, title: str,
+) -> ChatThread | None:
+    thread = db.scalar(
+        select(ChatThread).where(
+            ChatThread.id == thread_id, ChatThread.user_id == user_id,
+        )
+    )
+    if not thread:
+        return None
+    thread.title = title.strip() or thread.title
+    thread.updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(thread)
+    return thread
+
+
+def delete_thread(db: Session, *, user_id: str, thread_id: str) -> bool:
+    thread = db.scalar(
+        select(ChatThread).where(
+            ChatThread.id == thread_id, ChatThread.user_id == user_id,
+        )
+    )
+    if not thread:
+        return False
+    db.delete(thread)  # cascade=all,delete-orphan removes messages + memory FKs
+    db.commit()
+    return True
+
+
+def delete_message(db: Session, *, user_id: str, message_id: str) -> bool:
+    """Delete a single chat message belonging to the given user.
+
+    The agent loop reads thread history at the start of every turn, so
+    removing a middle message will simply omit it from future context.
+    Callers should be aware that this can make the conversation look
+    incoherent on re-read.
+    """
+    message = db.scalar(
+        select(ChatMessage)
+        .join(ChatThread, ChatThread.id == ChatMessage.thread_id)
+        .where(ChatMessage.id == message_id, ChatThread.user_id == user_id)
+    )
+    if not message:
+        return False
+    db.delete(message)
+    db.commit()
+    return True

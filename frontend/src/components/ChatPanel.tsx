@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
-import { AlertCircle, BookMarked, Brain, FileText, LoaderCircle, Paperclip, SendHorizontal, Sparkles, Square } from 'lucide-react'
+import { AlertCircle, BookMarked, Brain, FileText, LoaderCircle, Paperclip, SendHorizontal, Sparkles, Square, Trash2 } from 'lucide-react'
 import { Button } from './Button'
 import { MarkdownContent } from './MarkdownContent'
 import type { Message, ToolStep } from '../types/workspace'
@@ -18,6 +18,7 @@ type ChatPanelProps = {
   onPromptChange: (prompt: string) => void
   onStop: () => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onDeleteMessage?: (messageId: string) => void
   placeholder: string
   prompt: string
   sendLabel: string
@@ -37,6 +38,7 @@ export function ChatPanel({
   onPromptChange,
   onStop,
   onSubmit,
+  onDeleteMessage,
   placeholder,
   prompt,
   sendLabel,
@@ -96,6 +98,11 @@ export function ChatPanel({
                   message={message}
                   userInitials={userInitials}
                   assistantInitials={assistantInitials}
+                  onDelete={
+                    onDeleteMessage && message.id && !isResponding
+                      ? () => onDeleteMessage(message.id!)
+                      : undefined
+                  }
                 />
               ))}
               <div ref={messagesEndRef} />
@@ -221,13 +228,14 @@ type ChatMessageProps = {
   message: Message
   userInitials: string
   assistantInitials: string
+  onDelete?: () => void
 }
 
-function ChatMessage({ message, userInitials }: ChatMessageProps) {
+function ChatMessage({ message, userInitials, onDelete }: ChatMessageProps) {
   const isUser = message.role === 'user'
 
   return (
-    <article className={`flex gap-4 md:gap-6 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+    <article className={`group flex gap-4 md:gap-6 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       <div
         aria-hidden="true"
         className={`flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-xl grid place-items-center text-[10px] font-semibold border uppercase ${
@@ -272,6 +280,21 @@ function ChatMessage({ message, userInitials }: ChatMessageProps) {
             )
           )}
         </div>
+        {onDelete && (
+          <button
+            aria-label="Delete message"
+            className={`mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-neutral-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-700 focus:opacity-100 group-hover:opacity-100 ${
+              isUser ? 'self-end' : 'self-start'
+            }`}
+            onClick={() => {
+              if (window.confirm('Delete this message?')) onDelete()
+            }}
+            type="button"
+          >
+            <Trash2 size={11} />
+            Delete
+          </button>
+        )}
       </div>
     </article>
   )
