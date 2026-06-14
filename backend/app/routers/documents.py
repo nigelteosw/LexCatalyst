@@ -13,13 +13,12 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import authenticate_user_token, get_current_user
-from app.models import Document, MatterMember, User
+from app.models import Document, User
 from app.schemas import (
     DocumentCommentCreate,
     DocumentCommentResponse,
@@ -106,14 +105,6 @@ async def upload_document(
             matter = get_matter(db, matter_id)
             if not matter:
                 raise HTTPException(status_code=404, detail="Matter not found")
-            is_member = db.scalar(
-                select(MatterMember.id).where(
-                    MatterMember.matter_id == matter.id,
-                    MatterMember.user_id == current_user.id,
-                )
-            )
-            if not is_member and not current_user.is_admin:
-                raise HTTPException(status_code=403, detail="Matter access required")
 
         file_bytes = await file.read()
         if not file_bytes:
