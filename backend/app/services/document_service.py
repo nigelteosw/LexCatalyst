@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import BrokenExecutor, ProcessPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -25,6 +26,18 @@ from app.services.storage_service import (
 
 MAX_ERROR_LENGTH = 1000
 STALE_CLAIM_AFTER = timedelta(minutes=30)
+MAX_PROCESSING_ATTEMPTS = 3
+
+# One child process handles extraction. If it OOM-dies the pool is broken; we
+# rebuild it so the next document gets a fresh child rather than hanging forever.
+_extraction_pool = ProcessPoolExecutor(max_workers=1)
+
+
+def _get_extraction_pool() -> ProcessPoolExecutor:
+    global _extraction_pool
+    if _extraction_pool._broken:  # type: ignore[attr-defined]
+        _extraction_pool = ProcessPoolExecutor(max_workers=1)
+    return _extraction_pool
 
 
 class DocumentProcessingError(RuntimeError):
@@ -121,6 +134,21 @@ async def create_pending_document(
 
 def claim_pending_document(db: Session) -> str | None:
     """Atomically claim one queued document, including stale jobs."""
+    # Fail documents that have exhausted retries before attempting to claim.
+    db.execute(
+        update(Document)
+        .where(
+            Document.status == "processing",
+            Document.processing_attempts >= MAX_PROCESSING_ATTEMPTS,
+        )
+        .values(
+            status="failed",
+            error_message=f"Processing failed after {MAX_PROCESSING_ATTEMPTS} attempts (possible OOM or timeout)",
+            updated_at=datetime.now(UTC),
+        )
+    )
+    db.commit()
+
     stale_before = datetime.now(UTC) - STALE_CLAIM_AFTER
     document_id = db.scalar(
         select(Document.id)
@@ -168,20 +196,27 @@ async def process_document(document_id: str) -> None:
         return
 
     try:
-        file_bytes = await asyncio.to_thread(
-            download_document_file,
-            storage_key,
-        )
-        blocks = await asyncio.to_thread(
-            extract_text_blocks,
-            file_bytes,
-            filename,
-            content_type,
+        file_bytes = await asyncio.to_thread(download_document_file, storage_key)
+    except StorageError as exc:
+        _mark_document_failed(document_id, str(exc))
+        return
+
+    try:
+        # Run in a subprocess so an OOM kill only breaks the child, not this worker.
+        loop = asyncio.get_running_loop()
+        pool = _get_extraction_pool()
+        blocks = await loop.run_in_executor(
+            pool, extract_text_blocks, file_bytes, filename, content_type
         )
         chunks = chunk_text_blocks(blocks, filename=filename)
         embeddings = await embed_texts([chunk.text for chunk in chunks])
+    except BrokenExecutor:
+        # The child process was killed (OOM). Rebuild the pool and fail this doc.
+        global _extraction_pool
+        _extraction_pool = ProcessPoolExecutor(max_workers=1)
+        _mark_document_failed(document_id, "Extraction process was killed (likely OOM)")
+        return
     except (
-        StorageError,
         IngestionError,
         EmbeddingError,
         DocumentProcessingError,

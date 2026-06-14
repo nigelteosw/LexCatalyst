@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-06-14T09:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="async-processing" name="3 - Async Processing">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="ap-title" value="Durable Async Processing" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="390" y="30" width="390" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-upload" value="Upload PDF/DOCX" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="155" width="170" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-api" value="FastAPI&#xa;validate + upload to R2&#xa;insert processing row&#xa;return 202" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="270" y="125" width="210" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-db" value="PostgreSQL queues&#xa;Document rows&#xa;KB processing rows&#xa;DreamJob rows" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="550" y="120" width="190" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-worker" value="Combined Worker&#xa;independent queue slots&#xa;FOR UPDATE SKIP LOCKED&#xa;stale-claim recovery + heartbeat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="820" y="115" width="240" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-doc" value="Document pipeline&#xa;R2 download&#xa;PDF/DOCX extraction&#xa;OCR fallback&#xa;chunk + embed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="180" y="410" width="220" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-kb" value="Knowledge Bank pipeline&#xa;sample source chunks&#xa;DeepSeek Pro summary&#xa;embed summary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="480" y="410" width="220" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-dream" value="Dream pipeline&#xa;load personal memories&#xa;DeepSeek Pro consolidation&#xa;apply justified changes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="780" y="410" width="220" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-status" value="Terminal state persisted as ready/completed or failed. The frontend polls lightweight status endpoints and refreshes only affected records." style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14" vertex="1" parent="1">
+          <mxGeometry x="350" y="660" width="470" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-upload" target="ap-api">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e2" value="enqueue in transaction" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-api" target="ap-db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e3" value="atomic claim" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-db" target="ap-worker">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e4" value="document slot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-worker" target="ap-doc">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e5" value="KB slot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-worker" target="ap-kb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e6" value="Dream slot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-worker" target="ap-dream">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e7" value="persist result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-doc" target="ap-status">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e8" value="persist result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-kb" target="ap-status">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="ap-e9" value="persist result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="ap-dream" target="ap-status">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

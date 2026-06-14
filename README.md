@@ -57,25 +57,39 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ## Tech Stack
 
 ### Frontend
-- **React 19** + **TypeScript** + **Vite**
-- **Zustand** for view state, **TanStack Query v5** for paginated server state and lightweight job-status polling
-- **Tailwind CSS**
+- **React 19** + **TypeScript 6** + **Vite 8**, installed and built with **Bun 1.3**
+- **Zustand 5** for local view state and **TanStack Query v5** for paginated server state and job-status polling
+- **Tailwind CSS 4** through the Vite plugin
 - **react-markdown** + **remark-gfm** for KB summary rendering
 - **Server-Sent Events** for the streaming chat and Birdie agent
 
 ### Backend
-- **FastAPI** (Python 3.12) plus a database-backed background worker
+- **FastAPI** on **Python 3.12**, served by Uvicorn, plus a database-backed background worker
 - **SQLAlchemy 2.0** + **Alembic** migrations
-- **PostgreSQL** + **pgvector** (1536-dim cosine similarity)
-- **Tesseract** (via `pytesseract`) for OCR fallback on scanned PDFs
+- **PostgreSQL 17** + **pgvector** (1536-dimension cosine similarity) and `pg_trgm`
+- **Pydantic 2** request/response validation
+- **pypdf**, **python-docx**, **Tesseract**, and **Poppler** for document extraction and OCR fallback
 - **Google OAuth2** + **JWT** auth; field-level Fernet encryption for `client_name`
 
 ### AI & Search
-- **DeepSeek V4 Pro** for KB summarisation (hardcoded — comprehensive, long-context)
-- **DeepSeek V4 Flash** for Birdie mentor chat (fast, conversational)
+- **DeepSeek V4 Pro** for KB summaries and Dream memory consolidation
+- **DeepSeek V4 Flash** for Birdie mentor chat and thread summarisation
 - **DeepSeek V4 Flash/Pro** user-selectable for the main agent chat
 - **OpenAI `text-embedding-3-small`** (1536 dim) for both document chunks and KB entry summaries
-- **Cloudflare R2** for original document storage (optional — local disk fallback)
+- **Cloudflare R2** for original document storage
+
+### Infrastructure
+- **Docker Compose** for local PostgreSQL
+- **Railway** for the static frontend, FastAPI web service, background worker, and managed PostgreSQL
+- **Cloudflare R2** as the S3-compatible object store
+- **Alembic head:** `p1e2f3a4b5c6`
+
+Editable high-level architecture diagrams:
+
+- [`docs/architecture-system-context.drawio`](docs/architecture-system-context.drawio)
+- [`docs/architecture-chat-retrieval.drawio`](docs/architecture-chat-retrieval.drawio)
+- [`docs/architecture-async-processing.drawio`](docs/architecture-async-processing.drawio)
+- [`docs/architecture-authorization-boundaries.drawio`](docs/architecture-authorization-boundaries.drawio)
 
 ---
 
@@ -85,12 +99,13 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 .
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                            # API routes & SSE streaming
+│   │   ├── main.py                            # FastAPI app, middleware, router wiring
 │   │   ├── worker.py                          # Durable document, KB, and Dream worker
 │   │   ├── models.py                          # SQLAlchemy ORM
 │   │   ├── schemas.py                         # Pydantic request/response
 │   │   ├── dependencies.py                    # Auth + RBAC helpers
 │   │   ├── auth.py                            # Google OAuth + JWT
+│   │   ├── routers/                           # Thin HTTP/SSE handlers by domain
 │   │   ├── providers/                         # DeepSeek + OpenAI integrations
 │   │   └── services/
 │   │       ├── agent_service.py               # ReAct loop with cycle detection
@@ -101,7 +116,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 │   │       ├── document_service.py            # Upload + full-text reader
 │   │       ├── ingestion_service.py           # PDF/DOCX extraction (OCR fallback)
 │   │       ├── action_service.py              # Task items with RBAC
-│   │       ├── survey_service.py              # Anonymous surveys + weekly aggregation
+│   │       ├── survey_service.py              # User-linked weekly surveys + aggregation
 │   │       ├── user_service.py                # Role updates
 │   │       ├── memory_service.py              # Personal memory store
 │   │       ├── organization_service.py        # Teams + matters
@@ -131,6 +146,11 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 │   │       └── ui/                            # Button, Dialog, badges, Markdown
 │   └── package.json
 └── docs/
+    ├── architecture-system-context.drawio     # Services and external dependencies
+    ├── architecture-chat-retrieval.drawio     # ReAct chat and scoped retrieval
+    ├── architecture-async-processing.drawio   # Durable document, KB, and Dream jobs
+    ├── architecture-authorization-boundaries.drawio
+    │                                          # Legal data access boundaries
     ├── product-requirement.md                 # Whiteboard notes
     └── rfc-react-agent-loop.md
 ```
@@ -149,10 +169,10 @@ docker compose up -d
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+make install
 # Configure .env (see below)
-alembic upgrade head
-python -m uvicorn app.main:app --reload
+make migrate
+make dev
 ```
 
 Run the durable background worker in a second terminal:
@@ -195,11 +215,11 @@ DEEPSEEK_API_KEY=your_key_here
 OPENAI_API_KEY=your_key_here
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 
-# Optional — R2 falls back to local disk if unset
+# Required for document upload, review, and worker processing
+CLOUDFLARE_R2_BUCKET_NAME=lexcatalyst
 CLOUDFLARE_R2_ACCESS_KEY_ID=...
 CLOUDFLARE_R2_SECRET_ACCESS_KEY=...
 CLOUDFLARE_R2_ENDPOINT_URL=...
-CLOUDFLARE_R2_BUCKET=...
 
 # Must be at least 32 chars; rotating this invalidates encrypted client_name fields
 JWT_SECRET_KEY=at_least_32_characters_long
@@ -309,17 +329,17 @@ worker claims it without relying on the web process.
 
 After pushing this branch:
 
-Cloudflare Pages frontend settings:
+Railway frontend service settings:
 
 ```txt
 Root directory: frontend
 Build command: bun run build
-Build output: dist
+Static output directory: dist
 BUN_VERSION: 1.3.11
+VITE_API_URL: https://<backend-service>.up.railway.app
 ```
 
-The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`;
-Cloudflare treats it as an npm project and runs `npm ci` before the build command.
+The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`.
 
 | What | Where | Required? |
 |---|---|---|
@@ -327,7 +347,7 @@ Cloudflare treats it as an npm project and runs `npm ci` before the build comman
 | Background worker | Create a second Railway service using `/backend/railway.worker.toml`; it processes documents, KB entries, and Dream jobs, while the web service owns migrations | Required |
 | Frontend deps install | `bun install` adds `react-markdown` + `remark-gfm` | Yes — happens at build |
 | Backend deps install | No new Python packages | n/a |
-| New env vars | `BUN_VERSION=1.3.11` in Cloudflare Pages | Recommended |
+| Frontend env vars | `BUN_VERSION=1.3.11` and `VITE_API_URL` in Railway | Required |
 | Existing KB entries | Get `status="ready"` automatically via the `server_default` | Auto |
 | Existing KB embeddings | `embedding_content_hash` is NULL until first refresh | Optional |
 | Repair search index | `POST /kb/backfill-embeddings` (or the "Repair search index" button) backfills missing hashes idempotently | Recommended once |

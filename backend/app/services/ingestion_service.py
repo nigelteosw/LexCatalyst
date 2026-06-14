@@ -90,18 +90,27 @@ def _extract_pdf_native(file_bytes: bytes) -> list[TextBlock]:
 
 def _extract_pdf_ocr(file_bytes: bytes) -> list[TextBlock]:
     try:
-        images = convert_from_bytes(file_bytes, dpi=300)
+        page_count = len(PdfReader(BytesIO(file_bytes)).pages)
     except Exception as exc:
-        raise IngestionError(f"PDF to image conversion failed: {exc}") from exc
+        raise IngestionError(f"Could not read PDF page count: {exc}") from exc
 
     blocks: list[TextBlock] = []
-    for page_num, image in enumerate(images, start=1):
+    for page_num in range(1, page_count + 1):
+        # Convert one page at a time so peak memory is bounded to a single image.
         try:
-            text = pytesseract.image_to_string(image, lang="eng").strip()
+            images = convert_from_bytes(
+                file_bytes, dpi=150, first_page=page_num, last_page=page_num
+            )
         except Exception as exc:
-            raise IngestionError(f"OCR failed on page {page_num}: {exc}") from exc
-        if text:
-            blocks.append(TextBlock(text=text, page_number=page_num))
+            raise IngestionError(f"PDF to image conversion failed on page {page_num}: {exc}") from exc
+
+        for image in images:
+            try:
+                text = pytesseract.image_to_string(image, lang="eng").strip()
+            except Exception as exc:
+                raise IngestionError(f"OCR failed on page {page_num}: {exc}") from exc
+            if text:
+                blocks.append(TextBlock(text=text, page_number=page_num))
     return blocks
 
 

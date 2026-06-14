@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-06-14T09:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="system-context" name="1 - System Context">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="sc-title" value="LexCatalyst System Context" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="360" y="30" width="450" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-user" value="Legal Team User&#xa;Browser" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=15;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="50" y="250" width="180" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-frontend" value="Railway Static Frontend&#xa;React 19 + TypeScript 6&#xa;Vite 8 + Tailwind 4 + Bun" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="300" y="220" width="230" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-api" value="Railway Web Service&#xa;FastAPI + Uvicorn&#xa;Thin routers + Python services&#xa;JWT + RBAC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="620" y="190" width="240" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-worker" value="Railway Worker Service&#xa;Document extraction/OCR&#xa;Chunking + embeddings&#xa;KB summaries + Dream jobs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="620" y="440" width="240" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-db" value="Railway PostgreSQL 17&#xa;SQLAlchemy + Alembic&#xa;pgvector + pg_trgm&#xa;App data + durable queues" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="950" y="200" width="180" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-r2" value="Cloudflare R2&#xa;Original PDF/DOCX files" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="950" y="455" width="180" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-deepseek" value="DeepSeek API&#xa;V4 Pro / V4 Flash" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="600" y="70" width="180" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-openai" value="OpenAI API&#xa;text-embedding-3-small" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="850" y="70" width="190" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-google" value="Google OAuth" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="300" y="80" width="170" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e1" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-user" target="sc-frontend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e2" value="REST + SSE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-frontend" target="sc-api">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e3" value="SQL" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-api" target="sc-db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e4" value="claim/update jobs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-worker" target="sc-db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e5" value="upload/download" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-api" target="sc-r2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e6" value="download originals" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-worker" target="sc-r2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e7" value="chat/summaries" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-api" target="sc-deepseek">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e8" value="summaries" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-worker" target="sc-deepseek">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e9" value="embeddings" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-worker" target="sc-openai">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="sc-e10" value="ID token" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="sc-frontend" target="sc-google">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
