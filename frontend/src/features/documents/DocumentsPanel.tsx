@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, FileText, RefreshCcw, Trash2, UploadCloud } from 'lucide-react'
+import {
+  BookOpen,
+  Check,
+  Eye,
+  FileText,
+  Pencil,
+  RefreshCcw,
+  Trash2,
+  UploadCloud,
+  X,
+} from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '../../shared/ui/Button'
 import { StatusBadge } from '../../shared/ui/StatusBadge'
@@ -10,10 +20,12 @@ import {
   getKnowledgeBankEntryStatuses,
   listDocuments,
   listKnowledgeBankEntries,
+  renameDocument,
   uploadDocument,
 } from '../../shared/api/api'
 import type { WorkspaceDocument } from '../../shared/types/workspace'
 import { useViewStore } from '../../app/viewStore'
+import { DocumentDrawer } from './DocumentDrawer'
 
 export type DocumentsPanelProps = {
   selectedMatterId: string | null
@@ -27,6 +39,9 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
+  const [renamingDocumentId, setRenamingDocumentId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const ACCEPTED = [
@@ -79,6 +94,8 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
   })
 
   const documents = documentsQuery.data ?? []
+  const selectedDocument =
+    documents.find((document) => document.id === selectedDocumentId) ?? null
   const knowledgeEntries = useMemo(
     () => knowledgeEntriesQuery.data ?? [],
     [knowledgeEntriesQuery.data],
@@ -127,8 +144,21 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
     mutationFn: (id: string) => deleteDocument(id),
     onSuccess: () => {
       setMutationError(null)
+      setSelectedDocumentId(null)
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
+    },
+    onError: (err) => setMutationError(getErrorMessage(err)),
+  })
+
+  const renameMutation = useMutation({
+    mutationFn: ({ id, filename }: { id: string; filename: string }) =>
+      renameDocument(id, filename),
+    onSuccess: () => {
+      setRenamingDocumentId(null)
+      setRenameValue('')
+      setMutationError(null)
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
     },
     onError: (err) => setMutationError(getErrorMessage(err)),
   })
@@ -160,6 +190,27 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ['documents'] })
     queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
+  }
+
+  function startRename(document: WorkspaceDocument) {
+    setRenamingDocumentId(document.id)
+    setRenameValue(document.filename)
+    setMutationError(null)
+  }
+
+  function submitRename(document: WorkspaceDocument) {
+    const filename = renameValue.trim()
+    if (!filename || renameMutation.isPending) return
+    renameMutation.mutate({ id: document.id, filename })
+  }
+
+  if (selectedDocument) {
+    return (
+      <DocumentDrawer
+        document={selectedDocument}
+        onClose={() => setSelectedDocumentId(null)}
+      />
+    )
   }
 
   return (
@@ -259,16 +310,62 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
               return (
                 <article
                   key={document.id}
-                  className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 sm:flex-row sm:items-start"
+                  className="flex cursor-pointer flex-col gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 transition-colors hover:border-neutral-300 hover:bg-neutral-50/50 sm:flex-row sm:items-start"
+                  onClick={() => setSelectedDocumentId(document.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelectedDocumentId(document.id)
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-neutral-100 text-neutral-600">
                     <FileText size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate text-sm font-medium text-neutral-900">
-                        {document.filename}
-                      </h3>
+                      {renamingDocumentId === document.id ? (
+                        <div
+                          className="flex min-w-0 flex-1 items-center gap-1"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            autoFocus
+                            className="h-8 min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-900 outline-none focus:border-neutral-500"
+                            maxLength={255}
+                            onChange={(event) => setRenameValue(event.target.value)}
+                            onKeyDown={(event) => {
+                              event.stopPropagation()
+                              if (event.key === 'Enter') submitRename(document)
+                              if (event.key === 'Escape') setRenamingDocumentId(null)
+                            }}
+                            value={renameValue}
+                          />
+                          <Button
+                            aria-label="Save filename"
+                            disabled={!renameValue.trim() || renameMutation.isPending}
+                            onClick={() => submitRename(document)}
+                            size="icon"
+                            variant="ghost"
+                          >
+                            <Check size={14} />
+                          </Button>
+                          <Button
+                            aria-label="Cancel rename"
+                            onClick={() => setRenamingDocumentId(null)}
+                            size="icon"
+                            variant="ghost"
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <h3 className="truncate text-sm font-medium text-neutral-900">
+                          {document.filename}
+                        </h3>
+                      )}
                       <StatusBadge
                         tone={
                           document.status === 'ready'
@@ -309,7 +406,18 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
                       </div>
                     )}
                   </div>
-                  <div className="flex shrink-0 gap-2 sm:justify-end">
+                  <div
+                    className="flex shrink-0 flex-wrap gap-2 sm:justify-end"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Button
+                      onClick={() => setSelectedDocumentId(document.id)}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      <Eye size={14} />
+                      Review
+                    </Button>
                     {knowledgeEntry?.status === 'ready' ? (
                       <Button
                         onClick={() => selectKnowledgeBank(knowledgeEntry.id)}
@@ -329,7 +437,7 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
                         <BookOpen size={14} />
                         Summarising...
                       </Button>
-                    ) : (
+                    ) : document.canManage ? (
                       <Button
                         onClick={() => void handleAddToKnowledgeBank(document)}
                         disabled={document.status !== 'ready' || !!ingestingDocumentId}
@@ -350,16 +458,28 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
                             ? 'Retry summary'
                             : 'Add to Knowledge Bank'}
                       </Button>
+                    ) : null}
+                    {document.canManage && renamingDocumentId !== document.id && (
+                      <Button
+                        onClick={() => startRename(document)}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        <Pencil size={14} />
+                        Rename
+                      </Button>
                     )}
-                    <Button
-                      onClick={() => void handleDeleteDocument(document)}
-                      disabled={isDeleting || isGenerating}
-                      size="sm"
-                      variant="danger"
-                    >
-                      <Trash2 size={14} />
-                      {isDeleting ? 'Deleting...' : 'Delete'}
-                    </Button>
+                    {document.canManage && (
+                      <Button
+                        onClick={() => void handleDeleteDocument(document)}
+                        disabled={isDeleting || isGenerating}
+                        size="sm"
+                        variant="danger"
+                      >
+                        <Trash2 size={14} />
+                        {isDeleting ? 'Deleting...' : 'Delete'}
+                      </Button>
+                    )}
                   </div>
                 </article>
               )

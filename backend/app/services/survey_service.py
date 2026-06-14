@@ -1,10 +1,20 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models import SurveyQuestion, SurveyResponse, User
 from app.schemas import SurveyQuestionCreate, SurveyQuestionUpdate, SurveyResponseCreate
+
+
+def current_week_start() -> datetime:
+    now = datetime.now(timezone.utc)
+    return (now - timedelta(days=now.weekday())).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
 
 
 def list_survey_questions(db: Session, *, active_only: bool = True) -> list[SurveyQuestion]:
@@ -55,23 +65,55 @@ def update_survey_question(
 def submit_survey_response(
     db: Session,
     *,
+    user: User,
     schema: SurveyResponseCreate,
 ) -> SurveyResponse:
-    week_of = schema.week_of.replace(tzinfo=timezone.utc) if schema.week_of.tzinfo is None else schema.week_of
-    response = SurveyResponse(
-        question_id=schema.question_id,
-        score=schema.score,
-        week_of=week_of,
+    week_of = current_week_start()
+    response = db.scalar(
+        select(SurveyResponse).where(
+            SurveyResponse.user_id == user.id,
+            SurveyResponse.question_id == schema.question_id,
+            SurveyResponse.week_of == week_of,
+        )
     )
-    db.add(response)
+    if response:
+        response.score = schema.score
+        response.submitted_at = datetime.now(timezone.utc)
+    else:
+        response = SurveyResponse(
+            user_id=user.id,
+            question_id=schema.question_id,
+            score=schema.score,
+            week_of=week_of,
+        )
+        db.add(response)
     db.commit()
     db.refresh(response)
     return response
 
 
-def get_survey_results(db: Session) -> list[dict]:
+def get_survey_results(db: Session) -> dict:
+    week_of = current_week_start()
     questions = list_survey_questions(db, active_only=False)
-    results = []
+    active_question_count = sum(question.is_active for question in questions)
+    users = list(db.scalars(select(User).order_by(User.full_name, User.email)))
+    user_rows = db.execute(
+        select(
+            SurveyResponse.user_id,
+            func.avg(SurveyResponse.score).label("average_score"),
+            func.count(SurveyResponse.id).label("response_count"),
+        )
+        .join(SurveyQuestion, SurveyQuestion.id == SurveyResponse.question_id)
+        .where(
+            SurveyResponse.user_id.is_not(None),
+            SurveyResponse.week_of == week_of,
+            SurveyQuestion.is_active.is_(True),
+        )
+        .group_by(SurveyResponse.user_id)
+    ).all()
+    user_scores = {row.user_id: row for row in user_rows}
+
+    question_results = []
     for question in questions:
         rows = db.execute(
             select(
@@ -83,7 +125,7 @@ def get_survey_results(db: Session) -> list[dict]:
             .group_by(SurveyResponse.week_of)
             .order_by(desc(SurveyResponse.week_of))
         ).all()
-        results.append(
+        question_results.append(
             {
                 "question_id": question.id,
                 "question_text": question.text,
@@ -98,4 +140,28 @@ def get_survey_results(db: Session) -> list[dict]:
                 ],
             }
         )
-    return results
+    return {
+        "current_week_of": week_of,
+        "users": [
+            {
+                "user_id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "firm_role": user.firm_role,
+                "week_of": week_of,
+                "average_score": (
+                    float(user_scores[user.id].average_score)
+                    if user.id in user_scores
+                    else None
+                ),
+                "response_count": (
+                    user_scores[user.id].response_count
+                    if user.id in user_scores
+                    else 0
+                ),
+                "question_count": active_question_count,
+            }
+            for user in users
+        ],
+        "questions": question_results,
+    }

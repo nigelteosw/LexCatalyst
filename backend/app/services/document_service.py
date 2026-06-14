@@ -1,7 +1,8 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
-from sqlalchemy import delete, exists, func, or_, select, update
+from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -12,6 +13,7 @@ from app.services.ingestion_service import (
     UnsupportedDocumentError,
     chunk_text_blocks,
     extract_text_blocks,
+    make_citation_label,
     validate_supported_document,
 )
 from app.services.storage_service import (
@@ -27,6 +29,39 @@ STALE_CLAIM_AFTER = timedelta(minutes=30)
 
 class DocumentProcessingError(RuntimeError):
     pass
+
+
+def document_access_filter(user_id: str):
+    return or_(
+        Document.user_id == user_id,
+        and_(
+            Document.matter_id.is_not(None),
+            exists(
+                select(MatterMember.id).where(
+                    MatterMember.matter_id == Document.matter_id,
+                    MatterMember.user_id == user_id,
+                )
+            ),
+        ),
+    )
+
+
+def can_access_document(
+    db: Session,
+    *,
+    user_id: str,
+    document: Document,
+) -> bool:
+    if document.user_id == user_id:
+        return True
+    if not document.matter_id:
+        return False
+    return db.scalar(
+        select(MatterMember.id).where(
+            MatterMember.matter_id == document.matter_id,
+            MatterMember.user_id == user_id,
+        )
+    ) is not None
 
 
 async def create_pending_document(
@@ -218,7 +253,7 @@ def list_user_documents(
     stmt = (
         select(Document, chunk_count)
         .outerjoin(DocumentChunk)
-        .where(Document.user_id == user_id)
+        .where(document_access_filter(user_id))
         .group_by(Document.id)
         .order_by(Document.created_at.desc())
         .offset(offset)
@@ -232,7 +267,7 @@ def get_user_document(db: Session, user_id: str, document_id: str) -> tuple[Docu
     stmt = (
         select(Document, chunk_count)
         .outerjoin(DocumentChunk)
-        .where(Document.id == document_id, Document.user_id == user_id)
+        .where(Document.id == document_id, document_access_filter(user_id))
         .group_by(Document.id)
     )
     row = db.execute(stmt).one_or_none()
@@ -259,16 +294,7 @@ def get_document_full_text(
     document = db.scalar(
         select(Document).where(
             Document.id == document_id,
-            or_(
-                Document.user_id == user_id,
-                Document.matter_id.is_not(None)
-                & exists(
-                    select(MatterMember.id).where(
-                        MatterMember.matter_id == Document.matter_id,
-                        MatterMember.user_id == user_id,
-                    )
-                ),
-            ),
+            document_access_filter(user_id),
         )
     )
     if not document:
@@ -302,6 +328,53 @@ def get_document_full_text(
     if truncated:
         body += "\n\n[Document truncated — call again with a more specific question or rely on the KB summary.]"
     return document, body
+
+
+def rename_user_document(
+    db: Session,
+    *,
+    user_id: str,
+    document_id: str,
+    filename: str,
+) -> Document | None:
+    document = db.scalar(
+        select(Document).where(
+            Document.id == document_id,
+            Document.user_id == user_id,
+        )
+    )
+    if not document:
+        return None
+
+    requested_name = Path(filename).name.strip()
+    if not requested_name:
+        raise ValueError("Filename is required")
+
+    current_suffix = Path(document.filename).suffix.lower()
+    requested_suffix = Path(requested_name).suffix.lower()
+    if not requested_suffix:
+        requested_name = f"{requested_name}{current_suffix}"
+    elif current_suffix and requested_suffix != current_suffix:
+        raise ValueError(f"Filename must keep the {current_suffix} extension")
+    if len(requested_name) > 255:
+        raise ValueError("Filename must be 255 characters or fewer")
+
+    document.filename = requested_name
+    document.updated_at = datetime.now(UTC)
+    chunks = list(
+        db.scalars(
+            select(DocumentChunk).where(DocumentChunk.document_id == document.id)
+        )
+    )
+    for chunk in chunks:
+        chunk.citation_label = make_citation_label(
+            requested_name,
+            chunk.page_number,
+            chunk.chunk_index,
+        )
+    db.commit()
+    db.refresh(document)
+    return document
 
 
 def delete_user_document(db: Session, user_id: str, document_id: str) -> bool:

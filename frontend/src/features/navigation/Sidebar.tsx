@@ -19,11 +19,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { deleteChatThread, renameChatThread } from '../../shared/api/api'
 import type { ChatThread, Matter } from '../../shared/types/workspace'
 import { useViewStore } from '../../app/viewStore'
+import birdieLogo from '../../assets/Birdie.png'
 
 export type SidebarProps = {
   threads: ChatThread[]
   matters: Matter[]
+  isBirdieOpen: boolean
   selectedMatterId: string | null
+  onBirdieToggle: () => void
   onMatterChange: (matterId: string | null) => void
   onNewChat: () => void
   isOpen: boolean
@@ -48,7 +51,9 @@ const sidebarNavActiveClass = 'bg-white/10 text-white'
 export function Sidebar({
   threads,
   matters,
+  isBirdieOpen,
   selectedMatterId,
+  onBirdieToggle,
   onMatterChange,
   onNewChat,
   isOpen,
@@ -156,7 +161,39 @@ export function Sidebar({
               type="button"
             >
               <Plus size={13} strokeWidth={2.25} />
-              New chat
+              New LexChat
+            </button>
+            <button
+              aria-label={isBirdieOpen ? 'Close Birdie' : 'Open Birdie'}
+              aria-pressed={isBirdieOpen}
+              className={`mt-2 flex w-full items-center gap-2 rounded-[9px] border px-3 py-2 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                isBirdieOpen
+                  ? 'border-[#2d9e6b]/55 bg-[#2d9e6b]/15 text-[#6ed6a4]'
+                  : 'border-white/10 bg-white/[0.04] text-white/65 hover:bg-white/[0.1] hover:text-white'
+              }`}
+              onClick={() => {
+                onBirdieToggle()
+                closeMobile()
+              }}
+              type="button"
+            >
+              <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full border border-[#2d9e6b]/45 bg-[#fff8d8]">
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="h-auto w-[250%] max-w-none"
+                  src={birdieLogo}
+                />
+              </span>
+              <span className="flex-1">Birdie</span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  isBirdieOpen ? 'animate-pulse bg-[#2d9e6b]' : 'bg-white/25'
+                }`}
+              />
+              <span className="text-[10px] font-normal text-current/70">
+                {isBirdieOpen ? 'Close' : 'Open'}
+              </span>
             </button>
           </div>
 
@@ -227,13 +264,13 @@ export function Sidebar({
               type="button"
             >
               <CheckSquare size={14} />
-              Actions
+              Workboard
             </button>
           </nav>
 
           {/* Past Chats List */}
           <nav
-            aria-label="Recent chats"
+            aria-label="Recent LexChat conversations"
             className="app-scroll-region lex-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-2"
           >
             {matters.length > 0 && (
@@ -272,7 +309,7 @@ export function Sidebar({
             )}
             <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.09em] text-white/30">
               <Clock size={11} />
-              Recent chats
+              Recent LexChats
             </div>
             {threads.length > 0 ? (
               <div className="space-y-0.5">
@@ -292,7 +329,7 @@ export function Sidebar({
                 ))}
               </div>
             ) : (
-              <div className="px-2.5 py-3 text-[11px] text-white/30">No recent chats</div>
+              <div className="px-2.5 py-3 text-[11px] text-white/30">No recent LexChats</div>
             )}
           </nav>
 

@@ -1,4 +1,4 @@
-"""Wellbeing surveys — structurally anonymous responses + partner aggregates."""
+"""Wellbeing check-ins and partner team dashboard."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -69,9 +69,9 @@ def patch_survey_question(
 def post_survey_response(
     schema: SurveyResponseCreate,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    submit_survey_response(db, schema=schema)
+    submit_survey_response(db, user=current_user, schema=schema)
     return {"status": "ok"}
 
 
@@ -81,4 +81,4 @@ def survey_results(
     current_user: User = Depends(get_current_user),
 ) -> SurveyResultsResponse:
     require_partner_or_admin(current_user)
-    return SurveyResultsResponse(questions=get_survey_results(db))
+    return SurveyResultsResponse.model_validate(get_survey_results(db))

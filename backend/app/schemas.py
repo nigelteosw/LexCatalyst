@@ -76,6 +76,36 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     chunk_count: int = 0
+    can_manage: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentUpdate(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+
+
+class DocumentCommentCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=3000)
+
+
+class DocumentCommentAuthorResponse(BaseModel):
+    id: str
+    full_name: str | None = None
+    email: str
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentCommentResponse(BaseModel):
+    id: str
+    document_id: str
+    user_id: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    author: DocumentCommentAuthorResponse
+    can_delete: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -178,6 +208,7 @@ class MemoryResponse(BaseModel):
     id: str
     category: str
     content: str
+    justification: str | None = None
     confidence: float
     scope: str = "personal"
     matter_id: str | None = None
@@ -201,25 +232,25 @@ class MemoryExtractionResult(BaseModel):
 class DreamAddition(BaseModel):
     category: Literal["semantic", "procedural", "episodic"]
     content: str = Field(min_length=1, max_length=5000)
-    reason: str = Field(max_length=1000)
+    reason: str = Field(min_length=1, max_length=1000)
 
 
 class DreamMerge(BaseModel):
     replace_ids: list[str] = Field(min_length=2)
     category: Literal["semantic", "procedural", "episodic"]
     content: str = Field(min_length=1, max_length=5000)
-    reason: str = Field(max_length=1000)
+    reason: str = Field(min_length=1, max_length=1000)
 
 
 class DreamUpdate(BaseModel):
     memory_id: str
     content: str = Field(min_length=1, max_length=5000)
-    reason: str = Field(max_length=1000)
+    reason: str = Field(min_length=1, max_length=1000)
 
 
 class DreamDrop(BaseModel):
     memory_id: str
-    reason: str = Field(max_length=1000)
+    reason: str = Field(min_length=1, max_length=1000)
 
 
 class DreamProposal(BaseModel):
@@ -230,25 +261,11 @@ class DreamProposal(BaseModel):
     reviewed_message_count: int = 0
 
 
-class AcceptedDreamProposal(BaseModel):
-    additions: list[DreamAddition] = Field(default_factory=list)
-    merges: list[DreamMerge] = Field(default_factory=list)
-    updates: list[DreamUpdate] = Field(default_factory=list)
-    drops: list[DreamDrop] = Field(default_factory=list)
-
-
-class DreamApplyResult(BaseModel):
-    memories: list[MemoryResponse]
-    added: int
-    merged: int
-    updated: int
-    dropped: int
-
-
 class DreamJobStatus(BaseModel):
     job_id: str
-    status: Literal["processing", "ready", "failed"]
+    status: Literal["processing", "completed", "failed"]
     proposal: DreamProposal | None = None
+    memories: list[MemoryResponse] | None = None
     error_message: str | None = None
 
 
@@ -484,7 +501,20 @@ class SurveyQuestionResult(BaseModel):
     weeks: list[SurveyWeekResult]
 
 
+class SurveyUserResult(BaseModel):
+    user_id: str
+    full_name: str | None = None
+    email: str
+    firm_role: str
+    week_of: datetime
+    average_score: float | None = None
+    response_count: int
+    question_count: int
+
+
 class SurveyResultsResponse(BaseModel):
+    current_week_of: datetime
+    users: list[SurveyUserResult]
     questions: list[SurveyQuestionResult]
 
 

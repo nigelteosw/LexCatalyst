@@ -65,6 +65,8 @@ def update_memory(db: Session, user_id: str, memory_id: str, schema: MemoryUpdat
         memory.category = schema.category
     if schema.content is not None:
         memory.content = schema.content
+    if schema.category is not None or schema.content is not None:
+        memory.justification = None
     
     db.commit()
     db.refresh(memory)

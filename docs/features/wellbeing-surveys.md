@@ -1,6 +1,6 @@
-# Wellbeing — Anonymous Pulse Surveys
+# Wellbeing — Weekly Team Check-ins
 
-> A weekly survey juniors can fill in honestly because there is, structurally, no way to trace a response back to them.
+> A weekly survey with a partner dashboard showing every user's completion state and average score.
 
 ## The lawyer's problem
 
@@ -32,40 +32,38 @@ Any of those outcomes makes the survey useless for the firm and dangerous for th
 
 ## What we built
 
-A weekly survey that is **structurally anonymous**, plus a partner-facing aggregate dashboard.
+A weekly survey linked to each submitting user, plus a partner-facing team dashboard and aggregate trends.
 
-### Structural anonymity
+### Identified weekly responses
 
-The `survey_responses` table has no `user_id` column. Not "we delete it after a while" — there's nowhere to put it in the first place.
+The `survey_responses` table stores `user_id` for new submissions. A unique constraint on `(user_id, question_id, week_of)` means resubmitting updates the weekly answer instead of inflating aggregate counts. Rows created before migration `n1c2d3e4f5a6` keep a null `user_id` and remain visible only in aggregate trends.
 
 ```sql
 CREATE TABLE survey_responses (
     id            UUID PRIMARY KEY,
+    user_id       UUID REFERENCES users(id),
     question_id   UUID REFERENCES survey_questions(id),
     score         SMALLINT,            -- 1-5
     week_of       TIMESTAMP,
-    submitted_at  TIMESTAMP
-    -- NO user_id column
+    submitted_at  TIMESTAMP,
+    UNIQUE (user_id, question_id, week_of)
 );
 ```
-
-A bad actor with database access cannot deanonymise responses, because the data simply isn't there.
 
 ### Three tabs
 
 | Tab | Who sees it |
 |---|---|
-| **My check-in** | All users. A weekly form with a 1–5 slider per active question. Once submitted, the user sees confirmation; we don't track *whether* they submitted (that would be deanonymising). |
-| **Results** | Partners + admins. Weekly aggregates per question: average score, response count. Shown as horizontal bars. |
+| **My check-in** | All users. A weekly form with a 1–5 slider per active question. A second submission updates that week's answers. |
+| **Results** | Partners + admins. Every firm user, completion state, current-week average, and weekly aggregates per question. |
 | **Manage questions** | Partners + admins. Create, edit, toggle questions on/off, group by category (workload, mental health, team dynamics, learning). |
 
 ## Why these specific design choices
 
 | Choice | Why for lawyers |
 |---|---|
-| **No `user_id` column** | The original whiteboard says "anonymised team mental survey". We took that literally. Any other design — pseudonymous, hashed, deleted-after-X-days — relies on people not abusing access. Removing the column removes the temptation. |
-| **Aggregate-only results** | Partners get weekly averages, not individual responses. The smallest unit of insight is the team, not the person. |
-| **No "X people responded out of Y" stat** | That would let a partner correlate response count with team size and identify who didn't answer. |
+| **One answer per user/question/week** | Prevents repeat submissions from skewing the dashboard while still allowing a user to correct an answer. |
+| **Every user is listed** | Partners can distinguish a missing check-in from a low team response rate and follow up directly. |
 | **Weekly, not real-time** | Burnout is a trend, not a moment. Aggregating weekly smooths out the "I had one bad day" signal and surfaces the "this team is in trouble" signal. |
 | **Category grouping** | Lets partners look at workload separately from team dynamics. The same week could show "workload OK, team dynamics terrible" — different interventions. |
 | **Partners can edit questions** | The firm's burnout drivers change. The questions should change with them. Locking the question set defeats the point of surveying. |
@@ -84,9 +82,9 @@ GET /survey/questions?active_only=true
         ▼
 POST /survey/responses (one per question)
         │   { question_id, score, week_of }
-        │   No user identity in the payload.
+        │   Identity comes from the authenticated JWT.
         ▼
-[Backend stores in survey_responses — anonymous]
+[Backend upserts survey_responses for the current user and week]
 
 ────────────────────────────────────────────────
 
@@ -96,7 +94,7 @@ POST /survey/responses (one per question)
 GET /survey/results          (RBAC: partner or admin)
         │
         ▼
-[Per-question weekly aggregation in SQL]
+[Current-week user dashboard + per-question weekly aggregation]
         │   SELECT week_of, AVG(score), COUNT(*)
         │   FROM survey_responses
         │   WHERE question_id = ?
@@ -111,28 +109,28 @@ GET /survey/results          (RBAC: partner or admin)
 |---|---|
 | Submit response | Any authenticated user |
 | Create / edit questions | Partner or admin |
-| View aggregate results | Partner or admin |
+| View user dashboard and aggregate results | Partner or admin |
 
 The API enforces this via `require_partner_or_admin`.
 
 ## What this is NOT
 
-- **It's not a clinical mental-health intervention.** If a junior is in crisis, no anonymous form helps. The firm's actual mental-health resources (EAP, etc.) sit outside this product.
-- **It's not retaliation-proof in social terms.** Even with anonymous data, a partner could call a team meeting and say "this team's wellbeing scores are low, who has feedback?" — and juniors will still feel exposed. The product can guarantee technical anonymity; it cannot guarantee cultural psychological safety.
+- **It's not a clinical mental-health intervention.** If a junior is in crisis, a weekly form is not enough. The firm's actual mental-health resources (EAP, etc.) sit outside this product.
+- **It's not anonymous.** Partners and admins can see each user's completion and average score. The UI tells users this before submission.
 - **It's not a substitute for 1:1s.** The survey surfaces patterns. A human still needs to act on them.
 
 ## Limitations
 
 - No question-level pagination — surveys with 20+ questions would be a chore. We don't currently warn partners about question fatigue.
-- No "skip this question" tracking, because that would require knowing who answered what. So responses are required to be all-or-nothing per submission.
-- Submission status is client-side only — a user could resubmit in the same week and skew their team's average. For an internal firm tool, we trust people not to do that.
+- The current form submits every active question using a default score of 3 when the slider was not changed.
+- Existing rows created before migration `n1c2d3e4f5a6` cannot be linked back to a user and appear only in aggregate trends.
 
 ## Where it lives in the code
 
 | Concern | Path |
 |---|---|
 | Service | `backend/app/services/survey_service.py` |
-| Migration | `backend/migrations/versions/d1e2f3a4b5c6_add_rbac_survey_actions.py` |
-| Routes | `backend/app/main.py` → `/survey/*` |
-| Frontend panel | `frontend/src/components/WellbeingPanel.tsx` |
+| Migrations | `backend/migrations/versions/d1e2f3a4b5c6_add_rbac_survey_actions.py`, `backend/migrations/versions/n1c2d3e4f5a6_identify_survey_responses.py` |
+| Routes | `backend/app/routers/surveys.py` → `/survey/*` |
+| Frontend panel | `frontend/src/features/wellbeing/WellbeingPanel.tsx` |
 | Model | `backend/app/models.py` → `SurveyQuestion`, `SurveyResponse` |

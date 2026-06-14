@@ -278,6 +278,6 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
 const FEATURES = [
   { glyph: '◆', label: 'BIRDIE', desc: 'AI mentor & doc reviewer' },
   { glyph: '◈', label: 'LEX-WIKI', desc: 'Firm knowledge graph' },
-  { glyph: '◉', label: 'ACTIONS', desc: 'Matter triage & delegation' },
+  { glyph: '◉', label: 'WORKBOARD', desc: 'Matter triage & delegation' },
   { glyph: '◎', label: 'WELLBEING', desc: 'Team health signals' },
 ]

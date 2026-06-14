@@ -1,14 +1,13 @@
 import type {
-  AcceptedDreamProposal,
   ActionItem,
   ActionPriority,
   ActionStatus,
   ChatModel,
   ChatThread,
   CurrentUser,
-  DreamApplyResult,
   DreamJobStatus,
   DreamProposal,
+  DocumentComment,
   FirmRole,
   FirmUser,
   KnowledgeBankAccessLog,
@@ -67,6 +66,22 @@ type BackendDocument = {
   created_at: string
   updated_at: string
   chunk_count: number
+  can_manage: boolean
+}
+
+type BackendDocumentComment = {
+  id: string
+  document_id: string
+  user_id: string
+  content: string
+  created_at: string
+  updated_at: string
+  can_delete: boolean
+  author: {
+    id: string
+    full_name: string | null
+    email: string
+  }
 }
 
 type BackendWikiUser = {
@@ -222,6 +237,7 @@ type BackendMemory = {
   id: string
   category: MemoryCategory
   content: string
+  justification: string | null
   confidence: number
   created_at: string
   updated_at: string
@@ -307,6 +323,24 @@ function mapDocument(document: BackendDocument): WorkspaceDocument {
     createdAt: document.created_at,
     updatedAt: document.updated_at,
     chunkCount: document.chunk_count,
+    canManage: document.can_manage,
+  }
+}
+
+function mapDocumentComment(comment: BackendDocumentComment): DocumentComment {
+  return {
+    id: comment.id,
+    documentId: comment.document_id,
+    userId: comment.user_id,
+    content: comment.content,
+    createdAt: comment.created_at,
+    updatedAt: comment.updated_at,
+    canDelete: comment.can_delete,
+    author: {
+      id: comment.author.id,
+      fullName: comment.author.full_name,
+      email: comment.author.email,
+    },
   }
 }
 
@@ -399,6 +433,7 @@ function mapMemory(memory: BackendMemory): Memory {
     id: memory.id,
     category: memory.category,
     content: memory.content,
+    justification: memory.justification,
     confidence: memory.confidence,
     createdAt: memory.created_at,
     updatedAt: memory.updated_at,
@@ -517,6 +552,47 @@ export async function deleteDocument(id: string): Promise<void> {
   await request(`/documents/${id}`, {
     method: 'DELETE',
   })
+}
+
+export async function renameDocument(id: string, filename: string): Promise<WorkspaceDocument> {
+  return mapDocument(
+    await request<BackendDocument>(`/documents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ filename }),
+    }),
+  )
+}
+
+export function getDocumentFileUrl(id: string, download = false): string {
+  const search = new URLSearchParams()
+  const token = localStorage.getItem('token')
+  if (token) search.set('token', token)
+  if (download) search.set('download', 'true')
+  const suffix = search.toString() ? `?${search}` : ''
+  return `${API_BASE_URL}/documents/${encodeURIComponent(id)}/file${suffix}`
+}
+
+export async function listDocumentComments(documentId: string): Promise<DocumentComment[]> {
+  const comments = await request<BackendDocumentComment[]>(
+    `/documents/${documentId}/comments`,
+  )
+  return comments.map(mapDocumentComment)
+}
+
+export async function createDocumentComment(
+  documentId: string,
+  content: string,
+): Promise<DocumentComment> {
+  return mapDocumentComment(
+    await request<BackendDocumentComment>(`/documents/${documentId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+  )
+}
+
+export async function deleteDocumentComment(commentId: string): Promise<void> {
+  await request(`/documents/comments/${commentId}`, { method: 'DELETE' })
 }
 
 export async function listWikiPages(params?: {
@@ -1118,7 +1194,53 @@ export async function submitSurveyResponse(payload: {
 }
 
 export async function getSurveyResults(): Promise<SurveyResults> {
-  return request<SurveyResults>('/survey/results')
+  const results = await request<{
+    current_week_of: string
+    users: Array<{
+      user_id: string
+      full_name: string | null
+      email: string
+      firm_role: FirmRole
+      week_of: string
+      average_score: number | null
+      response_count: number
+      question_count: number
+    }>
+    questions: Array<{
+      question_id: string
+      question_text: string
+      category: string
+      weeks: Array<{
+        week_of: string
+        avg_score: number
+        response_count: number
+      }>
+    }>
+  }>('/survey/results')
+
+  return {
+    currentWeekOf: results.current_week_of,
+    users: results.users.map((user) => ({
+      userId: user.user_id,
+      fullName: user.full_name,
+      email: user.email,
+      firmRole: user.firm_role,
+      weekOf: user.week_of,
+      averageScore: user.average_score,
+      responseCount: user.response_count,
+      questionCount: user.question_count,
+    })),
+    questions: results.questions.map((question) => ({
+      questionId: question.question_id,
+      questionText: question.question_text,
+      category: question.category,
+      weeks: question.weeks.map((week) => ({
+        weekOf: week.week_of,
+        avgScore: week.avg_score,
+        responseCount: week.response_count,
+      })),
+    })),
+  }
 }
 
 // Action items
@@ -1373,18 +1495,11 @@ type BackendDreamProposal = {
   drops: BackendDreamDrop[]
   reviewed_message_count: number
 }
-type BackendDreamApplyResult = {
-  memories: BackendMemory[]
-  added: number
-  merged: number
-  updated: number
-  dropped: number
-}
-
 type BackendDreamJobStatus = {
   job_id: string
-  status: 'processing' | 'ready' | 'failed'
+  status: 'processing' | 'completed' | 'failed'
   proposal: BackendDreamProposal | null
+  memories: BackendMemory[] | null
   error_message: string | null
 }
 
@@ -1416,6 +1531,7 @@ function mapDreamJobStatus(status: BackendDreamJobStatus): DreamJobStatus {
     jobId: status.job_id,
     status: status.status,
     proposal: status.proposal ? mapDreamProposal(status.proposal) : null,
+    memories: status.memories?.map(mapMemory) ?? null,
     errorMessage: status.error_message,
   }
 }
@@ -1431,37 +1547,4 @@ export async function startDreamJob(): Promise<DreamJobStatus> {
 export async function getDreamJob(jobId: string): Promise<DreamJobStatus> {
   const status = await request<BackendDreamJobStatus>(`/memories/dream/${jobId}`)
   return mapDreamJobStatus(status)
-}
-
-export async function applyDream(accepted: AcceptedDreamProposal): Promise<DreamApplyResult> {
-  const payload = {
-    additions: accepted.additions.map((a) => ({
-      category: a.category,
-      content: a.content,
-      reason: a.reason,
-    })),
-    merges: accepted.merges.map((m) => ({
-      replace_ids: m.replaceIds,
-      category: m.category,
-      content: m.content,
-      reason: m.reason,
-    })),
-    updates: accepted.updates.map((u) => ({
-      memory_id: u.memoryId,
-      content: u.content,
-      reason: u.reason,
-    })),
-    drops: accepted.drops.map((d) => ({ memory_id: d.memoryId, reason: d.reason })),
-  }
-  const result = await request<BackendDreamApplyResult>('/memories/dream/apply', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-  return {
-    memories: result.memories.map(mapMemory),
-    added: result.added,
-    merged: result.merged,
-    updated: result.updated,
-    dropped: result.dropped,
-  }
 }

@@ -1,5 +1,7 @@
 # Plan: PDF viewer + matter-wide comments
 
+> Implemented June 14, 2026. The final migration is `p1e2f3a4b5c6` because the migration ID proposed below was already used. The implementation also includes uploader-only document renaming and widens the Documents list to owner-or-matter-member visibility.
+
 ## Why
 
 Today the Documents panel lists uploaded files but you can't actually *read* them in-app — you'd have to download. For a legal workflow that's wrong: a lawyer reviewing a draft NDA wants the PDF open next to the chat, and wants to leave a comment for a teammate (*"check clause 7.2"*) without leaving the platform.

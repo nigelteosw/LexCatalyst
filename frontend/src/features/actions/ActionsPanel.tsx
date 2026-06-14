@@ -167,7 +167,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
             <CheckSquare size={16} />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-[#0f0f0f]">Actions board</h2>
+            <h2 className="text-sm font-semibold text-[#0f0f0f]">Workboard</h2>
             <p className="text-[10px] text-[#8c8c86]">
               Firm-wide workload. Everyone sees the same board.
             </p>
@@ -411,4 +411,3 @@ function ActionCard({
     </button>
   )
 }
-

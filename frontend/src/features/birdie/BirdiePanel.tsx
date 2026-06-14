@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUp, BookMarked, Lightbulb, User, X } from 'lucide-react'
+import { ArrowUp, BookMarked, Lightbulb, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { listKnowledgeBankEntries, streamBirdieMessage } from '../../shared/api/api'
 import type { KnowledgeBankEntry } from '../../shared/types/workspace'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
+import birdieLogo from '../../assets/Birdie.png'
 
 type BirdiePanelProps = {
   isOpen: boolean
@@ -121,8 +122,13 @@ export function BirdiePanel({ isOpen, onToggle, matterId }: BirdiePanelProps) {
         className="flex shrink-0 items-center gap-2.5 border-b border-black/10 bg-white px-3 py-2.5 sm:cursor-grab sm:active:cursor-grabbing"
         onMouseDown={startDrag}
       >
-        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e8f5ee] border border-[#1a6b4a]/20">
-          <User size={14} className="text-[#1a6b4a]" />
+        <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full border border-[#2d9e6b]/35 bg-[#fff8d8]">
+          <img
+            alt=""
+            aria-hidden="true"
+            className="h-auto w-[250%] max-w-none"
+            src={birdieLogo}
+          />
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold text-[#0f0f0f]">Birdie</div>

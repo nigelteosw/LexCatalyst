@@ -12,6 +12,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -140,6 +141,7 @@ class Memory(Base):
     )
     category: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    justification: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_thread_id: Mapped[str | None] = mapped_column(
         ForeignKey("chat_threads.id", ondelete="SET NULL"),
         index=True,
@@ -226,6 +228,11 @@ class Document(Base):
         cascade="all, delete-orphan",
         order_by="DocumentChunk.chunk_index",
     )
+    comments: Mapped[list["DocumentComment"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="DocumentComment.created_at",
+    )
 
 
 class DocumentChunk(Base):
@@ -249,6 +256,37 @@ class DocumentChunk(Base):
     )
 
     document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+class DocumentComment(Base):
+    __tablename__ = "document_comments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    document: Mapped[Document] = relationship(back_populates="comments")
+    author: Mapped[User] = relationship()
 
 
 class WikiPage(Base):
@@ -695,11 +733,22 @@ class SurveyQuestion(Base):
 
 
 class SurveyResponse(Base):
-    """Truly anonymous — no user_id column."""
-
     __tablename__ = "survey_responses"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "question_id",
+            "week_of",
+            name="uq_survey_response_user_question_week",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     question_id: Mapped[str] = mapped_column(
         ForeignKey("survey_questions.id", ondelete="CASCADE"),
         index=True,
@@ -713,6 +762,7 @@ class SurveyResponse(Base):
         nullable=False,
     )
 
+    user: Mapped[User | None] = relationship()
     question: Mapped[SurveyQuestion] = relationship(back_populates="responses")
 
 
@@ -728,6 +778,11 @@ class DreamJob(Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="processing")
     proposal_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    processing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

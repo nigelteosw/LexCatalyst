@@ -20,6 +20,7 @@ import {
 import type { ChatModel, ChatThread, CurrentUser, Message } from '../shared/types/workspace'
 import { useViewStore } from './viewStore'
 import { getErrorMessage, isAbortError } from '../shared/lib/errors'
+import lexChatLogo from '../assets/LexCatalyst.png'
 
 const MemoriesPanel = lazy(() =>
   import('../features/memories/MemoriesPanel').then((module) => ({ default: module.MemoriesPanel })),
@@ -503,7 +504,9 @@ function App() {
     <div className="flex h-dvh min-h-0 w-full overflow-hidden overscroll-none bg-[#fcfcfb] text-neutral-900">
       <Sidebar
         isOpen={isSidebarOpen}
+        isBirdieOpen={isBirdieOpen}
         matters={matters}
+        onBirdieToggle={() => setIsBirdieOpen((open) => !open)}
         onClose={() => setIsSidebarOpen(false)}
         onMatterChange={handleMatterChange}
         onNewChat={handleNewChat}
@@ -537,18 +540,6 @@ function App() {
             <span className="truncate text-sm font-semibold text-neutral-900">
               {mobileViewTitle(current.view)}
             </span>
-            <button
-              aria-label={isBirdieOpen ? 'Hide Birdie' : 'Show Birdie'}
-              className={`ml-auto grid h-8 w-8 place-items-center rounded-full border ${
-                isBirdieOpen
-                  ? 'border-[#1a6b4a]/18 bg-[#e8f5ee]'
-                  : 'border-neutral-200 bg-neutral-50'
-              }`}
-              onClick={() => setIsBirdieOpen((open) => !open)}
-              type="button"
-            >
-              <span className={`h-2 w-2 rounded-full ${isBirdieOpen ? 'bg-[#2d9e6b]' : 'bg-neutral-300'}`} />
-            </button>
           </header>
         )}
 
@@ -592,9 +583,22 @@ function App() {
                   >
                     <Menu size={20} />
                   </Button>
-                  <h2 className="truncate text-sm font-semibold text-neutral-900">
-                    {activeThread?.title ?? 'New Chat'}
-                  </h2>
+                  <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-xl bg-sky-50 ring-1 ring-sky-100">
+                    <img
+                      alt=""
+                      aria-hidden="true"
+                      className="h-auto w-[150%] max-w-none"
+                      src={lexChatLogo}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-600">
+                      LexChat
+                    </div>
+                    <h2 className="truncate text-sm font-semibold text-neutral-900">
+                      {activeThread?.title ?? 'New conversation'}
+                    </h2>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <select
@@ -636,21 +640,6 @@ function App() {
                       )
                     })}
                   </div>
-                  {/* Birdie toggle */}
-                  <button
-                    aria-label={isBirdieOpen ? 'Hide Birdie' : 'Show Birdie'}
-                    className={`flex h-8 w-8 items-center justify-center gap-1.5 rounded-full border text-[11px] font-medium transition-colors sm:w-auto sm:px-3 ${
-                      isBirdieOpen
-                        ? 'border-[#1a6b4a]/18 bg-[#e8f5ee] text-[#1a6b4a]'
-                        : 'border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-neutral-100'
-                    }`}
-                    onClick={() => setIsBirdieOpen((o) => !o)}
-                    title={isBirdieOpen ? 'Hide Birdie' : 'Show Birdie'}
-                    type="button"
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${isBirdieOpen ? 'animate-pulse bg-[#2d9e6b]' : 'bg-neutral-300'}`} />
-                    <span className="hidden sm:inline">Birdie</span>
-                  </button>
                   <Button
                     className="hidden sm:inline-flex"
                     onClick={handleLogout}
@@ -676,10 +665,9 @@ function App() {
               </header>
 
               <ChatPanel
-                assistantInitials="LC"
                 attachmentStatus={composerAttachmentStatus}
                 error={error ?? (workspaceError ? getErrorMessage(workspaceError) : null)}
-                inputLabel="Ask LexCatalyst"
+                inputLabel="Ask LexChat"
                 isLoading={isLoading}
                 isResponding={isResponding}
                 isUploadingFile={isUploadingComposerFile}
@@ -704,9 +692,9 @@ function App() {
 }
 
 function mobileViewTitle(view: ReturnType<typeof useViewStore.getState>['current']['view']) {
-  if (view === 'chat') return 'Chat'
+  if (view === 'chat') return 'LexChat'
   const labels = {
-    actions: 'Actions',
+    actions: 'Workboard',
     documents: 'Documents',
     knowledge_bank: 'Knowledge Bank',
     memories: 'Memories',

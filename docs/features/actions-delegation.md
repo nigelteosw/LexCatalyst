@@ -1,4 +1,4 @@
-# Actions — Visible Work Delegation
+# Workboard — Visible Work Delegation
 
 > A kanban board for handing off work to juniors with priority, due date, and matter context. The senior who delegated and the junior who received both see it.
 

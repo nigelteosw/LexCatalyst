@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Check, ClipboardList, LockKeyhole, Plus, ShieldCheck, Users } from 'lucide-react'
+import { Check, ClipboardList, Plus, ShieldCheck, Users } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createSurveyQuestion,
@@ -46,13 +46,13 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
           </div>
           <div>
             <h2 className="text-sm font-semibold text-[#0f0f0f]">Wellbeing</h2>
-            <p className="text-[10px] text-[#8c8c86]">Anonymous weekly survey</p>
+            <p className="text-[10px] text-[#8c8c86]">Weekly team check-in</p>
           </div>
         </div>
 
         <nav className="flex gap-0.5 overflow-x-auto sm:ml-2">
           <TabButton active={visibleTab === 'survey'} onClick={() => setActiveTab('survey')}>
-            <LockKeyhole size={12} />
+            <ClipboardList size={12} />
             My check-in
           </TabButton>
           {isPartner && (
@@ -150,7 +150,7 @@ function SurveyTab() {
         <Check size={28} className="mx-auto text-[#1a6b4a]" />
         <p className="mt-3 text-base font-semibold text-[#1a6b4a]">Check-in submitted</p>
         <p className="mt-1 text-xs text-[#2d9e6b]">
-          Your responses are anonymous and cannot be linked back to you.
+          Your responses are saved for this week. Submitting again will update them.
         </p>
       </div>
     )
@@ -165,9 +165,9 @@ function SurveyTab() {
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3 rounded-[12px] border border-black/8 bg-white px-4 py-3">
-        <LockKeyhole size={15} className="mt-0.5 shrink-0 text-[#4a3db0]" />
+        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#4a3db0]" />
         <p className="text-xs leading-5 text-[#5a5a56]">
-          Your responses are <strong>completely anonymous</strong> — no user ID is stored. Partners only see aggregated weekly averages across the team.
+          Partners can see completion and average scores for each user so they can follow up on workload and support needs.
         </p>
       </div>
 
@@ -213,7 +213,7 @@ function SurveyTab() {
         onClick={() => submitMutation.mutate()}
         type="button"
       >
-        {submitMutation.isPending ? 'Submitting...' : 'Submit anonymous check-in'}
+        {submitMutation.isPending ? 'Submitting...' : 'Submit weekly check-in'}
       </button>
     </div>
   )
@@ -233,22 +233,98 @@ function ResultsTab() {
       </div>
     )
   }
-  if (!resultsQuery.data || resultsQuery.data.questions.length === 0) {
+  if (!resultsQuery.data) {
     return (
       <div className="rounded-[14px] border border-dashed border-black/15 bg-white p-8 text-center">
-        <p className="text-sm text-[#6f6f69]">No responses recorded yet.</p>
+        <p className="text-sm text-[#6f6f69]">No survey data is available.</p>
       </div>
     )
   }
+
+  const completedUsers = resultsQuery.data.users.filter(
+    (user) => user.questionCount > 0 && user.responseCount >= user.questionCount,
+  ).length
 
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3 rounded-[12px] border border-[#4a3db0]/15 bg-[#eeecff] px-4 py-3">
         <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#4a3db0]" />
         <p className="text-xs leading-5 text-[#4a3db0]">
-          Showing anonymised aggregates only. Individual responses are never stored or surfaced.
+          Current week starting{' '}
+          {new Date(resultsQuery.data.currentWeekOf).toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+          })}
+          . {completedUsers} of {resultsQuery.data.users.length} users completed every active question.
         </p>
       </div>
+
+      <section className="overflow-hidden rounded-[14px] border border-black/10 bg-white">
+        <div className="flex items-center justify-between border-b border-black/8 px-5 py-4">
+          <div>
+            <h3 className="text-sm font-semibold text-[#0f0f0f]">Team dashboard</h3>
+            <p className="mt-0.5 text-[11px] text-[#8c8c86]">Every firm user, including missing check-ins</p>
+          </div>
+          <span className="rounded-full bg-[#f4f3ef] px-2.5 py-1 text-[11px] font-medium text-[#5a5a56]">
+            {resultsQuery.data.users.length} users
+          </span>
+        </div>
+
+        {resultsQuery.data.users.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-[#8c8c86]">No users found.</p>
+        ) : (
+          <div className="divide-y divide-black/8">
+            {resultsQuery.data.users.map((user) => {
+              const isComplete = user.questionCount > 0 && user.responseCount >= user.questionCount
+              const isPartial = user.responseCount > 0 && !isComplete
+              const statusLabel = isComplete ? 'Complete' : isPartial ? 'Partial' : 'Not submitted'
+              const statusClass = isComplete
+                ? 'bg-[#e8f5ee] text-[#1a6b4a]'
+                : isPartial
+                  ? 'bg-[#fff4d6] text-[#8a5a00]'
+                  : 'bg-[#f4f3ef] text-[#777770]'
+
+              return (
+                <div
+                  key={user.userId}
+                  className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_120px_110px] sm:items-center"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-[#171717]">
+                      {user.fullName || user.email}
+                    </p>
+                    <p className="truncate text-[11px] text-[#8c8c86]">
+                      {user.fullName ? user.email : user.firmRole.replace('_', ' ')}
+                    </p>
+                  </div>
+                  <div className="text-xs text-[#5a5a56] sm:text-right">
+                    {user.averageScore === null ? 'No score' : `${user.averageScore.toFixed(1)}/5 average`}
+                  </div>
+                  <div className="flex items-center gap-2 sm:justify-end">
+                    <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${statusClass}`}>
+                      {statusLabel}
+                    </span>
+                    <span className="text-[10px] text-[#9a9a94]">
+                      {user.responseCount}/{user.questionCount}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      <div>
+        <h3 className="text-sm font-semibold text-[#0f0f0f]">Question trends</h3>
+        <p className="mt-0.5 text-[11px] text-[#8c8c86]">Weekly averages across submitted responses</p>
+      </div>
+
+      {resultsQuery.data.questions.length === 0 && (
+        <div className="rounded-[14px] border border-dashed border-black/15 bg-white p-8 text-center">
+          <p className="text-sm text-[#6f6f69]">No survey questions yet.</p>
+        </div>
+      )}
       {resultsQuery.data.questions.map((q) => (
         <section key={q.questionId} className="rounded-[14px] border border-black/10 bg-white p-5">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">

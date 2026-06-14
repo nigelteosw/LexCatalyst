@@ -4,10 +4,10 @@ import { AlertCircle, BookMarked, Brain, FileText, LoaderCircle, Paperclip, Send
 import { Button } from '../../shared/ui/Button'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import type { Message, ToolStep } from '../../shared/types/workspace'
+import lexChatLogo from '../../assets/LexCatalyst.png'
 
 export type ChatPanelProps = {
   attachmentStatus?: string | null
-  assistantInitials: string
   error: string | null
   inputLabel: string
   isLoading: boolean
@@ -27,7 +27,6 @@ export type ChatPanelProps = {
 
 export function ChatPanel({
   attachmentStatus,
-  assistantInitials,
   error,
   inputLabel,
   isLoading,
@@ -88,7 +87,7 @@ export function ChatPanel({
   }, [prompt])
 
   return (
-    <section aria-label="Chat" className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+    <section aria-label="LexChat" className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -102,7 +101,6 @@ export function ChatPanel({
                   key={message.id ?? `${message.role}-${index}`}
                   message={message}
                   userInitials={userInitials}
-                  assistantInitials={assistantInitials}
                   onDelete={
                     onDeleteMessage && message.id && !isResponding
                       ? () => onDeleteMessage(message.id!)
@@ -112,12 +110,17 @@ export function ChatPanel({
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4">
-              <div className="w-12 h-12 bg-neutral-900 text-white rounded-2xl grid place-items-center shadow-lg">
-                <Sparkles size={24} />
+            <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-4 text-center">
+              <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-sky-50 shadow-sm ring-1 ring-sky-100">
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="h-auto w-[155%] max-w-none"
+                  src={lexChatLogo}
+                />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-neutral-900">How can I help you today?</h3>
+                <h3 className="text-xl font-semibold text-neutral-900">Welcome to LexChat</h3>
                 <p className="text-sm text-neutral-500 max-w-sm">
                   I can help you analyze legal documents, research case law, or draft professional correspondence.
                 </p>
@@ -220,7 +223,7 @@ export function ChatPanel({
             </div>
           </div>
           <p className="mt-3 text-[10px] text-center text-neutral-400">
-            LexCatalyst can make mistakes. Check important info.
+            LexChat can make mistakes. Check important info.
           </p>
         </form>
       </div>
@@ -231,7 +234,6 @@ export function ChatPanel({
 type ChatMessageProps = {
   message: Message
   userInitials: string
-  assistantInitials: string
   onDelete?: () => void
 }
 
@@ -248,7 +250,16 @@ function ChatMessage({ message, userInitials, onDelete }: ChatMessageProps) {
             : 'bg-white border-neutral-200 text-neutral-600 shadow-sm'
         }`}
       >
-        {isUser ? userInitials : <Sparkles size={18} className="text-neutral-900" />}
+        {isUser ? (
+          userInitials
+        ) : (
+          <img
+            alt=""
+            aria-hidden="true"
+            className="h-auto w-[145%] max-w-none"
+            src={lexChatLogo}
+          />
+        )}
       </div>
       <div className={`flex flex-col max-w-[85%] md:max-w-[80%] ${isUser ? 'items-end' : 'items-start'}`}>
         {!isUser && message.steps && message.steps.length > 0 && (

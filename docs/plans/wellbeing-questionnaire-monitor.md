@@ -1,5 +1,7 @@
 # Plan: Wellbeing questionnaire polish + team monitor
 
+> Superseded in part on June 14, 2026: survey responses are now linked to users and the Results tab includes every firm user. Any remaining questionnaire polish or monitor work must build on the identified response model introduced by migration `n1c2d3e4f5a6`; the anonymous and k-anonymity requirements below no longer apply.
+
 ## Why
 
 The existing wellbeing surface is too thin to be useful. The check-in is a row of sliders with no progress feedback and no way to capture context. The partner-facing "Results" tab is a static list of bars — partners can't actually see whether things are getting better or worse, and there's no way for the system to flag a category that's trending badly.

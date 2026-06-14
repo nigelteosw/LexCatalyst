@@ -16,7 +16,7 @@ Each file in `features/` answers one question: *why does this feature exist for 
 | [Agent chat](./features/agent-chat.md) | Everyone | Confidential, matter-aware Q&A with citations |
 | [Knowledge Bank](./features/knowledge-bank.md) | Whole firm | Style standardisation, retraining costs, institutional memory leak |
 | [Wellbeing surveys](./features/wellbeing-surveys.md) | Juniors → Partners | Burnout signals without retaliation risk |
-| [Actions delegation](./features/actions-delegation.md) | Seniors → Juniors | Workload triage and visible distribution |
+| [Workboard](./features/actions-delegation.md) | Seniors → Juniors | Workload triage and visible distribution |
 | [RBAC & roles](./features/rbac-roles.md) | Whole firm | Confidentiality at the right granularity |
 | [Personal memory](./features/memory.md) | Each user | Style guide and instructions per individual |
 
@@ -36,7 +36,6 @@ Per-feature implementation plans, each tied to an open TODO. These have enough d
 
 - [`plans/wellbeing-questionnaire-monitor.md`](./plans/wellbeing-questionnaire-monitor.md) — Polish the weekly check-in and replace the partner Results tab with a richer monitor.
 - [`plans/kb-skills-rename.md`](./plans/kb-skills-rename.md) — Rename the third KB category from `action` to `skill`; introduce always-load skills.
-- [`plans/dream-agent.md`](./plans/dream-agent.md) — Memory consolidation agent (Dream button) that proposes additions, merges, updates, drops.
 - [`plans/pdf-viewer-comments.md`](./plans/pdf-viewer-comments.md) — Inline PDF drawer with matter-wide comments.
 
 ## Working notes

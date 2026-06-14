@@ -7,11 +7,11 @@ The third KB category was originally called `action` to mean *"soft-skill / well
 - **Hard skills** — how to perform a specific legal task (drafting a survival clause, reviewing an indemnity cap, doing a due-diligence checklist).
 - **Soft skills** — how to manage a workload conversation with a supervising partner, how to receive feedback, etc.
 
-These are **reusable instructions** that can be loaded into the agent's context to make it act more like a senior. Calling them "actions" is misleading because the project also has the Actions board (kanban tickets). One word, two meanings → confusion.
+These are **reusable instructions** that can be loaded into the agent's context to make it act more like a senior. Calling them "actions" is misleading because the project also has the Workboard (kanban tickets). One word, two meanings → confusion.
 
 Renaming to `skill` gives us:
 - A clean noun the agent can describe (*"I'll apply the negotiation-skill before answering"*)
-- Separation from the kanban Actions
+- Separation from the Workboard
 - A future-proof name as the slot grows beyond the initial wellness-advice content
 
 ## What changes

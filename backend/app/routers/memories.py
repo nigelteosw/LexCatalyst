@@ -8,15 +8,12 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
 from app.schemas import (
-    AcceptedDreamProposal,
-    DreamApplyResult,
     DreamJobStatus,
     MemoryCreate,
     MemoryResponse,
     MemoryUpdate,
 )
 from app.services.dream_service import (
-    apply_dream_proposal,
     get_dream_job,
     start_dream_job,
 )
@@ -87,18 +84,6 @@ def get_dream_status(
     current_user: User = Depends(get_current_user),
 ) -> DreamJobStatus:
     return get_dream_job(db, user=current_user, job_id=job_id)
-
-
-@router.post("/memories/dream/apply", response_model=DreamApplyResult)
-def apply_dream(
-    accepted: AcceptedDreamProposal,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> DreamApplyResult:
-    try:
-        return apply_dream_proposal(db, user=current_user, accepted=accepted)
-    except SQLAlchemyError:
-        raise HTTPException(status_code=503, detail="Database is unavailable")
 
 
 @router.delete("/memories/{memory_id}")

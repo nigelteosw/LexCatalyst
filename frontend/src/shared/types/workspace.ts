@@ -34,6 +34,22 @@ export type WorkspaceDocument = {
   createdAt: string
   updatedAt: string
   chunkCount: number
+  canManage: boolean
+}
+
+export type DocumentComment = {
+  id: string
+  documentId: string
+  userId: string
+  content: string
+  createdAt: string
+  updatedAt: string
+  canDelete: boolean
+  author: {
+    id: string
+    fullName?: string | null
+    email: string
+  }
 }
 
 export type ChatModel = 'deepseek-v4-flash' | 'deepseek-v4-pro'
@@ -44,6 +60,7 @@ export type Memory = {
   id: string
   category: MemoryCategory
   content: string
+  justification?: string | null
   confidence: number
   createdAt: string
   updatedAt: string
@@ -81,25 +98,11 @@ export type DreamProposal = {
   reviewedMessageCount: number
 }
 
-export type AcceptedDreamProposal = {
-  additions: DreamAddition[]
-  merges: DreamMerge[]
-  updates: DreamUpdate[]
-  drops: DreamDrop[]
-}
-
-export type DreamApplyResult = {
-  memories: Memory[]
-  added: number
-  merged: number
-  updated: number
-  dropped: number
-}
-
 export type DreamJobStatus = {
   jobId: string
-  status: 'processing' | 'ready' | 'failed'
+  status: 'processing' | 'completed' | 'failed'
   proposal: DreamProposal | null
+  memories: Memory[] | null
   errorMessage: string | null
 }
 
@@ -237,7 +240,20 @@ export type SurveyQuestionResult = {
   weeks: SurveyWeekResult[]
 }
 
+export type SurveyUserResult = {
+  userId: string
+  fullName?: string | null
+  email: string
+  firmRole: FirmRole
+  weekOf: string
+  averageScore: number | null
+  responseCount: number
+  questionCount: number
+}
+
 export type SurveyResults = {
+  currentWeekOf: string
+  users: SurveyUserResult[]
   questions: SurveyQuestionResult[]
 }
 

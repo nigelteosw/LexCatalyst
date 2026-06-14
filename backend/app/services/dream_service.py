@@ -1,27 +1,24 @@
 """Dream agent — memory consolidation.
 
 Reviews a user's recent chat history and existing memory bank, then
-proposes a minimal set of additions, merges, updates, and drops. The
-agent never writes to the DB directly: it returns a proposal that the
-user reviews and accepts (in whole or part) via a separate apply call.
+applies a minimal set of additions, merges, updates, and drops. Jobs are
+claimed by the durable worker and each automated memory change stores
+the agent's justification.
 """
 
-import asyncio
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import delete, desc, select
+from sqlalchemy import delete, desc, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import ChatMessage, ChatThread, DreamJob, Memory, User
 from app.providers.deepseek import DeepSeekError, DeepSeekProvider
 from app.schemas import (
-    AcceptedDreamProposal,
     DreamAddition,
-    DreamApplyResult,
     DreamDrop,
     DreamJobStatus,
     DreamMerge,
@@ -35,11 +32,12 @@ RECENT_MESSAGE_LIMIT = 50
 RECENT_MESSAGE_CHAR_BUDGET = 30_000
 RATE_LIMIT_WINDOW = timedelta(minutes=5)
 DREAM_MODEL = "deepseek-v4-pro"
-DREAM_JOB_TTL = timedelta(minutes=30)
+DREAM_JOB_RETENTION = timedelta(days=1)
+STALE_CLAIM_AFTER = timedelta(minutes=10)
 
 
 def _gc_dream_jobs(db: Session) -> None:
-    cutoff = datetime.now(timezone.utc) - DREAM_JOB_TTL
+    cutoff = datetime.now(UTC) - DREAM_JOB_RETENTION
     db.execute(delete(DreamJob).where(DreamJob.created_at < cutoff))
     db.commit()
 
@@ -50,11 +48,12 @@ Rules:
 - Be conservative. Default to keeping existing memories. Only delete when there is clear evidence in the chat history that the fact has changed (e.g. user states a new supervising partner).
 - Group near-identical memories into a single merged version. A merge must reference at least two existing memory_ids.
 - New memories must be specific and durable. "Asked about clause 7" is too episodic; "prefers worked examples in answers" is durable.
+- This is a global personal-memory pass. Do not add matter-specific facts or confidential document content.
 - Never propose memories that are sensitive personal information unless the user has already stored similar themselves.
 - Use only the memory_ids provided in the existing memory list. Never invent ids.
 - Return JSON only — no commentary, no markdown fences.
 
-Categories: semantic (stable facts about user/firm/matters), procedural (how the user wants the assistant to behave), episodic (significant events from sessions).
+Categories: semantic (stable facts about the user or firm), procedural (how the user wants the assistant to behave), episodic (significant non-confidential events from sessions).
 
 Output shape:
 {
@@ -67,7 +66,7 @@ Output shape:
 
 
 def _check_rate_limit(db: Session, user_id: str) -> None:
-    cutoff = datetime.now(timezone.utc) - RATE_LIMIT_WINDOW
+    cutoff = datetime.now(UTC) - RATE_LIMIT_WINDOW
     last_job = db.scalar(
         select(DreamJob)
         .where(DreamJob.user_id == user_id, DreamJob.created_at >= cutoff)
@@ -75,7 +74,7 @@ def _check_rate_limit(db: Session, user_id: str) -> None:
         .limit(1)
     )
     if last_job is not None:
-        elapsed = datetime.now(timezone.utc) - last_job.created_at.replace(tzinfo=timezone.utc)
+        elapsed = datetime.now(UTC) - last_job.created_at.replace(tzinfo=UTC)
         retry_in = int((RATE_LIMIT_WINDOW - elapsed).total_seconds())
         raise HTTPException(
             status_code=429,
@@ -108,7 +107,7 @@ def _load_recent_messages(db: Session, *, user_id: str) -> list[ChatMessage]:
 
 
 def _build_user_prompt(*, memories: list[Memory], messages: list[ChatMessage]) -> str:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
 
     memory_lines = []
     for m in memories:
@@ -161,6 +160,7 @@ def _parse_dream_proposal(
     merges: list[DreamMerge] = []
     updates: list[DreamUpdate] = []
     drops: list[DreamDrop] = []
+    merged_ids: set[str] = set()
 
     for item in data.get("additions", []) or []:
         try:
@@ -173,15 +173,16 @@ def _parse_dream_proposal(
             merge = DreamMerge.model_validate(item)
         except Exception:
             continue
-        # Drop any merge that references a non-existent memory.
-        if not set(merge.replace_ids).issubset(existing_memory_ids):
+        replace_ids = set(merge.replace_ids)
+        # Require two distinct, owned memories and reject overlapping merges.
+        if (
+            len(replace_ids) < 2
+            or not replace_ids.issubset(existing_memory_ids)
+            or replace_ids & merged_ids
+        ):
             continue
         merges.append(merge)
-
-    # Collect all memory IDs claimed by merges and drops so we can guard
-    # against the LLM proposing conflicting operations on the same memory.
-    merged_ids: set[str] = {mid for m in merges for mid in m.replace_ids}
-    dropped_ids: set[str] = set()
+        merged_ids.update(replace_ids)
 
     for item in data.get("updates", []) or []:
         try:
@@ -208,7 +209,6 @@ def _parse_dream_proposal(
         if drop.memory_id in merged_ids or drop.memory_id in updated_ids:
             continue
         drops.append(drop)
-        dropped_ids.add(drop.memory_id)
 
     return DreamProposal(
         additions=additions,
@@ -249,41 +249,177 @@ async def _run_dream_consolidation(*, user_id: str) -> DreamProposal:
         db.close()
 
 
-def _write_job_result(
-    job_id: str,
-    *,
-    proposal: DreamProposal | None = None,
-    error: str | None = None,
-) -> None:
+def claim_pending_dream_job(db: Session) -> str | None:
+    """Atomically claim one queued Dream job, including stale jobs."""
+    stale_before = datetime.now(UTC) - STALE_CLAIM_AFTER
+    job_id = db.scalar(
+        select(DreamJob.id)
+        .where(
+            DreamJob.status == "processing",
+            or_(
+                DreamJob.processing_started_at.is_(None),
+                DreamJob.processing_started_at < stale_before,
+            ),
+        )
+        .order_by(DreamJob.created_at)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    if not job_id:
+        return None
+
+    db.execute(
+        update(DreamJob)
+        .where(DreamJob.id == job_id)
+        .values(
+            processing_started_at=datetime.now(UTC),
+            processing_attempts=DreamJob.processing_attempts + 1,
+            error_message=None,
+        )
+    )
+    db.commit()
+    return job_id
+
+
+def _mark_dream_failed(job_id: str, claim_started_at: datetime, error: str) -> None:
     db = SessionLocal()
     try:
-        job = db.get(DreamJob, job_id)
-        if job is None:
+        job = db.scalar(
+            select(DreamJob).where(DreamJob.id == job_id).with_for_update()
+        )
+        if (
+            job is None
+            or job.status != "processing"
+            or job.processing_started_at != claim_started_at
+        ):
             return
-        if proposal is not None:
-            job.status = "ready"
-            job.proposal_json = proposal.model_dump_json()
-        else:
-            job.status = "failed"
-            job.error_message = error
+        job.status = "failed"
+        job.error_message = error[:2000]
+        job.processing_started_at = None
         db.commit()
     finally:
         db.close()
 
 
-async def _dream_job_worker(job_id: str, user_id: str) -> None:
+def _apply_dream_proposal(
+    db: Session,
+    *,
+    user_id: str,
+    proposal: DreamProposal,
+) -> None:
+    """Apply the validated proposal in the caller's transaction."""
+    referenced_ids: set[str] = set()
+    for merge in proposal.merges:
+        referenced_ids.update(merge.replace_ids)
+    for item in proposal.updates:
+        referenced_ids.add(item.memory_id)
+    for drop in proposal.drops:
+        referenced_ids.add(drop.memory_id)
+
+    owned: dict[str, Memory] = {}
+    if referenced_ids:
+        owned = {
+            memory.id: memory
+            for memory in db.scalars(
+                select(Memory)
+                .where(Memory.id.in_(referenced_ids), Memory.user_id == user_id)
+                .with_for_update()
+            )
+        }
+        missing = referenced_ids - owned.keys()
+        if missing:
+            raise RuntimeError(
+                "Memory bank changed while Dream was running; please run Dream again."
+            )
+
+    for item in proposal.updates:
+        memory = owned[item.memory_id]
+        memory.content = item.content
+        memory.justification = item.reason
+
+    for merge in proposal.merges:
+        db.add(
+            Memory(
+                user_id=user_id,
+                category=merge.category,
+                content=merge.content,
+                justification=merge.reason,
+                confidence=1.0,
+            )
+        )
+        for memory_id in merge.replace_ids:
+            db.delete(owned[memory_id])
+
+    for drop in proposal.drops:
+        db.delete(owned[drop.memory_id])
+
+    for addition in proposal.additions:
+        db.add(
+            Memory(
+                user_id=user_id,
+                category=addition.category,
+                content=addition.content,
+                justification=addition.reason,
+                confidence=1.0,
+            )
+        )
+
+
+async def process_dream_job(job_id: str) -> None:
+    """Generate and atomically apply one claimed Dream job."""
+    metadata_db = SessionLocal()
+    try:
+        job = metadata_db.get(DreamJob, job_id)
+        if (
+            job is None
+            or job.status != "processing"
+            or job.processing_started_at is None
+        ):
+            return
+        user_id = job.user_id
+        claim_started_at = job.processing_started_at
+    finally:
+        metadata_db.close()
+
     try:
         proposal = await _run_dream_consolidation(user_id=user_id)
-        _write_job_result(job_id, proposal=proposal)
     except DeepSeekError as exc:
-        _write_job_result(job_id, error=str(exc))
+        _mark_dream_failed(job_id, claim_started_at, str(exc))
+        return
     except HTTPException as exc:
-        _write_job_result(
+        _mark_dream_failed(
             job_id,
-            error=exc.detail if isinstance(exc.detail, str) else "Dream failed",
+            claim_started_at,
+            exc.detail if isinstance(exc.detail, str) else "Dream failed",
         )
+        return
     except Exception as exc:  # noqa: BLE001
-        _write_job_result(job_id, error=f"Dream failed: {exc}")
+        _mark_dream_failed(job_id, claim_started_at, f"Dream failed: {exc}")
+        return
+
+    db = SessionLocal()
+    try:
+        job = db.scalar(
+            select(DreamJob).where(DreamJob.id == job_id).with_for_update()
+        )
+        if (
+            job is None
+            or job.status != "processing"
+            or job.processing_started_at != claim_started_at
+        ):
+            return
+
+        _apply_dream_proposal(db, user_id=user_id, proposal=proposal)
+        job.status = "completed"
+        job.proposal_json = proposal.model_dump_json()
+        job.error_message = None
+        job.processing_started_at = None
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        _mark_dream_failed(job_id, claim_started_at, f"Dream failed: {exc}")
+    finally:
+        db.close()
 
 
 def start_dream_job(db: Session, *, user: User) -> DreamJobStatus:
@@ -295,8 +431,6 @@ def start_dream_job(db: Session, *, user: User) -> DreamJobStatus:
     db.add(job)
     db.commit()
 
-    asyncio.create_task(_dream_job_worker(job_id, user.id))
-
     return DreamJobStatus(job_id=job_id, status="processing")
 
 
@@ -307,110 +441,19 @@ def get_dream_job(db: Session, *, user: User, job_id: str) -> DreamJobStatus:
     if job is None:
         raise HTTPException(status_code=404, detail="Dream job not found")
 
-    # If the background task was lost (e.g. server restart), surface a failure
-    # rather than leaving the client polling forever.
-    if job.status == "processing":
-        age = datetime.now(timezone.utc) - job.created_at.replace(tzinfo=timezone.utc)
-        if age > DREAM_JOB_TTL:
-            job.status = "failed"
-            job.error_message = "Dream job timed out. Please try again."
-            db.commit()
-
     proposal: DreamProposal | None = None
-    if job.status == "ready" and job.proposal_json:
+    memories: list[MemoryResponse] | None = None
+    if job.status == "completed" and job.proposal_json:
         proposal = DreamProposal.model_validate_json(job.proposal_json)
+        memories = [
+            MemoryResponse.model_validate(memory)
+            for memory in list_memories(db, user_id=user.id)
+        ]
 
     return DreamJobStatus(
         job_id=job_id,
         status=job.status,
         proposal=proposal,
+        memories=memories,
         error_message=job.error_message,
-    )
-
-
-def apply_dream_proposal(
-    db: Session, *, user: User, accepted: AcceptedDreamProposal,
-) -> DreamApplyResult:
-    """Apply accepted items atomically. Every referenced memory_id must
-    belong to the calling user."""
-
-    referenced_ids: set[str] = set()
-    for merge in accepted.merges:
-        referenced_ids.update(merge.replace_ids)
-    for update in accepted.updates:
-        referenced_ids.add(update.memory_id)
-    for drop in accepted.drops:
-        referenced_ids.add(drop.memory_id)
-
-    owned: dict[str, Memory] = {}
-    if referenced_ids:
-        stmt = select(Memory).where(
-            Memory.id.in_(referenced_ids), Memory.user_id == user.id
-        )
-        owned = {m.id: m for m in db.scalars(stmt)}
-        missing = referenced_ids - owned.keys()
-        if missing:
-            raise HTTPException(
-                status_code=403,
-                detail="One or more memories don't belong to you.",
-            )
-
-    added_count = 0
-    merged_count = 0
-    updated_count = 0
-    dropped_count = 0
-
-    try:
-        # Updates first — they don't depend on anything.
-        for update in accepted.updates:
-            mem = owned[update.memory_id]
-            mem.content = update.content
-            updated_count += 1
-
-        # Merges: create the new memory then delete the originals.
-        for merge in accepted.merges:
-            new_mem = Memory(
-                user_id=user.id,
-                category=merge.category,
-                content=merge.content,
-                confidence=1.0,
-            )
-            db.add(new_mem)
-            for mid in merge.replace_ids:
-                old = owned.get(mid)
-                if old is not None:
-                    db.delete(old)
-            merged_count += 1
-
-        # Drops.
-        for drop in accepted.drops:
-            mem = owned.get(drop.memory_id)
-            if mem is not None:
-                db.delete(mem)
-                dropped_count += 1
-
-        # Additions last so we don't accidentally merge against fresh rows.
-        for addition in accepted.additions:
-            db.add(
-                Memory(
-                    user_id=user.id,
-                    category=addition.category,
-                    content=addition.content,
-                    confidence=1.0,
-                )
-            )
-            added_count += 1
-
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-
-    memories = list_memories(db, user_id=user.id)
-    return DreamApplyResult(
-        memories=[MemoryResponse.model_validate(m) for m in memories],
-        added=added_count,
-        merged=merged_count,
-        updated=updated_count,
-        dropped=dropped_count,
     )
