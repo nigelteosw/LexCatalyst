@@ -12,6 +12,10 @@ import type { CurrentUser, FirmRole } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { userLabel } from '../actions/config'
 
+type SettingsPanelProps = {
+  currentUser: CurrentUser | null
+}
+
 const roles: Array<{
   id: FirmRole | 'admin'
   label: string

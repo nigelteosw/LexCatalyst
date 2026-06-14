@@ -347,6 +347,7 @@ export type FirmUser = {
   fullName?: string | null
   email: string
   firmRole: FirmRole
+  isAdmin: boolean
 }
 
 export type KbEntryStatus = 'processing' | 'ready' | 'failed'

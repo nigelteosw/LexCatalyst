@@ -1375,6 +1375,7 @@ type BackendFirmUser = {
   full_name: string | null
   email: string
   firm_role: FirmRole
+  is_admin: boolean
 }
 
 export async function listFirmUsers(): Promise<FirmUser[]> {
@@ -1384,6 +1385,7 @@ export async function listFirmUsers(): Promise<FirmUser[]> {
     fullName: u.full_name,
     email: u.email,
     firmRole: u.firm_role,
+    isAdmin: u.is_admin,
   }))
 }
 
@@ -1794,9 +1796,8 @@ export async function getReviewsWaitingCount(): Promise<number> {
 }
 
 export async function createDummyUsers(count: number = 5): Promise<void> {
-  await request('/system/dummy-users', {
+  await request(`/system/dummy-users?count=${count}`, {
     method: 'POST',
-    params: { count },
   })
 }
 

@@ -673,5 +673,6 @@ class FirmUserResponse(BaseModel):
     full_name: str | None = None
     email: str
     firm_role: str
+    is_admin: bool
 
     model_config = {"from_attributes": True}
