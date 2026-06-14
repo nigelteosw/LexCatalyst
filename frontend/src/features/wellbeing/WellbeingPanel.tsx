@@ -1,9 +1,18 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Check, ClipboardList, Plus, ShieldCheck, Users } from 'lucide-react'
+import {
+  Check,
+  ClipboardList,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Users,
+} from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createSurveyQuestion,
+  deleteSurveyQuestion,
   getSurveyResults,
   listSurveyQuestions,
   submitSurveyResponse,
@@ -368,6 +377,9 @@ function ManageQuestionsTab() {
   const [isAdding, setIsAdding] = useState(false)
   const [newText, setNewText] = useState('')
   const [newCategory, setNewCategory] = useState<SurveyCategory>('workload')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
+  const [editCategory, setEditCategory] = useState<SurveyCategory>('workload')
   const [error, setError] = useState<string | null>(null)
 
   const createMutation = useMutation({
@@ -381,9 +393,28 @@ function ManageQuestionsTab() {
     onError: (caughtError) => setError(getErrorMessage(caughtError)),
   })
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
-      updateSurveyQuestion(id, { isActive }),
+  const updateMutation = useMutation({
+    mutationFn: ({
+      id,
+      text,
+      category,
+      isActive,
+    }: {
+      id: string
+      text?: string
+      category?: SurveyCategory
+      isActive?: boolean
+    }) => updateSurveyQuestion(id, { text, category, isActive }),
+    onSuccess: () => {
+      setEditingId(null)
+      setError(null)
+      queryClient.invalidateQueries({ queryKey: ['surveyQuestions'] })
+    },
+    onError: (caughtError) => setError(getErrorMessage(caughtError)),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteSurveyQuestion(id),
     onSuccess: () => {
       setError(null)
       queryClient.invalidateQueries({ queryKey: ['surveyQuestions'] })
@@ -408,23 +439,30 @@ function ManageQuestionsTab() {
       </div>
 
       {isAdding && (
-        <div className="rounded-[14px] border border-black/10 bg-white p-4 space-y-3">
+        <div className="rounded-[14px] border border-black/10 bg-white p-4 space-y-3 shadow-sm">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+            New question
+          </div>
           <input
             autoFocus
             className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-black/30"
             onChange={(e) => setNewText(e.target.value)}
-            placeholder="Question text"
+            placeholder="e.g. I feel supported by my team"
             value={newText}
           />
-          <select
-            className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs"
-            onChange={(e) => setNewCategory(e.target.value as SurveyCategory)}
-            value={newCategory}
-          >
-            {Object.entries(categoryLabels).map(([id, label]) => (
-              <option key={id} value={id}>{label}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs"
+              onChange={(e) => setNewCategory(e.target.value as SurveyCategory)}
+              value={newCategory}
+            >
+              {Object.entries(categoryLabels).map(([id, label]) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex gap-2">
             <button
               className="rounded-lg px-3 py-2 text-xs text-[#5a5a56] hover:bg-[#f4f3ef]"
@@ -439,7 +477,7 @@ function ManageQuestionsTab() {
               onClick={() => createMutation.mutate()}
               type="button"
             >
-              {createMutation.isPending ? 'Adding...' : 'Add'}
+              {createMutation.isPending ? 'Adding...' : 'Add question'}
             </button>
           </div>
         </div>
@@ -460,28 +498,98 @@ function ManageQuestionsTab() {
           {questions.map((q) => (
             <div
               key={q.id}
-              className={`flex items-center gap-3 rounded-[12px] border px-4 py-3 ${
+              className={`rounded-[12px] border px-4 py-3 transition-all ${
                 q.isActive ? 'border-black/10 bg-white' : 'border-black/8 bg-[#f8f8f6] opacity-60'
               }`}
             >
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-[#0f0f0f]">{q.text}</p>
-                <p className="mt-0.5 text-[10px] text-[#9a9a94]">
-                  {categoryLabels[q.category as SurveyCategory] ?? q.category}
-                </p>
-              </div>
-              <button
-                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  q.isActive
-                    ? 'bg-[#e8f5ee] text-[#1a6b4a] hover:bg-[#d0edde]'
-                    : 'bg-[#f4f3ef] text-[#6f6f69] hover:bg-[#eeecea]'
-                }`}
-                disabled={toggleMutation.isPending}
-                onClick={() => toggleMutation.mutate({ id: q.id, isActive: !q.isActive })}
-                type="button"
-              >
-                {q.isActive ? 'Active' : 'Inactive'}
-              </button>
+              {editingId === q.id ? (
+                <div className="space-y-3">
+                  <input
+                    autoFocus
+                    className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-black/30"
+                    onChange={(e) => setEditText(e.target.value)}
+                    value={editText}
+                  />
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="rounded-lg border border-black/10 bg-white px-2 py-1.5 text-xs"
+                      onChange={(e) => setEditCategory(e.target.value as SurveyCategory)}
+                      value={editCategory}
+                    >
+                      {Object.entries(categoryLabels).map(([id, label]) => (
+                        <option key={id} value={id}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-lg px-3 py-1.5 text-xs text-[#5a5a56] hover:bg-[#f4f3ef]"
+                      onClick={() => setEditingId(null)}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                      disabled={!editText.trim() || updateMutation.isPending}
+                      onClick={() => updateMutation.mutate({ id: q.id, text: editText, category: editCategory })}
+                      type="button"
+                    >
+                      Save changes
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-[#0f0f0f]">{q.text}</p>
+                    <p className="mt-0.5 text-[10px] text-[#9a9a94]">
+                      {categoryLabels[q.category as SurveyCategory] ?? q.category}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                        q.isActive
+                          ? 'bg-[#e8f5ee] text-[#1a6b4a] hover:bg-[#d0edde]'
+                          : 'bg-[#f4f3ef] text-[#6f6f69] hover:bg-[#eeecea]'
+                      }`}
+                      disabled={updateMutation.isPending}
+                      onClick={() => updateMutation.mutate({ id: q.id, isActive: !q.isActive })}
+                      type="button"
+                    >
+                      {q.isActive ? 'Active' : 'Inactive'}
+                    </button>
+                    <button
+                      className="grid h-8 w-8 place-items-center rounded-lg text-[#8c8c86] hover:bg-[#f4f3ef] hover:text-[#5a5a56]"
+                      onClick={() => {
+                        setEditingId(q.id)
+                        setEditText(q.text)
+                        setEditCategory(q.category as SurveyCategory)
+                      }}
+                      title="Edit question"
+                      type="button"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      className="grid h-8 w-8 place-items-center rounded-lg text-[#8c8c86] hover:bg-red-50 hover:text-red-600"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => {
+                        if (window.confirm('Delete this question and all its historical responses?')) {
+                          deleteMutation.mutate(q.id)
+                        }
+                      }}
+                      title="Delete question"
+                      type="button"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

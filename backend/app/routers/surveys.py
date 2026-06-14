@@ -15,6 +15,7 @@ from app.schemas import (
 )
 from app.services.survey_service import (
     create_survey_question,
+    delete_survey_question,
     get_survey_results,
     list_survey_questions,
     submit_survey_response,
@@ -63,6 +64,18 @@ def patch_survey_question(
     if not q:
         raise HTTPException(status_code=404, detail="Survey question not found")
     return SurveyQuestionResponse.model_validate(q)
+
+
+@router.delete("/survey/questions/{question_id}")
+def delete_survey_question_endpoint(
+    question_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    require_partner_or_admin(current_user)
+    if not delete_survey_question(db, question_id=question_id):
+        raise HTTPException(status_code=404, detail="Survey question not found")
+    return {"status": "ok"}
 
 
 @router.post("/survey/responses", status_code=status.HTTP_201_CREATED)

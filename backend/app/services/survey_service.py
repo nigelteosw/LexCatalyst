@@ -63,6 +63,15 @@ def update_survey_question(
     return question
 
 
+def delete_survey_question(db: Session, question_id: str) -> bool:
+    question = db.get(SurveyQuestion, question_id)
+    if not question:
+        return False
+    db.delete(question)
+    db.commit()
+    return True
+
+
 def submit_survey_response(
     db: Session,
     *,
