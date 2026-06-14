@@ -37,7 +37,7 @@ import { AnnotationRail } from './AnnotationRail'
 import { SuggestionEditor } from './SuggestionEditor'
 
 const PDFJS_WORKER_URL = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
+  'pdfjs-dist/build/pdf.worker.min.js',
   import.meta.url,
 ).toString()
 
@@ -189,8 +189,6 @@ function HandoffViewer({
   const [fileError, setFileError] = useState<string | null>(null)
   const [annotationError, setAnnotationError] = useState<string | null>(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
-  const highlightPluginRef = useRef<ReturnType<typeof highlightPlugin> | null>(null)
-  const defaultLayoutRef = useRef<ReturnType<typeof defaultLayoutPlugin> | null>(null)
 
   // Build the current annotations list from the handoff (kept fresh by query)
   const annotations = handoff.annotations
@@ -367,45 +365,15 @@ function HandoffViewer({
     )
   }
 
-  function buildPlugins() {
-    highlightPluginRef.current = highlightPlugin({
-      renderHighlightTarget,
-      renderHighlightContent,
-      renderHighlights,
-      trigger: Trigger.TextSelection,
-    })
-    // defaultLayoutPlugin must be rebuilt together with the highlight plugin so
-    // both receive fresh Viewer-internal store refs on every remount. Reusing a
-    // stale defaultLayoutPlugin instance across viewerKey increments leaves its
-    // toolbar DOM refs pointing at the previous (unmounted) Viewer.
-    defaultLayoutRef.current = defaultLayoutPlugin()
-  }
-
-  // Build plugins on first render.
-  if (!highlightPluginRef.current || !defaultLayoutRef.current) {
-    buildPlugins()
-  }
-
-  // Rebuild both plugins and remount the Viewer whenever annotations or
-  // isReviewer change. Doing this in a ref-guard + effect (rather than
-  // useCallback) avoids an extra render cycle while still giving closures
-  // fresh values.
-  const [viewerKey, setViewerKey] = useState(0)
-  const prevAnnotationsRef = useRef(annotations)
-  const prevIsReviewerRef = useRef(isReviewer)
-  useEffect(() => {
-    const annotationsChanged = annotations !== prevAnnotationsRef.current
-    const reviewerChanged = isReviewer !== prevIsReviewerRef.current
-    if (annotationsChanged || reviewerChanged) {
-      prevAnnotationsRef.current = annotations
-      prevIsReviewerRef.current = isReviewer
-      buildPlugins()
-      setViewerKey((k) => k + 1)
-    }
-  // buildPlugins is redeclared each render and captures current closures —
-  // intentional; deps are tracked via the prev-refs above.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [annotations, isReviewer])
+  // These plugin factories use React hooks internally and must be invoked
+  // unconditionally on every render, just like custom hooks.
+  const highlightPluginInstance = highlightPlugin({
+    renderHighlightTarget,
+    renderHighlightContent,
+    renderHighlights,
+    trigger: Trigger.TextSelection,
+  })
+  const defaultLayoutInstance = defaultLayoutPlugin()
 
   // PDF fetch
   useEffect(() => {
@@ -427,7 +395,7 @@ function HandoffViewer({
   }, [handoff.documentId])
 
   function jumpToAnnotation(area: HighlightArea) {
-    highlightPluginRef.current?.jumpToHighlightArea(area)
+    highlightPluginInstance.jumpToHighlightArea(area)
   }
 
   return (
@@ -549,9 +517,8 @@ function HandoffViewer({
             <div style={{ height: 'calc(100vh - 14rem)' }}>
               <Worker workerUrl={PDFJS_WORKER_URL}>
                 <Viewer
-                  key={viewerKey}
                   fileUrl={fileUrl}
-                  plugins={[defaultLayoutRef.current!, highlightPluginRef.current!]}
+                  plugins={[defaultLayoutInstance, highlightPluginInstance]}
                 />
               </Worker>
             </div>

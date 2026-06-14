@@ -379,74 +379,74 @@ function ActionCard({
   onDelete: () => void
 }) {
   return (
-    <button
-      className="group relative rounded-[12px] border border-black/10 bg-white p-3.5 text-left transition-all hover:border-black/20 hover:shadow-sm"
-      onClick={onClick}
-      type="button"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="line-clamp-2 text-xs font-medium text-[#0f0f0f]">{item.title}</p>
-        <div className="flex items-center gap-1 mt-0.5 shrink-0">
-          <button
-            className="grid h-5 w-5 place-items-center rounded text-red-600/40 transition-colors hover:bg-red-50 hover:text-red-600"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete()
-            }}
-            title="Delete ticket"
-            type="button"
+    <article className="group relative rounded-[12px] border border-black/10 bg-white transition-all hover:border-black/20 hover:shadow-sm">
+      <button
+        className="w-full p-3.5 pr-14 text-left"
+        onClick={onClick}
+        type="button"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="line-clamp-2 text-xs font-medium text-[#0f0f0f]">{item.title}</p>
+          <div className="mt-0.5 shrink-0">
+            <ChevronRight size={13} className="text-[#aaa9a3]" />
+          </div>
+        </div>
+        {item.activeHandoffId && (
+          <div
+            className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-medium ${
+              item.status === 'in_progress'
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-[#fff1d6] text-[#8a5a00]'
+            }`}
           >
-            <Trash2 size={12} />
-          </button>
-          <ChevronRight size={13} className="text-[#aaa9a3]" />
-        </div>
-      </div>
-      {item.activeHandoffId && (
-        <div
-          className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-medium ${
-            item.status === 'in_progress'
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-[#fff1d6] text-[#8a5a00]'
-          }`}
-        >
-          <ClipboardList size={10} />
-          {item.status === 'in_progress' ? 'Returned for rework' : 'Handoff ready'}
-        </div>
-      )}
-      {item.description && (
-        <p className="mt-1 line-clamp-1 text-[11px] text-[#8c8c86]">{item.description}</p>
-      )}
-      {item.tags.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {item.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full bg-[#eeecff] px-2 py-0.5 text-[9.5px] font-medium text-[#4a3db0]"
-            >
-              {tag}
+            <ClipboardList size={10} />
+            {item.status === 'in_progress' ? 'Returned for rework' : 'Handoff ready'}
+          </div>
+        )}
+        {item.description && (
+          <p className="mt-1 line-clamp-1 text-[11px] text-[#8c8c86]">{item.description}</p>
+        )}
+        {item.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {item.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-[#eeecff] px-2 py-0.5 text-[9.5px] font-medium text-[#4a3db0]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-medium capitalize ${priorityColors[item.priority]}`}>
+            {item.priority}
+          </span>
+          {item.assignee ? (
+            <span className="rounded-full bg-[#e8f0fe] px-2 py-0.5 text-[9.5px] font-medium text-[#1a4a8a]">
+              {item.assignee.fullName ?? item.assignee.email}
             </span>
-          ))}
+          ) : (
+            <span className="rounded-full bg-[#f4f3ef] px-2 py-0.5 text-[9.5px] font-medium text-[#8c8c86]">
+              Unassigned
+            </span>
+          )}
+          {item.dueDate && (
+            <span className="text-[9.5px] text-[#9a9a94]">
+              Due {new Date(item.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </span>
+          )}
         </div>
-      )}
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-medium capitalize ${priorityColors[item.priority]}`}>
-          {item.priority}
-        </span>
-        {item.assignee ? (
-          <span className="rounded-full bg-[#e8f0fe] px-2 py-0.5 text-[9.5px] font-medium text-[#1a4a8a]">
-            {item.assignee.fullName ?? item.assignee.email}
-          </span>
-        ) : (
-          <span className="rounded-full bg-[#f4f3ef] px-2 py-0.5 text-[9.5px] font-medium text-[#8c8c86]">
-            Unassigned
-          </span>
-        )}
-        {item.dueDate && (
-          <span className="text-[9.5px] text-[#9a9a94]">
-            Due {new Date(item.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-          </span>
-        )}
-      </div>
-    </button>
+      </button>
+      <button
+        aria-label={`Delete ${item.title}`}
+        className="absolute right-8 top-3 grid h-5 w-5 place-items-center rounded text-red-600/40 transition-colors hover:bg-red-50 hover:text-red-600"
+        onClick={onDelete}
+        title="Delete ticket"
+        type="button"
+      >
+        <Trash2 size={12} />
+      </button>
+    </article>
   )
 }

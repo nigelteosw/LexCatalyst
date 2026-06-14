@@ -159,7 +159,7 @@ export function ActionDetailDialog({
   return (
     <Dialog
       bodyClassName="p-0"
-      className={tab === 'handoff' ? 'max-w-6xl' : 'max-w-2xl'}
+      className={tab === 'handoff' ? 'max-w-6xl' : 'max-w-2xl sm:rounded-lg rounded-none sm:m-4 m-0 sm:max-h-[calc(100dvh-2rem)] max-h-dvh'}
       headerActions={
         <button
           aria-label="Delete ticket"
