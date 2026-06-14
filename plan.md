@@ -232,17 +232,21 @@ Do not store raw files directly in Postgres.
 
 Do not make document ingestion fully synchronous.
 
-Use the database-backed worker:
+Use the database-backed worker embedded in the FastAPI service:
 
 ```txt
-python -m app.worker
+uvicorn app.main:app
 ```
 
 The upload request stores the original in R2 and creates a durable
 `processing` document row. The worker claims jobs with `FOR UPDATE SKIP
 LOCKED`, reclaims stale jobs after restarts, and performs extraction, OCR,
-chunking, and embedding outside the web process. The same worker service also
-processes Knowledge Bank summaries.
+chunking, and embedding outside the FastAPI event loop on a managed worker
+thread. OCR extraction runs in a killable subprocess so a timeout cannot leave
+CPU work running. The same embedded worker processes Knowledge Bank summaries
+and Dream jobs. Worker concurrency is deliberately fixed in code for the demo:
+two jobs globally and one slot per queue. Run one Uvicorn process for the
+Railway backend service.
 
 Document statuses:
 

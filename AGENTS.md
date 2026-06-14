@@ -161,7 +161,7 @@ Do not add a tool registry unless it removes real duplication.
 
 All schema changes go through Alembic (`backend/migrations/`). Never add new tables or indexes only to `create_db_tables()` — that path runs only when `AUTO_CREATE_TABLES=true`, which is not the case in production.
 
-Current head: `r3a4b5c6d7e8`
+Current head: `s4b5c6d7e8f9`
 
 ```sh
 cd backend && source .venv/bin/activate

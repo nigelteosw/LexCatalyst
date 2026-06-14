@@ -1,6 +1,8 @@
+> **SUPERSEDED (2026-06-15)** — The extraction-based handoff flow described here was replaced by visual PDF redlining (annotations). See `docs/plans/pdf-redlining-review.md` and migration `s4b5c6d7e8f9`. The `review_findings` table and `extracting` status no longer exist. This document is kept for historical context only.
+
 # RFC: Structured Review Handoff
 
-Status: Proposed
+Status: Superseded
 Date: 2026-06-14
 Owner: LexCatalyst product/backend
 Related: [`rfc-knowledge-bank.md`](./rfc-knowledge-bank.md), [`features/actions-delegation.md`](./features/actions-delegation.md), [`plans/document-review-redlining.md`](./plans/document-review-redlining.md)

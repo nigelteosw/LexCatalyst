@@ -158,7 +158,7 @@ async def ingest_document_kb_entry(
     """Kick off async summarization of a document into a KB entry.
 
     Returns a placeholder entry with `status="processing"` immediately. The
-    actual summarization is claimed by the dedicated KB worker using
+    actual summarization is claimed by the embedded combined worker using
     DeepSeek Pro and flips the entry to `status="ready"` (or `"failed"`)
     when done. Clients should poll `GET /kb/entries/{id}` to observe
     completion.

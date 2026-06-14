@@ -5,7 +5,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ## Core Features
 
 ### Knowledge & Documents
-- **Async document, Knowledge Bank, and Dream jobs**: A Railway worker claims durable Postgres jobs for extraction, OCR, embeddings, optional **DeepSeek Pro** Knowledge Bank summaries, and automatic memory consolidation.
+- **Async document, Knowledge Bank, and Dream jobs**: The FastAPI service runs an embedded worker thread that claims durable Postgres jobs for extraction, OCR, embeddings, optional **DeepSeek Pro** Knowledge Bank summaries, and automatic memory consolidation.
 - **Auditable memory consolidation**: Dream applies conservative memory additions, merges, updates, and drops without a manual approval step. Automated memories retain the agent's justification.
 - **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
 - **Drag-and-drop uploads**: Drop PDF/DOCX directly onto the Documents panel. OCR fallback via Tesseract for scanned PDFs.
@@ -60,7 +60,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 
 ### Frontend
 - **React 19** + **TypeScript 6** + **Vite 8**, installed and built with **Bun 1.3**
-- **Zustand 5** for local view state and **TanStack Query v5** for paginated server state and job-status polling
+- **React Router 7** for URL-backed workspace navigation and **TanStack Query v5** for paginated server state and job-status polling
 - **Tailwind CSS 4** through the Vite plugin
 - **react-markdown** + **remark-gfm** for KB summary rendering
 - **Server-Sent Events** for the streaming chat and Birdie agent
@@ -82,9 +82,9 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 
 ### Infrastructure
 - **Docker Compose** for local PostgreSQL
-- **Railway** for the static frontend, FastAPI web service, background worker, and managed PostgreSQL
+- **Railway** for the static frontend, FastAPI web service with its embedded worker, and managed PostgreSQL
 - **Cloudflare R2** as the S3-compatible object store
-- **Alembic head:** `r3a4b5c6d7e8`
+- **Alembic head:** `s4b5c6d7e8f9`
 
 Editable high-level architecture diagrams:
 
@@ -101,8 +101,9 @@ Editable high-level architecture diagrams:
 .
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                            # FastAPI app, middleware, router wiring
-│   │   ├── worker.py                          # Durable document, KB, and Dream worker
+│   │   ├── main.py                            # FastAPI app, lifespan, embedded worker
+│   │   ├── worker.py                          # Durable combined queue runner
+│   │   ├── worker_types.py                    # Claim ownership token
 │   │   ├── models.py                          # SQLAlchemy ORM
 │   │   ├── schemas.py                         # Pydantic request/response
 │   │   ├── dependencies.py                    # Auth + RBAC helpers
@@ -127,12 +128,11 @@ Editable high-level architecture diagrams:
 │   │       ├── storage_service.py             # R2 / local file storage
 │   │       └── field_encryption.py            # Fernet encryption
 │   ├── migrations/versions/                   # Alembic migrations
-│   ├── railway.toml                           # Auto-runs `alembic upgrade head`
-│   ├── railway.worker.toml                    # Document + KB + Dream worker service
+│   ├── railway.toml                           # Migrations + API + embedded worker
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── app/                               # App shell and Zustand navigation state
+│   │   ├── app/                               # App shell and URL route state
 │   │   ├── features/                          # Domain-owned screens and components
 │   │   │   ├── chat/                          # Main agent chat with tool steps
 │   │   │   ├── knowledge-bank/                # KB browser, filters, reader, forms
@@ -177,13 +177,9 @@ make migrate
 make dev
 ```
 
-Run the durable background worker in a second terminal:
-
-```bash
-cd backend
-source .venv/bin/activate
-make worker
-```
+`make dev` starts both FastAPI and the embedded durable worker. Do not start
+`make worker` in a second terminal because that would add duplicate worker
+capacity.
 
 Authenticated Dream endpoints:
 
@@ -271,7 +267,7 @@ Optimized KB read routes, all requiring Bearer authentication:
        ├──► Return 202 Accepted to client
        │
        ▼
-[Combined Railway worker]                 (async)
+[Embedded FastAPI worker]                 (async)
        │   Claims document rows with SKIP LOCKED
        │   Reclaims stale jobs after restarts
        │   Downloads original from R2
@@ -293,7 +289,7 @@ Optimized KB read routes, all requiring Bearer authentication:
        ├──► Return 202 Accepted to client
        │
        ▼
-[Combined Railway worker]                 (async)
+[Embedded FastAPI worker]                 (async)
        │   Claims queued rows from Postgres
        │   Reclaims stale jobs after restarts
        │   Samples up to 80 chunks (~240KB)
@@ -311,7 +307,7 @@ page or detail after a terminal state.
 ```
 
 Retry: clicking "Retry summary" resets a failed entry to `processing`; the
-worker claims it without relying on the web process.
+embedded worker claims it from the durable Postgres queue.
 
 ### ReAct Agent Loop
 1. **Build context** — `prepare_agent_context` injects memories + thread summary into the system prompt (NOT KB/docs — those come via tools).
@@ -346,7 +342,7 @@ The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`.
 | What | Where | Required? |
 |---|---|---|
 | Run migrations | Auto (Railway runs `alembic upgrade head && uvicorn ...`) | Auto |
-| Background worker | Create a second Railway service using `/backend/railway.worker.toml`; it processes documents, KB entries, and Dream jobs, while the web service owns migrations | Required |
+| Background worker | Runs inside the FastAPI service through its lifespan; do not create a second Railway service | Auto |
 | Frontend deps install | `bun install` adds `react-markdown` + `remark-gfm` | Yes — happens at build |
 | Backend deps install | No new Python packages | n/a |
 | Frontend env vars | `BUN_VERSION=1.3.11` and `VITE_API_URL` in Railway | Required |
@@ -392,7 +388,7 @@ Authenticated Workboard and review-handoff routes:
 ### What to verify after deploy
 1. `/me` returns `firm_role` and `is_admin` for the logged-in user.
 2. Existing KB entries appear with no "processing" badge (they default to `status="ready"`).
-3. The Railway worker logs `LexCatalyst worker started`.
+3. The backend service logs `LexCatalyst worker started`.
 4. Uploading a new PDF returns with `processing`, then flips to `ready` after extraction and embedding.
 5. Clicking "Add to Knowledge Bank" shows a "Summarising..." badge that flips to "Ready".
 6. Clicking "Dream" returns immediately; the worker applies changes and the Memories panel shows the justifications.
