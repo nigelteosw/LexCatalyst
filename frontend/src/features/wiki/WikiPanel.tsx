@@ -3,6 +3,7 @@ import { FileText, GitBranch, RefreshCcw, Save, Trash2, UploadCloud } from 'luci
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '../../shared/ui/Button'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
+import { PanelHeader } from '../../shared/ui/PanelHeader'
 import { StatusBadge } from '../../shared/ui/StatusBadge'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { WikiGraphCanvas } from './WikiGraphCanvas'
@@ -16,10 +17,10 @@ import {
   updateWikiPage,
 } from '../../shared/api/api'
 import type { CurrentUser } from '../../shared/types/workspace'
-import { useViewStore } from '../../app/viewStore'
+import { useWorkspaceNavigation } from '../../app/routes'
 
 export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) {
-  const { current, setWikiPageId, selectDocuments } = useViewStore()
+  const { current, selectWiki, selectDocuments } = useWorkspaceNavigation()
   const pageId = current.view === 'wiki' ? current.pageId : null
 
   const queryClient = useQueryClient()
@@ -53,9 +54,9 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
   // Auto-select first page when none is selected
   useEffect(() => {
     if (!pageId && pages.length > 0) {
-      setWikiPageId(pages[0].id)
+      selectWiki(pages[0].id, { replace: true })
     }
-  }, [pageId, pages, setWikiPageId])
+  }, [pageId, pages, selectWiki])
 
   // Initialise drafts when opening editor
   function handleStartEdit() {
@@ -93,7 +94,7 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
     mutationFn: () => deleteWikiPage(pageId!),
     onSuccess: () => {
       setMutationError(null)
-      setWikiPageId(null)
+      selectWiki(null, { replace: true })
       invalidateWiki()
     },
     onError: (err) => setMutationError(getErrorMessage(err)),
@@ -132,7 +133,7 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
 
   function handleSelectPage(id: string) {
     setIsEditing(false)
-    setWikiPageId(id)
+    selectWiki(id)
   }
 
   async function handleDelete() {
@@ -147,25 +148,22 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-100 px-4 lg:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-neutral-900">Lex-Wiki</h2>
-            <p className="text-xs text-neutral-500">
-              Draft, publish, and browse generated matter knowledge.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={selectDocuments} size="sm" variant="secondary">
-            Documents
-          </Button>
-          <Button onClick={handleRefresh} disabled={isLoading} size="sm" variant="secondary">
-            <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
-        </div>
-      </header>
+      <PanelHeader
+        actions={
+          <>
+            <Button onClick={() => selectDocuments()} size="sm" variant="secondary">
+              Documents
+            </Button>
+            <Button onClick={handleRefresh} disabled={isLoading} size="sm" variant="secondary">
+              <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''} />
+              Refresh
+            </Button>
+          </>
+        }
+        description="Draft, publish, and browse generated matter knowledge."
+        icon={GitBranch}
+        title="Lex-Wiki"
+      />
 
       <div className="app-scroll-region flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[280px_minmax(0,1fr)_320px] lg:overflow-hidden">
         <aside className="border-b border-neutral-100 lg:min-h-0 lg:border-b-0 lg:border-r">

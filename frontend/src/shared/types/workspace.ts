@@ -212,6 +212,11 @@ export type CurrentUser = {
   createdAt: string
 }
 
+export type SessionUser = Pick<
+  CurrentUser,
+  'id' | 'email' | 'fullName' | 'firmRole' | 'isAdmin'
+>
+
 export type KnowledgeBankScope = 'firm_wide' | 'team' | 'matter' | 'private'
 export type KnowledgeBankEntryType = 'knowledge_bank' | 'style_guide' | 'action'
 export type PiiStatus = 'clean' | 'flagged' | 'pending_review' | 'redacted'

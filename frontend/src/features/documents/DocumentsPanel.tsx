@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '../../shared/ui/Button'
+import { PanelHeader } from '../../shared/ui/PanelHeader'
 import { StatusBadge } from '../../shared/ui/StatusBadge'
 import { getErrorMessage } from '../../shared/lib/errors'
 import {
@@ -23,19 +24,19 @@ import {
   renameDocument,
   uploadDocument,
 } from '../../shared/api/api'
-import type { WorkspaceDocument } from '../../shared/types/workspace'
-import { useViewStore } from '../../app/viewStore'
+import type { CurrentUser, WorkspaceDocument } from '../../shared/types/workspace'
+import { useWorkspaceNavigation } from '../../app/routes'
 import { DocumentDrawer } from './DocumentDrawer'
 
-export function DocumentsPanel() {
-  const { selectKnowledgeBank } = useViewStore()
+export function DocumentsPanel({ currentUser }: { currentUser: CurrentUser | null }) {
+  const { current, selectDocuments, selectKnowledgeBank } = useWorkspaceNavigation()
   const queryClient = useQueryClient()
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [ingestingDocumentId, setIngestingDocumentId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
+  const selectedDocumentId = current.view === 'documents' ? current.documentId : null
   const [renamingDocumentId, setRenamingDocumentId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -140,7 +141,7 @@ export function DocumentsPanel() {
     mutationFn: (id: string) => deleteDocument(id),
     onSuccess: () => {
       setMutationError(null)
-      setSelectedDocumentId(null)
+      selectDocuments(null, { replace: true })
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
     },
@@ -203,24 +204,26 @@ export function DocumentsPanel() {
   if (selectedDocument) {
     return (
       <DocumentDrawer
+        currentUser={currentUser}
         document={selectedDocument}
-        onClose={() => setSelectedDocumentId(null)}
+        onClose={() => selectDocuments()}
       />
     )
   }
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-100 px-4 lg:px-6">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-neutral-900">Documents</h2>
-          <p className="text-xs text-neutral-500">Upload PDF or DOCX files for semantic chat search.</p>
-        </div>
-        <Button onClick={handleRefresh} disabled={isLoading} size="sm" variant="secondary">
-          <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''} />
-          Refresh
-        </Button>
-      </header>
+      <PanelHeader
+        actions={
+          <Button onClick={handleRefresh} disabled={isLoading} size="sm" variant="secondary">
+            <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''} />
+            Refresh
+          </Button>
+        }
+        description="Upload PDF or DOCX files for semantic chat search."
+        icon={FileText}
+        title="Documents"
+      />
 
       <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
         <div className="mb-5">
@@ -306,16 +309,7 @@ export function DocumentsPanel() {
               return (
                 <article
                   key={document.id}
-                  className="flex cursor-pointer flex-col gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 transition-colors hover:border-neutral-300 hover:bg-neutral-50/50 sm:flex-row sm:items-start"
-                  onClick={() => setSelectedDocumentId(document.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      setSelectedDocumentId(document.id)
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
+                  className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 transition-colors hover:border-neutral-300 hover:bg-neutral-50/50 sm:flex-row sm:items-start"
                 >
                   <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-neutral-100 text-neutral-600">
                     <FileText size={16} />
@@ -323,17 +317,13 @@ export function DocumentsPanel() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       {renamingDocumentId === document.id ? (
-                        <div
-                          className="flex min-w-0 flex-1 items-center gap-1"
-                          onClick={(event) => event.stopPropagation()}
-                        >
+                        <div className="flex min-w-0 flex-1 items-center gap-1">
                           <input
                             autoFocus
                             className="h-8 min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-900 outline-none focus:border-neutral-500"
                             maxLength={255}
                             onChange={(event) => setRenameValue(event.target.value)}
                             onKeyDown={(event) => {
-                              event.stopPropagation()
                               if (event.key === 'Enter') submitRename(document)
                               if (event.key === 'Escape') setRenamingDocumentId(null)
                             }}
@@ -402,12 +392,9 @@ export function DocumentsPanel() {
                       </div>
                     )}
                   </div>
-                  <div
-                    className="flex shrink-0 flex-wrap gap-2 sm:justify-end"
-                    onClick={(event) => event.stopPropagation()}
-                  >
+                  <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
                     <Button
-                      onClick={() => setSelectedDocumentId(document.id)}
+                      onClick={() => selectDocuments(document.id)}
                       size="sm"
                       variant="secondary"
                     >

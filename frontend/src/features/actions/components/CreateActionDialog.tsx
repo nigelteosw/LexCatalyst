@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Tag, Users, X } from 'lucide-react'
+import { Tag, Users } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { createActionItem } from '../../../shared/api/api'
 import type { ActionItem, ActionPriority, FirmUser, Matter } from '../../../shared/types/workspace'
 import { userLabel } from '../config'
+import { Button } from '../../../shared/ui/Button'
+import { Dialog } from '../../../shared/ui/Dialog'
 
 type CreateActionDialogProps = {
   matters: Matter[]
@@ -46,20 +48,14 @@ export function CreateActionDialog({
   })
 
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/35 p-4 backdrop-blur-sm">
-      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[14px] border border-black/10 bg-[#fafaf8] shadow-2xl">
-        <header className="flex items-center justify-between border-b border-black/10 px-5 py-4">
-          <h3 className="text-sm font-semibold text-[#0f0f0f]">New ticket</h3>
-          <button
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-lg text-[#8c8c86] hover:bg-[#eeecea]"
-            onClick={onClose}
-            type="button"
-          >
-            <X size={15} />
-          </button>
-        </header>
-        <div className="space-y-3 p-5">
+    <Dialog className="max-w-lg" onClose={onClose} title="New ticket">
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (title.trim() && !createMutation.isPending) createMutation.mutate()
+        }}
+      >
           <input
             autoFocus
             className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-black/30"
@@ -138,16 +134,15 @@ export function CreateActionDialog({
           {error && (
             <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-xs text-[#8a1f1f]">{error}</div>
           )}
-          <button
-            className="w-full rounded-lg bg-[#0f0f0f] px-3 py-2.5 text-xs font-medium text-white disabled:bg-[#aaa9a3]"
+          <Button
+            className="w-full"
             disabled={!title.trim() || createMutation.isPending}
-            onClick={() => createMutation.mutate()}
-            type="button"
+            type="submit"
+            variant="primary"
           >
             {createMutation.isPending ? 'Creating...' : 'Create ticket'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+      </form>
+    </Dialog>
   )
 }

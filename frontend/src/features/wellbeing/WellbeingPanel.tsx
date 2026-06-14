@@ -20,6 +20,7 @@ import {
 } from '../../shared/api/api'
 import type { CurrentUser, SurveyCategory, SurveyQuestion } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
+import { PanelHeader } from '../../shared/ui/PanelHeader'
 
 type WellbeingPanelProps = {
   currentUser: CurrentUser | null
@@ -48,17 +49,12 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]">
-      <header className="flex min-h-14 shrink-0 flex-col items-stretch gap-2 border-b border-black/10 bg-white px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-0">
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0f0f0f] text-white">
-            <ClipboardList size={16} />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-[#0f0f0f]">Wellbeing</h2>
-            <p className="text-[10px] text-[#8c8c86]">Weekly team check-in</p>
-          </div>
-        </div>
-
+      <PanelHeader
+        className="items-stretch sm:items-center"
+        description="Weekly team check-in"
+        icon={ClipboardList}
+        title="Wellbeing"
+      >
         <nav className="flex gap-0.5 overflow-x-auto sm:ml-2">
           <TabButton active={visibleTab === 'survey'} onClick={() => setActiveTab('survey')}>
             <ClipboardList size={12} />
@@ -76,7 +72,7 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
             </TabButton>
           )}
         </nav>
-      </header>
+      </PanelHeader>
 
       <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
         {visibleTab === 'survey' && <SurveyTab />}

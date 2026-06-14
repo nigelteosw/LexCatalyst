@@ -22,7 +22,7 @@ import {
   renameChatThread,
 } from '../../shared/api/api'
 import type { ChatThread, Matter } from '../../shared/types/workspace'
-import { useViewStore } from '../../app/viewStore'
+import { useWorkspaceNavigation } from '../../app/routes'
 import birdieLogo from '../../assets/Birdie.png'
 
 export type SidebarProps = {
@@ -75,7 +75,7 @@ export function Sidebar({
     selectWellbeing,
     selectActions,
     selectSettings,
-  } = useViewStore()
+  } = useWorkspaceNavigation()
 
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
@@ -413,7 +413,7 @@ function ThreadRow({
   onSelect: () => void
 }) {
   const queryClient = useQueryClient()
-  const { current, startNewChat } = useViewStore()
+  const { current, startNewChat } = useWorkspaceNavigation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [draftTitle, setDraftTitle] = useState(thread.title)
@@ -455,7 +455,7 @@ function ThreadRow({
       queryClient.removeQueries({ queryKey: ['messages', thread.id] })
       // If the deleted thread was the active one, drop the user to a new chat
       if (current.view === 'chat' && current.threadId === thread.id) {
-        startNewChat()
+        startNewChat({ replace: true })
       }
     },
   })

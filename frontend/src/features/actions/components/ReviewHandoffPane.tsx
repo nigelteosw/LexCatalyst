@@ -20,6 +20,7 @@ import {
   createReviewFinding,
   createReviewHandoff,
   deleteReviewHandoff,
+  fetchDocumentFile,
   getReviewHandoff,
   listReviewHandoffsForAction,
   promoteFindingToKb,
@@ -36,15 +37,6 @@ import type {
   ReviewHandoff,
 } from '../../../shared/types/workspace'
 import { getErrorMessage } from '../../../shared/lib/errors'
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
-
-function documentViewUrl(documentId: string): string {
-  // The /documents/{id}/file endpoint accepts ?token= so the browser
-  // can open it directly in a new tab.
-  const token = localStorage.getItem('token') ?? ''
-  return `${API_BASE_URL}/documents/${documentId}/file?token=${encodeURIComponent(token)}`
-}
 
 type Props = {
   action: ActionItem
@@ -65,15 +57,14 @@ export function ReviewHandoffPane({ action, currentUser, onActionStateChange }: 
   })
 
   const latest = handoffsQuery.data?.[0]
-  const isExtracting = latest?.status === 'extracting'
-
   // Poll while extraction is in flight so the pane flips into review mode
   // as soon as the worker finishes.
   const detailQuery = useQuery({
     queryKey: ['handoffs', latest?.id],
-    queryFn: () => (latest ? getReviewHandoff(latest.id) : Promise.reject(new Error('no handoff'))),
+    queryFn: () => getReviewHandoff(latest!.id),
     enabled: !!latest,
-    refetchInterval: isExtracting ? 2_000 : false,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'extracting' ? 2_000 : false,
     staleTime: 1_000,
   })
 
@@ -168,6 +159,7 @@ export function ReviewHandoffPane({ action, currentUser, onActionStateChange }: 
         canReview={!!canReview}
         isSubmitter={isSubmitter}
         canDelete={true}
+        onDocumentError={(message) => setError(message)}
         onReExtract={() => reExtractMutation.mutate(handoff.id)}
         reExtracting={reExtractMutation.isPending}
         onDelete={async () => {
@@ -368,6 +360,7 @@ function HandoffHeader({
   onReturn,
   onComplete,
   onDelete,
+  onDocumentError,
   onReExtract,
   reExtracting,
 }: {
@@ -378,9 +371,11 @@ function HandoffHeader({
   onReturn: () => void
   onComplete: () => void
   onDelete: () => void
+  onDocumentError: (message: string) => void
   onReExtract: () => void
   reExtracting: boolean
 }) {
+  const [isOpeningDocument, setIsOpeningDocument] = useState(false)
   const total = handoff.findings.length
   const pending = handoff.findings.filter((f) => f.status === 'pending').length
   // Complete is allowed when there's nothing left to decide on:
@@ -393,6 +388,32 @@ function HandoffHeader({
       : undefined
     : `${pending} finding${pending === 1 ? '' : 's'} still pending`
 
+  async function openDocument() {
+    if (isOpeningDocument) return
+    const target = window.open('about:blank', '_blank')
+    if (target) target.opener = null
+    setIsOpeningDocument(true)
+    try {
+      const blob = await fetchDocumentFile(handoff.documentId)
+      const objectUrl = URL.createObjectURL(blob)
+      if (target) {
+        target.location.href = objectUrl
+      } else {
+        const anchor = window.document.createElement('a')
+        anchor.href = objectUrl
+        anchor.target = '_blank'
+        anchor.rel = 'noreferrer'
+        anchor.click()
+      }
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (error) {
+      target?.close()
+      onDocumentError(getErrorMessage(error, 'Could not open review PDF'))
+    } finally {
+      setIsOpeningDocument(false)
+    }
+  }
+
   return (
     <div className="rounded-lg border border-black/10 bg-white px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -402,15 +423,15 @@ function HandoffHeader({
           <StatusPill status={handoff.status} />
         </div>
         <div className="flex items-center gap-2 text-[10.5px] text-[#8c8c86]">
-          <a
+          <button
             className="inline-flex items-center gap-1 rounded-md border border-black/10 px-2 py-0.5 text-[#0f0f0f] hover:bg-[#f4f3ef]"
-            href={documentViewUrl(handoff.documentId)}
-            rel="noreferrer"
-            target="_blank"
+            disabled={isOpeningDocument}
+            onClick={() => void openDocument()}
+            type="button"
           >
-            <ExternalLink size={11} />
-            View PDF
-          </a>
+            {isOpeningDocument ? <Loader2 className="animate-spin" size={11} /> : <ExternalLink size={11} />}
+            {isOpeningDocument ? 'Opening...' : 'View PDF'}
+          </button>
           <span>
             Submitted by {handoff.submitter?.fullName ?? handoff.submitter?.email ?? 'lawyer'}
           </span>

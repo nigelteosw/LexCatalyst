@@ -48,7 +48,7 @@ backend/
 frontend/
   src/
     main.tsx
-    app/              # App shell: App.tsx (routing, state) + viewStore.ts
+    app/              # App shell: App.tsx + route mapping/navigation in routes.ts
     features/         # One directory per product area
       actions/        # Action board (kanban)
       auth/           # LoginPage

@@ -53,7 +53,7 @@ import type {
   Matter,
   RedactionProposal,
 } from '../../shared/types/workspace'
-import { useViewStore } from '../../app/viewStore'
+import { useWorkspaceNavigation } from '../../app/routes'
 import { WikiGraphCanvas } from '../wiki/WikiGraphCanvas'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { Button } from '../../shared/ui/Button'
@@ -86,7 +86,7 @@ export function KnowledgeBankPanel({
     currentUser?.isAdmin === true || currentUser?.firmRole === 'partner'
   const canViewAudit = canCreateFirmWide
   const queryClient = useQueryClient()
-  const { current, selectKnowledgeBank } = useViewStore()
+  const { current, selectKnowledgeBank } = useWorkspaceNavigation()
   const selectedEntryId = current.view === 'knowledge_bank' ? current.entryId : null
   const [activeTab, setActiveTab] = useState<'library' | 'audit'>('library')
   const [search, setSearch] = useState('')

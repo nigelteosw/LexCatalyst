@@ -10,6 +10,7 @@ import {
 } from '../../shared/api/api'
 import type { CurrentUser, FirmRole } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
+import { PanelHeader } from '../../shared/ui/PanelHeader'
 import { userLabel } from '../actions/config'
 
 type SettingsPanelProps = {
@@ -56,7 +57,12 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
       const savedUser = JSON.parse(localStorage.getItem('user') ?? '{}')
       localStorage.setItem(
         'user',
-        JSON.stringify({ ...savedUser, firm_role: updatedUser.firmRole, is_admin: updatedUser.isAdmin }),
+        JSON.stringify({
+          ...savedUser,
+          firmRole: updatedUser.firmRole,
+          isAdmin: updatedUser.isAdmin,
+          fullName: updatedUser.fullName,
+        }),
       )
       setSelectedRole(null)
       setMessage('Your role has been updated.')
@@ -110,15 +116,11 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]">
-      <header className="flex min-h-14 shrink-0 items-center gap-2 border-b border-black/10 bg-white px-5">
-        <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0f0f0f] text-white">
-          <Settings size={16} />
-        </div>
-        <div>
-          <h2 className="text-sm font-semibold text-[#0f0f0f]">Settings</h2>
-          <p className="text-[10px] text-[#8c8c86]">Profile and workspace access</p>
-        </div>
-      </header>
+      <PanelHeader
+        description="Profile and workspace access"
+        icon={Settings}
+        title="Settings"
+      />
 
       <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-8">
         <div className="mx-auto max-w-2xl space-y-8">

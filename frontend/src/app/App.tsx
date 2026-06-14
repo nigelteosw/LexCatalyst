@@ -17,8 +17,14 @@ import {
   loginWithGoogle,
   uploadDocument,
 } from '../shared/api/api'
-import type { ChatModel, ChatThread, CurrentUser, Message } from '../shared/types/workspace'
-import { useViewStore } from './viewStore'
+import type {
+  ChatModel,
+  ChatThread,
+  CurrentUser,
+  Message,
+  SessionUser,
+} from '../shared/types/workspace'
+import { useWorkspaceNavigation } from './routes'
 import { getErrorMessage, isAbortError } from '../shared/lib/errors'
 import lexChatLogo from '../assets/LexCatalyst.png'
 
@@ -49,11 +55,6 @@ const SettingsPanel = lazy(() =>
   import('../features/settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })),
 )
 
-type StoredUser = {
-  full_name: string
-  email: string
-}
-
 type ActiveStream = {
   threadId: string | null
   messages: Message[]
@@ -83,10 +84,23 @@ function getSavedChatModel(): ChatModel {
     : 'deepseek-v4-pro'
 }
 
-function getSavedUser(): StoredUser | null {
+function getSavedUser(): SessionUser | null {
   try {
     const saved = localStorage.getItem('user')
-    return saved ? JSON.parse(saved) as StoredUser : null
+    if (!saved) return null
+    const user = JSON.parse(saved) as Partial<SessionUser> & {
+      full_name?: string | null
+      firm_role?: SessionUser['firmRole']
+      is_admin?: boolean
+    }
+    if (!user.id || !user.email) return null
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName ?? user.full_name ?? null,
+      firmRole: user.firmRole ?? user.firm_role ?? 'associate',
+      isAdmin: user.isAdmin ?? user.is_admin ?? false,
+    }
   } catch {
     localStorage.removeItem('user')
     return null
@@ -95,7 +109,7 @@ function getSavedUser(): StoredUser | null {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'))
-  const [user, setUser] = useState<StoredUser | null>(getSavedUser)
+  const [user, setUser] = useState<SessionUser | null>(getSavedUser)
 
   const currentUserQuery = useQuery<CurrentUser>({
     queryKey: ['currentUser'],
@@ -105,7 +119,16 @@ function App() {
   const currentUser = currentUserQuery.data ?? null
 
   const queryClient = useQueryClient()
-  const { current, startNewChat, selectThread } = useViewStore()
+  const {
+    current,
+    isKnownRoute,
+    selectThread,
+    startNewChat,
+  } = useWorkspaceNavigation()
+  const currentRef = useRef(current)
+  useEffect(() => {
+    currentRef.current = current
+  }, [current])
 
   const threadId = current.view === 'chat' ? current.threadId : null
 
@@ -151,6 +174,10 @@ function App() {
   const streamAbortReasonRef = useRef<'stop' | 'navigation' | null>(null)
   const hasAutoSelectedRef = useRef(false)
 
+  useEffect(() => {
+    if (!isKnownRoute) startNewChat({ replace: true })
+  }, [isKnownRoute, startNewChat])
+
   useEffect(() => subscribeToUnauthorized(() => {
     streamAbortReasonRef.current = 'navigation'
     streamAbortRef.current?.abort()
@@ -173,7 +200,7 @@ function App() {
   useEffect(() => {
     if (!hasAutoSelectedRef.current && threads.length > 0) {
       hasAutoSelectedRef.current = true
-      selectThread(threads[0].id)
+      selectThread(threads[0].id, { replace: true })
     }
   }, [threads, selectThread])
 
@@ -211,7 +238,7 @@ function App() {
     setError(null)
     try {
       const response = await loginWithGoogle(credential)
-      localStorage.setItem('token', response.access_token)
+      localStorage.setItem('token', response.accessToken)
       localStorage.setItem('user', JSON.stringify(response.user))
       setUser(response.user)
       setIsAuthenticated(true)
@@ -363,7 +390,7 @@ function App() {
           queryClient.invalidateQueries({ queryKey: ['threads'] })
           queryClient.invalidateQueries({ queryKey: ['messages', response.threadId] })
           // Only navigate if the user hasn't moved to a different panel mid-stream
-          if (useViewStore.getState().current.view === 'chat') {
+          if (currentRef.current.view === 'chat') {
             selectThread(response.threadId)
           }
         },
@@ -481,14 +508,16 @@ function App() {
   }
 
   const userInitials = useMemo(() => {
-    if (!user?.full_name) return 'LC'
-    return user.full_name
+    const name = currentUser?.fullName || user?.fullName
+    if (!name) return 'LC'
+    return name
       .split(' ')
+      .filter(Boolean)
       .map((n) => n[0])
       .join('')
       .toUpperCase()
       .slice(0, 2)
-  }, [user])
+  }, [currentUser, user])
 
   if (!isAuthenticated) {
     return (
@@ -512,7 +541,7 @@ function App() {
         onNewChat={handleNewChat}
         threads={threads}
         selectedMatterId={selectedMatterId}
-        userFullName={user?.full_name ?? ''}
+        userFullName={currentUser?.fullName ?? user?.fullName ?? ''}
         userInitials={userInitials}
         onLogout={handleLogout}
       />
@@ -554,7 +583,7 @@ function App() {
           {current.view === 'memories' ? (
             <MemoriesPanel />
           ) : current.view === 'documents' ? (
-            <DocumentsPanel />
+            <DocumentsPanel currentUser={currentUser} />
           ) : current.view === 'wiki' ? (
             <WikiPanel currentUser={currentUser} />
           ) : current.view === 'wellbeing' ? (
@@ -691,7 +720,7 @@ function App() {
   )
 }
 
-function mobileViewTitle(view: ReturnType<typeof useViewStore.getState>['current']['view']) {
+function mobileViewTitle(view: import('./routes').AppView['view']) {
   if (view === 'chat') return 'LexChat'
   const labels = {
     actions: 'Workboard',

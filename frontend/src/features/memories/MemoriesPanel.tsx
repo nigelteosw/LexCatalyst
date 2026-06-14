@@ -15,6 +15,7 @@ import type { DreamProposal, MemoryCategory } from '../../shared/types/workspace
 import { waitForDelay } from '../../shared/lib/async'
 import { getErrorMessage, isAbortError } from '../../shared/lib/errors'
 import { ErrorBanner } from '../../shared/ui/ErrorBanner'
+import { PanelHeader } from '../../shared/ui/PanelHeader'
 
 const DREAM_POLL_INTERVAL_MS = 1000
 const DREAM_POLL_TIMEOUT_MS = 120_000
@@ -161,34 +162,29 @@ export function MemoriesPanel() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white lg:my-2 lg:mr-2 lg:rounded-tl-2xl lg:border-l lg:border-t lg:border-neutral-200 lg:shadow-sm">
-      <header className="z-30 flex h-14 shrink-0 items-center justify-between border-b border-neutral-100 bg-white/80 px-4 backdrop-blur-md lg:px-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-neutral-900 text-white rounded-lg">
-            <Brain size={18} />
-          </div>
-          <h2 className="text-sm font-semibold text-neutral-900">User Memory</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            disabled={isDreaming}
-            onClick={handleDream}
-            size="sm"
-            title="Review and refine your memories based on recent activity"
-            variant="secondary"
-          >
-            <Moon size={14} />
-            {isDreaming ? 'Dreaming…' : 'Dream'}
-          </Button>
-          <Button
-            onClick={() => setIsAdding(true)}
-            size="sm"
-            variant="primary"
-          >
-            <Plus size={14} />
-            Add Memory
-          </Button>
-        </div>
-      </header>
+      <PanelHeader
+        actions={
+          <>
+            <Button
+              disabled={isDreaming}
+              onClick={handleDream}
+              size="sm"
+              title="Review and refine your memories based on recent activity"
+              variant="secondary"
+            >
+              <Moon size={14} />
+              {isDreaming ? 'Dreaming…' : 'Dream'}
+            </Button>
+            <Button onClick={() => setIsAdding(true)} size="sm" variant="primary">
+              <Plus size={14} />
+              Add Memory
+            </Button>
+          </>
+        }
+        description="Review facts, working preferences, and session context."
+        icon={Brain}
+        title="User Memory"
+      />
       {isDreaming && (
         <div className="flex items-center gap-3 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 bg-[length:200%_100%] px-6 py-2 text-xs text-indigo-700 animate-pulse">
           <Moon size={14} />

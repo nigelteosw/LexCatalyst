@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Download, FileText, Send, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, Download, FileText, LoaderCircle, Send, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createDocumentComment,
   deleteDocumentComment,
-  getDocumentFileUrl,
+  fetchDocumentFile,
   listDocumentComments,
 } from '../../shared/api/api'
 import { getErrorMessage } from '../../shared/lib/errors'
@@ -14,23 +14,41 @@ import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { StatusBadge } from '../../shared/ui/StatusBadge'
 
 type DocumentDrawerProps = {
+  currentUser: CurrentUser | null
   document: WorkspaceDocument
   onClose: () => void
 }
 
-export function DocumentDrawer({ document, onClose }: DocumentDrawerProps) {
+export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawerProps) {
   const queryClient = useQueryClient()
   const queryKey = ['documentComments', document.id]
   const [content, setContent] = useState('')
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const [fileUrl, setFileUrl] = useState<string | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [isDownloading, setIsDownloading] = useState(false)
   const isPdf =
     document.contentType === 'application/pdf' ||
     document.filename.toLowerCase().endsWith('.pdf')
-  const fileUrl = useMemo(() => getDocumentFileUrl(document.id), [document.id])
-  const downloadUrl = useMemo(
-    () => getDocumentFileUrl(document.id, true),
-    [document.id],
-  )
+
+  useEffect(() => {
+    if (!isPdf) return
+    const controller = new AbortController()
+    let objectUrl: string | null = null
+    void fetchDocumentFile(document.id, { signal: controller.signal })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob)
+        setFileUrl(objectUrl)
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.name === 'AbortError') return
+        setFileError(getErrorMessage(error, 'Could not load document preview'))
+      })
+    return () => {
+      controller.abort()
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [document.id, isPdf])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -51,21 +69,20 @@ export function DocumentDrawer({ document, onClose }: DocumentDrawerProps) {
       await queryClient.cancelQueries({ queryKey })
       const previous = queryClient.getQueryData<DocumentComment[]>(queryKey) ?? []
       const optimisticId = `optimistic-${Date.now()}`
-      const user = readCurrentUser()
       queryClient.setQueryData<DocumentComment[]>(queryKey, [
         ...previous,
         {
           id: optimisticId,
           documentId: document.id,
-          userId: user?.id ?? 'current-user',
+          userId: currentUser?.id ?? 'current-user',
           content: comment,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           canDelete: false,
           author: {
-            id: user?.id ?? 'current-user',
-            fullName: user?.fullName,
-            email: user?.email ?? 'You',
+            id: currentUser?.id ?? 'current-user',
+            fullName: currentUser?.fullName,
+            email: currentUser?.email ?? 'You',
           },
         },
       ])
@@ -109,6 +126,25 @@ export function DocumentDrawer({ document, onClose }: DocumentDrawerProps) {
     createMutation.mutate(trimmed)
   }
 
+  async function downloadDocument() {
+    if (isDownloading) return
+    setIsDownloading(true)
+    setFileError(null)
+    try {
+      const blob = await fetchDocumentFile(document.id, { download: true })
+      const objectUrl = URL.createObjectURL(blob)
+      const anchor = window.document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = document.filename
+      anchor.click()
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
+    } catch (error) {
+      setFileError(getErrorMessage(error, 'Could not download document'))
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   return (
     <section
       aria-label={`Review ${document.filename}`}
@@ -144,23 +180,33 @@ export function DocumentDrawer({ document, onClose }: DocumentDrawerProps) {
             {document.chunkCount} searchable chunks
           </p>
         </div>
-        <a
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
-          href={downloadUrl}
+        <Button
+          disabled={isDownloading}
+          onClick={() => void downloadDocument()}
+          size="sm"
+          variant="ghost"
         >
-          <Download size={14} />
-          <span className="hidden sm:inline">Download</span>
-        </a>
+          {isDownloading ? <LoaderCircle className="animate-spin" size={14} /> : <Download size={14} />}
+          <span className="hidden sm:inline">{isDownloading ? 'Downloading' : 'Download'}</span>
+        </Button>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="min-h-[55dvh] flex-1 bg-neutral-100 lg:min-h-0">
-          {isPdf ? (
+          {isPdf && fileUrl ? (
             <iframe
               className="h-full w-full border-0"
               src={fileUrl}
               title={document.filename}
             />
+          ) : isPdf && fileError ? (
+            <div className="grid h-full place-items-center p-8 text-center text-sm text-red-700">
+              {fileError}
+            </div>
+          ) : isPdf ? (
+            <div className="grid h-full place-items-center text-neutral-500">
+              <LoaderCircle className="animate-spin" size={22} />
+            </div>
           ) : (
             <div className="grid h-full place-items-center p-8 text-center">
               <div>
@@ -171,13 +217,16 @@ export function DocumentDrawer({ document, onClose }: DocumentDrawerProps) {
                 <p className="mt-1 text-xs text-neutral-500">
                   DOCX preview is not supported in the browser yet.
                 </p>
-                <a
-                  className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-neutral-950 px-3 text-xs font-medium text-white hover:bg-neutral-800"
-                  href={downloadUrl}
+                <Button
+                  className="mt-4"
+                  disabled={isDownloading}
+                  onClick={() => void downloadDocument()}
+                  size="sm"
+                  variant="primary"
                 >
                   <Download size={14} />
-                  Download document
-                </a>
+                  {isDownloading ? 'Downloading...' : 'Download document'}
+                </Button>
               </div>
             </div>
           )}
@@ -275,14 +324,6 @@ export function DocumentDrawer({ document, onClose }: DocumentDrawerProps) {
       </div>
     </section>
   )
-}
-
-function readCurrentUser(): CurrentUser | null {
-  try {
-    return JSON.parse(localStorage.getItem('user') ?? 'null') as CurrentUser | null
-  } catch {
-    return null
-  }
 }
 
 function initials(value: string) {

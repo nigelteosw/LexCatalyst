@@ -24,6 +24,7 @@ import type {
   ReviewFindingStatus,
   ReviewHandoff,
   ReviewHandoffStatus,
+  SessionUser,
   SurveyCategory,
   SurveyQuestion,
   SurveyResults,
@@ -564,13 +565,26 @@ export async function renameDocument(id: string, filename: string): Promise<Work
   )
 }
 
-export function getDocumentFileUrl(id: string, download = false): string {
-  const search = new URLSearchParams()
+export async function fetchDocumentFile(
+  id: string,
+  options: { download?: boolean; signal?: AbortSignal } = {},
+): Promise<Blob> {
   const token = localStorage.getItem('token')
-  if (token) search.set('token', token)
-  if (download) search.set('download', 'true')
-  const suffix = search.toString() ? `?${search}` : ''
-  return `${API_BASE_URL}/documents/${encodeURIComponent(id)}/file${suffix}`
+  const headers = new Headers()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const search = options.download ? '?download=true' : ''
+  const response = await fetch(
+    `${API_BASE_URL}/documents/${encodeURIComponent(id)}/file${search}`,
+    { headers, signal: options.signal },
+  )
+  handleUnauthorized(response)
+  if (!response.ok) {
+    const responseText = await response.text()
+    const payload = parseJson(responseText)
+    const detail = typeof payload?.detail === 'string' ? payload.detail : response.statusText
+    throw new Error(detail)
+  }
+  return response.blob()
 }
 
 export async function listDocumentComments(documentId: string): Promise<DocumentComment[]> {
@@ -1070,8 +1084,12 @@ function handleStreamEvent(
   return eventName
 }
 
-export async function loginWithGoogle(credential: string) {
-  return request<{
+export async function loginWithGoogle(credential: string): Promise<{
+  accessToken: string
+  tokenType: string
+  user: SessionUser
+}> {
+  const response = await request<{
     access_token: string
     token_type: string
     user: { id: string; email: string; full_name: string; firm_role: FirmRole; is_admin: boolean }
@@ -1079,6 +1097,17 @@ export async function loginWithGoogle(credential: string) {
     method: 'POST',
     body: JSON.stringify({ credential }),
   })
+  return {
+    accessToken: response.access_token,
+    tokenType: response.token_type,
+    user: {
+      id: response.user.id,
+      email: response.user.email,
+      fullName: response.user.full_name,
+      firmRole: response.user.firm_role,
+      isAdmin: response.user.is_admin,
+    },
+  }
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {

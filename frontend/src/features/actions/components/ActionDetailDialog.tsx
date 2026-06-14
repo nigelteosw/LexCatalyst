@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/types/workspace'
 import { isManager, priorityColors, statusColumns, userLabel } from '../config'
 import { ReviewHandoffPane } from './ReviewHandoffPane'
+import { Dialog } from '../../../shared/ui/Dialog'
 
 type ActionPatch = {
   title?: string
@@ -106,78 +107,73 @@ export function ActionDetailDialog({
     setEditingDescription(false)
   }
 
+  const dialogTitle = editingTitle ? (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <input
+        autoFocus
+        className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-black/35"
+        maxLength={200}
+        onBlur={commitTitle}
+        onChange={(event) => setTitleDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commitTitle()
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            setTitleDraft(item.title)
+            setEditingTitle(false)
+          }
+        }}
+        value={titleDraft}
+      />
+      <button
+        aria-label="Save title"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[#1a6b4a] hover:bg-[#e8f5ee]"
+        disabled={isUpdating}
+        onClick={commitTitle}
+        onMouseDown={(event) => event.preventDefault()}
+        type="button"
+      >
+        <Check size={13} />
+      </button>
+    </div>
+  ) : (
+    <span className="group flex min-w-0 items-center gap-2">
+      <span className="truncate">{item.title}</span>
+      {manager && (
+        <button
+          aria-label="Edit title"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#9a9a94] opacity-0 transition-opacity hover:bg-[#f4f3ef] hover:text-[#5a5a56] group-hover:opacity-100 focus:opacity-100"
+          onClick={() => setEditingTitle(true)}
+          type="button"
+        >
+          <Pencil size={11} />
+        </button>
+      )}
+    </span>
+  )
+
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/35 p-4 backdrop-blur-sm">
-      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[14px] border border-black/10 bg-[#fafaf8] shadow-2xl">
-        <header className="flex items-start justify-between gap-3 border-b border-black/10 px-5 py-4">
-          <div className="min-w-0 flex-1">
-            {editingTitle ? (
-              <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-black/35"
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      commitTitle()
-                    }
-                    if (e.key === 'Escape') {
-                      setTitleDraft(item.title)
-                      setEditingTitle(false)
-                    }
-                  }}
-                  onBlur={commitTitle}
-                  value={titleDraft}
-                  maxLength={200}
-                />
-                <button
-                  aria-label="Save title"
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[#1a6b4a] hover:bg-[#e8f5ee]"
-                  disabled={isUpdating}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={commitTitle}
-                  type="button"
-                >
-                  <Check size={13} />
-                </button>
-              </div>
-            ) : (
-              <div className="group flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-[#0f0f0f]">{item.title}</h3>
-                {manager && (
-                  <button
-                    aria-label="Edit title"
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#9a9a94] opacity-0 transition-opacity hover:bg-[#f4f3ef] hover:text-[#5a5a56] group-hover:opacity-100"
-                    onClick={() => setEditingTitle(true)}
-                    type="button"
-                  >
-                    <Pencil size={11} />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
-              disabled={isDeleting}
-              onClick={onDelete}
-              title="Delete ticket"
-              type="button"
-            >
-              <Trash2 size={15} />
-            </button>
-            <button
-              aria-label="Close"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#8c8c86] hover:bg-[#eeecea]"
-              onClick={onClose}
-              type="button"
-            >
-              <X size={15} />
-            </button>
-          </div>
-        </header>
+    <Dialog
+      bodyClassName="p-0"
+      className="max-w-2xl"
+      headerActions={
+        <button
+          aria-label="Delete ticket"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+          disabled={isDeleting}
+          onClick={onDelete}
+          type="button"
+        >
+          <Trash2 size={15} />
+        </button>
+      }
+      onClose={onClose}
+      title={dialogTitle}
+    >
         <div className="flex items-center gap-1 border-b border-black/10 bg-white px-3 py-1.5">
           <TabButton active={tab === 'details'} onClick={() => setTab('details')}>
             Details
@@ -423,8 +419,7 @@ export function ActionDetailDialog({
           </div>
         </div>
         )}
-      </div>
-    </div>
+    </Dialog>
   )
 }
 

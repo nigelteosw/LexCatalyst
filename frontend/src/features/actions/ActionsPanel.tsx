@@ -17,6 +17,9 @@ import { getErrorMessage } from '../../shared/lib/errors'
 import { isManager, priorityColors, statusColumns, userLabel } from './config'
 import { ActionDetailDialog } from './components/ActionDetailDialog'
 import { CreateActionDialog } from './components/CreateActionDialog'
+import { Button } from '../../shared/ui/Button'
+import { PanelHeader } from '../../shared/ui/PanelHeader'
+import { useWorkspaceNavigation } from '../../app/routes'
 
 type ActionsPanelProps = {
   matters: Matter[]
@@ -28,12 +31,13 @@ const ACTIONS_QUERY_KEY = ['actions'] as const
 export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
   const queryClient = useQueryClient()
   const manager = isManager(currentUser)
+  const { current, selectActions } = useWorkspaceNavigation()
+  const selectedActionId = current.view === 'actions' ? current.actionId : null
 
   const [matterFilter, setMatterFilter] = useState<string | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
 
   // Single keyed query — filters are applied in memory below. This is
@@ -55,6 +59,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
 
   const allItems = useMemo(() => actionsQuery.data ?? [], [actionsQuery.data])
   const users = usersQuery.data ?? []
+  const selectedItem = allItems.find((item) => item.id === selectedActionId) ?? null
 
   // Distinct tags from the full dataset (not filtered) so chips don't
   // disappear when their column empties.
@@ -130,9 +135,6 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
       if (patch.title !== undefined) optimistic.title = patch.title
       if (patch.description !== undefined) optimistic.description = patch.description
       const previous = applyOptimistic(id, optimistic)
-      setSelectedItem((current) =>
-        current?.id === id ? { ...current, ...optimistic } : current,
-      )
       setMutationError(null)
       return { previous }
     },
@@ -146,7 +148,6 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
       queryClient.setQueryData<ActionItem[]>(ACTIONS_QUERY_KEY, (curr) =>
         curr?.map((item) => (item.id === updated.id ? updated : item)) ?? curr,
       )
-      setSelectedItem((current) => (current?.id === updated.id ? updated : current))
     },
   })
 
@@ -161,7 +162,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           previous.filter((item) => item.id !== id),
         )
       }
-      setSelectedItem(null)
+      if (selectedActionId === id) selectActions(null, { replace: true })
       setMutationError(null)
       return { previous }
     },
@@ -175,60 +176,49 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-[#fafaf8]">
-      <header className="flex min-h-14 flex-wrap items-center gap-3 border-b border-black/10 bg-white px-5 py-2">
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0f0f0f] text-white">
-            <CheckSquare size={16} />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-[#0f0f0f]">Workboard</h2>
-            <p className="text-[10px] text-[#8c8c86]">
-              Firm-wide workload. Everyone sees the same board.
-            </p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Filter by matter"
-            className="h-8 max-w-56 rounded-lg border border-black/10 bg-[#f4f3ef] px-2.5 text-xs text-[#5a5a56] outline-none focus:border-black/25"
-            onChange={(e) => setMatterFilter(e.target.value || null)}
-            value={matterFilter ?? ''}
-          >
-            <option value="">All matters</option>
-            {matters.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.caseNumber} · {m.title}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Filter by assignee"
-            className="h-8 max-w-44 rounded-lg border border-black/10 bg-[#f4f3ef] px-2.5 text-xs text-[#5a5a56] outline-none focus:border-black/25"
-            onChange={(e) => setAssigneeFilter(e.target.value || null)}
-            value={assigneeFilter ?? ''}
-          >
-            <option value="">
-              {users.length > 0 ? `Everyone (${users.length})` : 'Everyone'}
-            </option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {userLabel(u)}
-              </option>
-            ))}
-          </select>
-          {manager && (
-            <button
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#0f0f0f] px-3 text-xs font-medium text-white transition-colors hover:bg-[#333]"
-              onClick={() => setIsCreating(true)}
-              type="button"
+      <PanelHeader
+        actions={
+          <>
+            <select
+              aria-label="Filter by matter"
+              className="h-8 max-w-56 rounded-lg border border-black/10 bg-[#f4f3ef] px-2.5 text-xs text-[#5a5a56] outline-none focus:border-black/25"
+              onChange={(e) => setMatterFilter(e.target.value || null)}
+              value={matterFilter ?? ''}
             >
-              <Plus size={13} />
-              New ticket
-            </button>
-          )}
-        </div>
-      </header>
+              <option value="">All matters</option>
+              {matters.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.caseNumber} · {m.title}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Filter by assignee"
+              className="h-8 max-w-44 rounded-lg border border-black/10 bg-[#f4f3ef] px-2.5 text-xs text-[#5a5a56] outline-none focus:border-black/25"
+              onChange={(e) => setAssigneeFilter(e.target.value || null)}
+              value={assigneeFilter ?? ''}
+            >
+              <option value="">
+                {users.length > 0 ? `Everyone (${users.length})` : 'Everyone'}
+              </option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {userLabel(u)}
+                </option>
+              ))}
+            </select>
+            {manager && (
+              <Button onClick={() => setIsCreating(true)} size="sm" variant="primary">
+                <Plus size={13} />
+                New ticket
+              </Button>
+            )}
+          </>
+        }
+        description="Firm-wide workload. Everyone sees the same board."
+        icon={CheckSquare}
+        title="Workboard"
+      />
 
       {availableTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-black/10 bg-white px-5 py-2">
@@ -290,7 +280,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
                   <ActionCard
                     key={item.id}
                     item={item}
-                    onClick={() => setSelectedItem(item)}
+                    onClick={() => selectActions(item.id)}
                     onDelete={() => {
                       if (window.confirm(`Delete "${item.title}"? This cannot be undone.`)) {
                         deleteMutation.mutate(item.id)
@@ -331,7 +321,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           currentUser={currentUser}
           matters={matters}
           users={users}
-          onClose={() => setSelectedItem(null)}
+          onClose={() => selectActions()}
           onUpdate={(patch) => updateMutation.mutate({ id: selectedItem.id, patch })}
           onDelete={() => {
             if (window.confirm(`Delete "${selectedItem.title}"? This cannot be undone.`)) {
@@ -340,9 +330,6 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           }}
           onActionStateChange={(patch) => {
             applyOptimistic(selectedItem.id, patch)
-            setSelectedItem((current) =>
-              current?.id === selectedItem.id ? { ...current, ...patch } : current,
-            )
           }}
           isDeleting={deleteMutation.isPending}
           isUpdating={updateMutation.isPending}
