@@ -21,8 +21,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
-from app.database import create_db_tables
+from app.database import SessionLocal, create_db_tables
 from app.routers import all_routers
+from app.services.survey_service import seed_survey_questions
 from app.worker import run_worker
 
 app = FastAPI(title="LexCatalyst API")
@@ -61,6 +62,15 @@ async def startup() -> None:
             create_db_tables()
         except SQLAlchemyError as exc:
             print(f"Database startup skipped: {exc}")
+
+    # Seed survey questions if empty
+    db = SessionLocal()
+    try:
+        seed_survey_questions(db)
+    except Exception as exc:
+        print(f"Failed to seed survey questions: {exc}")
+    finally:
+        db.close()
 
     threading.Thread(
         target=_run_worker_thread,

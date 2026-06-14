@@ -173,11 +173,24 @@ function SurveyTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-3 rounded-[12px] border border-black/8 bg-white px-4 py-3">
-        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#4a3db0]" />
-        <p className="text-xs leading-5 text-[#5a5a56]">
-          Your responses are anonymous. Partners see aggregated trends and a shuffled list of scores with identities redacted.
-        </p>
+      <div className="rounded-[14px] border border-black/10 bg-white p-6 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-[#0f0f0f]">Purpose</h3>
+          <p className="mt-2 text-xs leading-5 text-[#5a5a56]">
+            This short questionnaire is designed to help the organisation identify workload pressure, burnout risk, team frictions, and barriers to learning and growth. It is not a clinical diagnosis and should not be used to evaluate individual performance.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-4 border-t border-black/5">
+          <p className="text-[11px] font-medium text-[#0f0f0f]">
+            Recall period: <span className="font-normal text-[#5a5a56]">Past 2 weeks</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={13} className="text-[#4a3db0]" />
+            <p className="text-[11px] text-[#4a3db0]">
+              Anonymous responses (redacted contributor list)
+            </p>
+          </div>
+        </div>
       </div>
 
       {Object.entries(byCategory).map(([category, qs]) => (

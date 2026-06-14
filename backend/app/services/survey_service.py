@@ -72,6 +72,51 @@ def delete_survey_question(db: Session, question_id: str) -> bool:
     return True
 
 
+def seed_survey_questions(db: Session) -> None:
+    """Populate the survey questions with a baseline if the table is empty.
+
+    This baseline focuses on workload pressure, burnout risk, team frictions,
+    and barriers to learning/growth.
+    """
+    count = db.scalar(select(func.count(SurveyQuestion.id)))
+    if count > 0:
+        return
+
+    baseline = [
+        # 1. Workload
+        ("workload", "I had more work than I could reasonably complete within normal working hours."),
+        ("workload", "I frequently had to work late nights, weekends, or during rest time to keep up."),
+        ("workload", "I received urgent or last-minute requests without enough clarity on priority, deadline, or expected output."),
+        ("workload", "My workload felt unpredictable or difficult to plan around."),
+
+        # 2. Mental Health
+        ("mental_health", "I felt emotionally or mentally drained by work."),
+        ("mental_health", "I found it difficult to switch off from work during non-working time."),
+        ("mental_health", "I noticed myself becoming more detached, cynical, or less motivated about work."),
+        ("mental_health", "Work pressure affected my focus, judgement, sleep, or ability to recover."),
+
+        # 3. Team Dynamics
+        ("team_dynamics", "I felt comfortable telling a supervisor or team member when my workload was becoming unmanageable."),
+        ("team_dynamics", "I received useful support when I asked for help, clarification, or prioritisation."),
+        ("team_dynamics", "Work was allocated in a way that felt fair and transparent."),
+        ("team_dynamics", "I could raise concerns, mistakes, or capacity issues without fear that it would affect how I am viewed."),
+
+        # 4. Learning & Growth
+        ("learning", "My current workload left enough time for learning, feedback, and reflection."),
+        ("learning", "I received clear guidance or feedback that helped me improve."),
+        ("learning", "I had opportunities to do meaningful work, not just urgent execution."),
+        ("learning", "I can see a sustainable path for my professional growth in this team."),
+    ]
+
+    for idx, (cat, text) in enumerate(baseline):
+        db.add(SurveyQuestion(
+            category=cat,
+            text=text,
+            order_index=idx,
+        ))
+    db.commit()
+
+
 def submit_survey_response(
     db: Session,
     *,
