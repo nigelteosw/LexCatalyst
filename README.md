@@ -38,6 +38,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - **Partners and senior associates** can create and assign actions; assignee or assigner can update.
 - Completing a linked review handoff moves its ticket to Done. Any authenticated user can delete a ticket.
 - Filter by matter, edit through a detail dialog.
+- Admin demo tools can idempotently add Sarah Chen (senior associate) and Jane Pereira (associate) to the firm roster.
 
 ### Documents — In-App Review
 - Clicking a document opens a right-side review drawer. PDFs render inline; DOCX files provide an authenticated download.

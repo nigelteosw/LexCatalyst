@@ -1,7 +1,22 @@
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.models import MatterMember, TeamMember, User
+
+DUMMY_USERS = (
+    {
+        "email": "sarah.chen@lexcatalyst.local",
+        "full_name": "Sarah Chen",
+        "google_id": "dummy:sarah-chen",
+        "firm_role": "senior_associate",
+    },
+    {
+        "email": "jane.pereira@lexcatalyst.local",
+        "full_name": "Jane Pereira",
+        "google_id": "dummy:jane-pereira",
+        "firm_role": "associate",
+    },
+)
 
 
 def update_user_role(db: Session, *, user: User, firm_role: str) -> User:
@@ -38,42 +53,39 @@ def list_firm_users(db: Session) -> list[User]:
     return list(db.scalars(stmt))
 
 
-def create_dummy_users(db: Session, count: int = 5) -> list[User]:
-    """Create a batch of dummy users for testing/demo.
-    
-    Dummy users are identified by 'dummy:' prefix in their google_id.
-    """
-    from uuid import uuid4
-    
-    names = [
-        "James Sterling", "Elena Rodriguez", "Marcus Thorne", "Sarah Jenkins",
-        "David Cho", "Maya Patel", "Robert Vance", "Isabella Rossi",
-        "Thomas Wright", "Olivia Chen"
-    ]
-    roles = ["associate", "senior_associate", "partner"]
-    
-    new_users = []
-    for i in range(min(count, len(names))):
-        u = User(
-            email=f"dummy.{i+1}@lexcatalyst.local",
-            full_name=names[i],
-            google_id=f"dummy:{uuid4()}",
-            firm_role=roles[i % len(roles)],
-            is_admin=False
+def create_dummy_users(db: Session, count: int = len(DUMMY_USERS)) -> list[User]:
+    """Create or refresh the named demo users without producing duplicates."""
+    from app.services.organization_service import ensure_default_team
+
+    users: list[User] = []
+    for seed in DUMMY_USERS[: max(0, min(count, len(DUMMY_USERS)))]:
+        user = db.scalar(
+            select(User).where(
+                (User.google_id == seed["google_id"]) | (User.email == seed["email"])
+            )
         )
-        db.add(u)
-        new_users.append(u)
-    
-    db.commit()
-    for u in new_users:
-        db.refresh(u)
-    return new_users
+        if not user:
+            user = User(**seed, is_admin=False)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            user.email = seed["email"]
+            user.full_name = seed["full_name"]
+            user.google_id = seed["google_id"]
+            user.firm_role = seed["firm_role"]
+            user.is_admin = False
+            db.commit()
+            db.refresh(user)
+
+        ensure_default_team(db, user)
+        users.append(user)
+
+    return users
 
 
 def delete_dummy_users(db: Session) -> int:
     """Delete all users with the 'dummy:' google_id prefix."""
-    from sqlalchemy import delete
-    
     stmt = delete(User).where(User.google_id.like("dummy:%"))
     result = db.execute(stmt)
     db.commit()

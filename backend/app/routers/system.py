@@ -30,7 +30,7 @@ def config() -> dict[str, object]:
 
 @router.post("/system/dummy-users")
 def post_dummy_users(
-    count: int = 5,
+    count: int = 2,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:

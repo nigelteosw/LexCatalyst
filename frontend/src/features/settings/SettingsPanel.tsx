@@ -50,7 +50,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
   const effectiveRole = selectedRole ?? (currentUser?.isAdmin ? 'admin' : currentUser?.firmRole ?? 'associate')
 
   const mutation = useMutation({
-    mutationFn: (role: FirmRole | 'admin') => updateCurrentUserRole(role as any),
+    mutationFn: (role: FirmRole) => updateCurrentUserRole(role),
     onSuccess: (updatedUser) => {
       queryClient.setQueryData(['currentUser'], updatedUser)
       const savedUser = JSON.parse(localStorage.getItem('user') ?? '{}')
@@ -67,10 +67,10 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
   })
 
   const addDummyMutation = useMutation({
-    mutationFn: () => createDummyUsers(5),
+    mutationFn: () => createDummyUsers(2),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['firmUsers'] })
-      setMessage('Dummy users added.')
+      setMessage('Sarah Chen and Jane Pereira added.')
     },
     onError: (error) => {
       setMessage(getErrorMessage(error))
@@ -96,8 +96,8 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
   })
 
   const otherUserMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: FirmRole | 'admin' }) =>
-      updateOtherUserRole(userId, role as any),
+    mutationFn: ({ userId, role }: { userId: string; role: FirmRole }) =>
+      updateOtherUserRole(userId, role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['firmUsers'] })
       queryClient.invalidateQueries({ queryKey: ['actions'] })
@@ -228,7 +228,12 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                       <select
                         className="rounded-lg border border-black/10 bg-[#f4f3ef] px-2 py-1 text-[11px] font-medium text-[#5a5a56] outline-none focus:border-black/25"
                         disabled={u.id === currentUser.id || otherUserMutation.isPending}
-                        onChange={(e) => otherUserMutation.mutate({ userId: u.id, role: e.target.value as any })}
+                        onChange={(e) =>
+                          otherUserMutation.mutate({
+                            userId: u.id,
+                            role: e.target.value as FirmRole,
+                          })
+                        }
                         value={u.isAdmin ? 'admin' : u.firmRole}
                       >
                         <option value="admin">Administrator</option>
@@ -258,7 +263,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                   type="button"
                 >
                   <UserPlus size={14} />
-                  Add dummy users
+                  Add Sarah and Jane
                 </button>
                 <button
                   className="inline-flex h-9 items-center gap-2 rounded-lg border border-red-100 bg-white px-4 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"

@@ -1796,7 +1796,7 @@ export async function getReviewsWaitingCount(): Promise<number> {
   return res.count ?? 0
 }
 
-export async function createDummyUsers(count: number = 5): Promise<void> {
+export async function createDummyUsers(count: number = 2): Promise<void> {
   await request(`/system/dummy-users?count=${count}`, {
     method: 'POST',
   })
