@@ -1136,6 +1136,7 @@ export async function updateOtherUserRole(userId: string, firmRole: FirmRole): P
     fullName: u.full_name,
     email: u.email,
     firmRole: u.firm_role,
+    isAdmin: u.is_admin,
   }
 }
 
