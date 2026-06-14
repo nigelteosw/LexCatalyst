@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import random
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -96,7 +97,12 @@ def get_survey_results(db: Session) -> dict:
     week_of = current_week_start()
     questions = list_survey_questions(db, active_only=False)
     active_question_count = sum(question.is_active for question in questions)
-    users = list(db.scalars(select(User).order_by(User.full_name, User.email)))
+    
+    # Redact identities to ensure anonymity as requested.
+    # We fetch all users but shuffle them so the order doesn't match the firm directory.
+    users = list(db.scalars(select(User)))
+    random.shuffle(users)
+    
     user_rows = db.execute(
         select(
             SurveyResponse.user_id,
@@ -144,9 +150,9 @@ def get_survey_results(db: Session) -> dict:
         "current_week_of": week_of,
         "users": [
             {
-                "user_id": user.id,
-                "full_name": user.full_name,
-                "email": user.email,
+                "user_id": f"anon-{i}",
+                "full_name": f"Contributor {i+1}",
+                "email": "redacted@lexcatalyst.local",
                 "firm_role": user.firm_role,
                 "week_of": week_of,
                 "average_score": (
@@ -161,7 +167,7 @@ def get_survey_results(db: Session) -> dict:
                 ),
                 "question_count": active_question_count,
             }
-            for user in users
+            for i, user in enumerate(users)
         ],
         "questions": question_results,
     }

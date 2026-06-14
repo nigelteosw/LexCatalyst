@@ -167,7 +167,7 @@ function SurveyTab() {
       <div className="flex items-start gap-3 rounded-[12px] border border-black/8 bg-white px-4 py-3">
         <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#4a3db0]" />
         <p className="text-xs leading-5 text-[#5a5a56]">
-          Partners can see completion and average scores for each user so they can follow up on workload and support needs.
+          Your responses are anonymous. Partners see aggregated trends and a shuffled list of scores with identities redacted.
         </p>
       </div>
 
@@ -291,10 +291,10 @@ function ResultsTab() {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-[#171717]">
-                      {user.fullName || user.email}
+                      {user.fullName}
                     </p>
-                    <p className="truncate text-[11px] text-[#8c8c86]">
-                      {user.fullName ? user.email : user.firmRole.replace('_', ' ')}
+                    <p className="truncate text-[11px] text-[#8c8c86] capitalize">
+                      {user.firmRole.replace('_', ' ')}
                     </p>
                   </div>
                   <div className="text-xs text-[#5a5a56] sm:text-right">
