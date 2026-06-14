@@ -402,9 +402,15 @@ function ActionCard({
         </div>
       </div>
       {item.activeHandoffId && (
-        <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#fff1d6] px-2 py-0.5 text-[9.5px] font-medium text-[#8a5a00]">
+        <div
+          className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-medium ${
+            item.status === 'in_progress'
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-[#fff1d6] text-[#8a5a00]'
+          }`}
+        >
           <ClipboardList size={10} />
-          Handoff ready
+          {item.status === 'in_progress' ? 'Returned for rework' : 'Handoff ready'}
         </div>
       )}
       {item.description && (

@@ -9,7 +9,7 @@ import type {
   Matter,
 } from '../../../shared/types/workspace'
 import { isManager, priorityColors, statusColumns, userLabel } from '../config'
-import { ReviewHandoffPane } from './ReviewHandoffPane'
+import { ReviewPane } from './ReviewPane'
 import { Dialog } from '../../../shared/ui/Dialog'
 
 type ActionPatch = {
@@ -159,7 +159,7 @@ export function ActionDetailDialog({
   return (
     <Dialog
       bodyClassName="p-0"
-      className="max-w-2xl"
+      className={tab === 'handoff' ? 'max-w-6xl' : 'max-w-2xl'}
       headerActions={
         <button
           aria-label="Delete ticket"
@@ -187,13 +187,11 @@ export function ActionDetailDialog({
           </TabButton>
         </div>
         {tab === 'handoff' && (
-          <div className="p-5">
-            <ReviewHandoffPane
-              action={item}
-              currentUser={currentUser}
-              onActionStateChange={onActionStateChange}
-            />
-          </div>
+          <ReviewPane
+            action={item}
+            currentUser={currentUser}
+            onActionStateChange={onActionStateChange}
+          />
         )}
         {tab === 'details' && (
         <div className="space-y-4 p-5">

@@ -19,9 +19,10 @@ import type {
   MemoryCategory,
   Message,
   RedactionProposal,
-  ReviewCitation,
-  ReviewFinding,
-  ReviewFindingStatus,
+  ReviewAnnotation,
+  ReviewAnnotationKind,
+  ReviewAnnotationReply,
+  ReviewAnnotationStatus,
   ReviewHandoff,
   ReviewHandoffStatus,
   SessionUser,
@@ -1601,24 +1602,36 @@ export async function getDreamJob(jobId: string): Promise<DreamJobStatus> {
   return mapDreamJobStatus(status)
 }
 
-// Review handoffs
+// Review handoffs + annotations
 
-type BackendReviewFinding = {
+type BackendAnnotationReply = {
   id: string
-  handoff_id: string
-  sequence: number
-  original_clause: string
-  proposed_revision: string | null
-  reasoning: string
-  citations: Array<{ kind?: string; ref?: string | null; label: string }>
-  status: ReviewFindingStatus
-  reviewer_edit: string | null
-  reviewer_comment: string | null
-  promoted_kb_entry_id: string | null
-  reviewed_by: string | null
-  reviewed_at: string | null
+  annotation_id: string
+  author_user_id: string | null
+  body_markdown: string
   created_at: string
   updated_at: string
+  author: BackendActionUser | null
+}
+
+type BackendReviewAnnotation = {
+  id: string
+  handoff_id: string
+  document_id: string
+  page_no: number
+  kind: ReviewAnnotationKind
+  anchor_quote: string
+  anchor_rects: Array<{ pageIndex: number; left: number; top: number; width: number; height: number }>
+  suggested_text: string | null
+  note: string | null
+  status: ReviewAnnotationStatus
+  author_user_id: string | null
+  promoted_kb_entry_id: string | null
+  previous_annotation_id: string | null
+  created_at: string
+  updated_at: string
+  author: BackendActionUser | null
+  replies: BackendAnnotationReply[]
 }
 
 type BackendReviewHandoff = {
@@ -1632,35 +1645,50 @@ type BackendReviewHandoff = {
   status: ReviewHandoffStatus
   reviewer_id: string | null
   completed_at: string | null
+  return_reason: string | null
   error_message: string | null
   created_at: string
   updated_at: string
   submitter: BackendActionUser | null
   reviewer: BackendActionUser | null
-  findings: BackendReviewFinding[]
+  annotations: BackendReviewAnnotation[]
 }
 
-function mapFinding(f: BackendReviewFinding): ReviewFinding {
+function mapUser(u: BackendActionUser | null): ReviewAnnotation['author'] {
+  return u ? { id: u.id, fullName: u.full_name, email: u.email } : null
+}
+
+function mapReply(r: BackendAnnotationReply): ReviewAnnotationReply {
   return {
-    id: f.id,
-    handoffId: f.handoff_id,
-    sequence: f.sequence,
-    originalClause: f.original_clause,
-    proposedRevision: f.proposed_revision,
-    reasoning: f.reasoning,
-    citations: (f.citations ?? []).map((c) => ({
-      kind: (c.kind as ReviewCitation['kind']) ?? 'external',
-      ref: c.ref ?? null,
-      label: c.label,
-    })),
-    status: f.status,
-    reviewerEdit: f.reviewer_edit,
-    reviewerComment: f.reviewer_comment,
-    promotedKbEntryId: f.promoted_kb_entry_id,
-    reviewedBy: f.reviewed_by,
-    reviewedAt: f.reviewed_at,
-    createdAt: f.created_at,
-    updatedAt: f.updated_at,
+    id: r.id,
+    annotationId: r.annotation_id,
+    authorUserId: r.author_user_id,
+    bodyMarkdown: r.body_markdown,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    author: mapUser(r.author),
+  }
+}
+
+function mapAnnotation(a: BackendReviewAnnotation): ReviewAnnotation {
+  return {
+    id: a.id,
+    handoffId: a.handoff_id,
+    documentId: a.document_id,
+    pageNo: a.page_no,
+    kind: a.kind,
+    anchorQuote: a.anchor_quote,
+    anchorRects: a.anchor_rects ?? [],
+    suggestedText: a.suggested_text,
+    note: a.note,
+    status: a.status,
+    authorUserId: a.author_user_id,
+    promotedKbEntryId: a.promoted_kb_entry_id,
+    previousAnnotationId: a.previous_annotation_id,
+    createdAt: a.created_at,
+    updatedAt: a.updated_at,
+    author: mapUser(a.author),
+    replies: (a.replies ?? []).map(mapReply),
   }
 }
 
@@ -1676,16 +1704,13 @@ function mapHandoff(h: BackendReviewHandoff): ReviewHandoff {
     status: h.status,
     reviewerId: h.reviewer_id,
     completedAt: h.completed_at,
+    returnReason: h.return_reason,
     errorMessage: h.error_message,
     createdAt: h.created_at,
     updatedAt: h.updated_at,
-    submitter: h.submitter
-      ? { id: h.submitter.id, fullName: h.submitter.full_name, email: h.submitter.email }
-      : null,
-    reviewer: h.reviewer
-      ? { id: h.reviewer.id, fullName: h.reviewer.full_name, email: h.reviewer.email }
-      : null,
-    findings: (h.findings ?? []).map(mapFinding),
+    submitter: mapUser(h.submitter),
+    reviewer: mapUser(h.reviewer),
+    annotations: (h.annotations ?? []).map(mapAnnotation),
   }
 }
 
@@ -1719,14 +1744,6 @@ export async function listReviewHandoffsForAction(actionId: string): Promise<Rev
   return items.map(mapHandoff)
 }
 
-export async function restartReviewExtraction(handoffId: string): Promise<ReviewHandoff> {
-  return mapHandoff(
-    await request<BackendReviewHandoff>(`/handoffs/${handoffId}/extract`, {
-      method: 'POST',
-    }),
-  )
-}
-
 export async function updateReviewHandoff(
   handoffId: string,
   payload: { status?: ReviewHandoffStatus; reviewerId?: string | null },
@@ -1742,63 +1759,128 @@ export async function updateReviewHandoff(
   )
 }
 
-export async function createReviewFinding(
+export async function deleteReviewHandoff(handoffId: string): Promise<void> {
+  await request(`/handoffs/${handoffId}`, { method: 'DELETE' })
+}
+
+export async function listReviewAnnotations(handoffId: string): Promise<ReviewAnnotation[]> {
+  const items = await request<BackendReviewAnnotation[]>(
+    `/handoffs/${handoffId}/annotations`,
+  )
+  return items.map(mapAnnotation)
+}
+
+export async function createReviewAnnotation(
   handoffId: string,
   payload: {
-    originalClause: string
-    proposedRevision?: string | null
-    reasoning: string
-    citations?: ReviewCitation[]
+    documentId: string
+    pageNo: number
+    kind: ReviewAnnotationKind
+    anchorQuote: string
+    anchorRects: ReviewAnnotation['anchorRects']
+    suggestedText?: string | null
+    note?: string | null
   },
-): Promise<ReviewFinding> {
-  return mapFinding(
-    await request<BackendReviewFinding>(`/handoffs/${handoffId}/findings`, {
+): Promise<ReviewAnnotation> {
+  return mapAnnotation(
+    await request<BackendReviewAnnotation>(`/handoffs/${handoffId}/annotations`, {
       method: 'POST',
       body: JSON.stringify({
-        original_clause: payload.originalClause,
-        proposed_revision: payload.proposedRevision ?? null,
-        reasoning: payload.reasoning,
-        citations: payload.citations ?? [],
+        document_id: payload.documentId,
+        page_no: payload.pageNo,
+        kind: payload.kind,
+        anchor_quote: payload.anchorQuote,
+        anchor_rects: payload.anchorRects,
+        suggested_text: payload.suggestedText ?? null,
+        note: payload.note ?? null,
       }),
     }),
   )
 }
 
-export async function updateReviewFinding(
+export async function updateReviewAnnotation(
   handoffId: string,
-  findingId: string,
+  annotationId: string,
   payload: {
-    status?: ReviewFindingStatus
-    reviewerEdit?: string | null
-    reviewerComment?: string | null
+    status?: ReviewAnnotationStatus
+    suggestedText?: string | null
+    note?: string | null
   },
-): Promise<ReviewFinding> {
-  return mapFinding(
-    await request<BackendReviewFinding>(
-      `/handoffs/${handoffId}/findings/${findingId}`,
+): Promise<ReviewAnnotation> {
+  return mapAnnotation(
+    await request<BackendReviewAnnotation>(
+      `/handoffs/${handoffId}/annotations/${annotationId}`,
       {
         method: 'PATCH',
         body: JSON.stringify({
           status: payload.status,
-          reviewer_edit: payload.reviewerEdit,
-          reviewer_comment: payload.reviewerComment,
+          suggested_text: payload.suggestedText,
+          note: payload.note,
         }),
       },
     ),
   )
 }
 
-export async function deleteReviewFinding(handoffId: string, findingId: string): Promise<void> {
-  await request(`/handoffs/${handoffId}/findings/${findingId}`, { method: 'DELETE' })
-}
-
-export async function deleteReviewHandoff(handoffId: string): Promise<void> {
-  await request(`/handoffs/${handoffId}`, { method: 'DELETE' })
-}
-
-export async function promoteFindingToKb(
+export async function deleteReviewAnnotation(
   handoffId: string,
-  findingId: string,
+  annotationId: string,
+): Promise<void> {
+  await request(`/handoffs/${handoffId}/annotations/${annotationId}`, { method: 'DELETE' })
+}
+
+export async function listAnnotationReplies(
+  handoffId: string,
+  annotationId: string,
+): Promise<ReviewAnnotationReply[]> {
+  const items = await request<BackendAnnotationReply[]>(
+    `/handoffs/${handoffId}/annotations/${annotationId}/replies`,
+  )
+  return items.map(mapReply)
+}
+
+export async function postAnnotationReply(
+  handoffId: string,
+  annotationId: string,
+  body: string,
+): Promise<ReviewAnnotationReply> {
+  return mapReply(
+    await request<BackendAnnotationReply>(
+      `/handoffs/${handoffId}/annotations/${annotationId}/replies`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ body_markdown: body }),
+      },
+    ),
+  )
+}
+
+export async function deleteAnnotationReply(
+  handoffId: string,
+  annotationId: string,
+  replyId: string,
+): Promise<void> {
+  await request(
+    `/handoffs/${handoffId}/annotations/${annotationId}/replies/${replyId}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function rejectReviewHandoff(
+  handoffId: string,
+  reason: string,
+): Promise<ReviewHandoff> {
+  return mapHandoff(
+    await request<BackendReviewHandoff>(`/handoffs/${handoffId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  )
+}
+
+export async function promoteAnnotationToKb(
+  handoffId: string,
+  annotationId: string,
   payload: {
     targetScope?: KnowledgeBankScope
     entryType?: KnowledgeBankEntryType
@@ -1806,18 +1888,34 @@ export async function promoteFindingToKb(
     tags?: string[]
   },
 ): Promise<KnowledgeBankEntry> {
-  return await request<KnowledgeBankEntry>(
-    `/handoffs/${handoffId}/findings/${findingId}/promote`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        target_scope: payload.targetScope ?? 'matter',
-        entry_type: payload.entryType ?? 'knowledge_bank',
-        title: payload.title ?? null,
-        tags: payload.tags ?? [],
-      }),
-    },
+  return mapKnowledgeBankEntry(
+    await request<BackendKnowledgeBankEntry>(
+      `/handoffs/${handoffId}/annotations/${annotationId}/promote`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          target_scope: payload.targetScope ?? 'matter',
+          entry_type: payload.entryType ?? 'knowledge_bank',
+          title: payload.title ?? null,
+          tags: payload.tags ?? [],
+        }),
+      },
+    ),
   )
+}
+
+export async function exportAnnotatedPdf(handoffId: string): Promise<Blob> {
+  const token = localStorage.getItem('token') ?? ''
+  const res = await fetch(`${API_BASE_URL}/handoffs/${handoffId}/export`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  handleUnauthorized(res)
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(text || `Export failed: ${res.status}`)
+  }
+  return res.blob()
 }
 
 export async function getReviewsWaitingCount(): Promise<number> {

@@ -1,4 +1,6 @@
 import asyncio
+import multiprocessing
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from app.models import Document, DocumentChunk
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
     IngestionError,
+    TextBlock,
     UnsupportedDocumentError,
     chunk_text_blocks,
     extract_text_blocks,
@@ -22,6 +25,7 @@ from app.services.storage_service import (
     download_document_file,
     upload_document_file,
 )
+from app.worker_types import WorkerClaim
 
 MAX_ERROR_LENGTH = 1000
 STALE_CLAIM_AFTER = timedelta(minutes=30)
@@ -32,6 +36,69 @@ EXTRACTION_TIMEOUT_SECONDS = 120.0
 
 class DocumentProcessingError(RuntimeError):
     pass
+
+
+def _extract_blocks_child(
+    connection,
+    file_bytes: bytes,
+    filename: str,
+    content_type: str,
+) -> None:
+    try:
+        connection.send(
+            ("ok", extract_text_blocks(file_bytes, filename, content_type))
+        )
+    except BaseException as exc:  # noqa: BLE001 - report child failures to the parent
+        connection.send(("error", f"{type(exc).__name__}: {exc}"))
+    finally:
+        connection.close()
+
+
+def _extract_text_blocks_with_timeout(
+    file_bytes: bytes,
+    filename: str,
+    content_type: str,
+) -> list[TextBlock]:
+    """Run extraction in a subprocess that can be terminated on timeout."""
+    context = multiprocessing.get_context("spawn")
+    receive_connection, send_connection = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_extract_blocks_child,
+        args=(send_connection, file_bytes, filename, content_type),
+        name="document-extraction",
+    )
+    process.start()
+    send_connection.close()
+    deadline = time.monotonic() + EXTRACTION_TIMEOUT_SECONDS
+
+    try:
+        while time.monotonic() < deadline:
+            if receive_connection.poll(0.1):
+                status, payload = receive_connection.recv()
+                process.join(timeout=1)
+                if status == "error":
+                    raise IngestionError(payload)
+                return payload
+            if not process.is_alive():
+                break
+
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=1)
+            if process.is_alive():
+                process.kill()
+                process.join(timeout=1)
+            raise DocumentProcessingError(
+                f"Extraction timed out after {int(EXTRACTION_TIMEOUT_SECONDS)}s"
+            )
+        raise DocumentProcessingError(
+            f"Extraction process exited with code {process.exitcode} without returning text"
+        )
+    finally:
+        receive_connection.close()
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=1)
 
 
 def document_access_filter(user_id: str):
@@ -102,14 +169,19 @@ async def create_pending_document(
         raise
 
 
-def claim_pending_document(db: Session) -> str | None:
+def claim_pending_document(db: Session) -> WorkerClaim | None:
     """Atomically claim one queued document, including stale jobs."""
+    stale_before = datetime.now(UTC) - STALE_CLAIM_AFTER
     # Fail documents that have exhausted retries before attempting to claim.
     db.execute(
         update(Document)
         .where(
             Document.status == "processing",
             Document.processing_attempts >= MAX_PROCESSING_ATTEMPTS,
+            or_(
+                Document.processing_started_at.is_(None),
+                Document.processing_started_at < stale_before,
+            ),
         )
         .values(
             status="failed",
@@ -119,11 +191,11 @@ def claim_pending_document(db: Session) -> str | None:
     )
     db.commit()
 
-    stale_before = datetime.now(UTC) - STALE_CLAIM_AFTER
     document_id = db.scalar(
         select(Document.id)
         .where(
             Document.status == "processing",
+            Document.processing_attempts < MAX_PROCESSING_ATTEMPTS,
             or_(
                 Document.processing_started_at.is_(None),
                 Document.processing_started_at < stale_before,
@@ -136,24 +208,32 @@ def claim_pending_document(db: Session) -> str | None:
     if not document_id:
         return None
 
+    started_at = datetime.now(UTC)
     db.execute(
         update(Document)
         .where(Document.id == document_id)
         .values(
-            processing_started_at=datetime.now(UTC),
+            processing_started_at=started_at,
             processing_attempts=Document.processing_attempts + 1,
         )
     )
     db.commit()
-    return document_id
+    return WorkerClaim(job_id=document_id, started_at=started_at)
 
 
-async def process_document(document_id: str) -> None:
+async def process_document(claim: WorkerClaim) -> None:
     """Download, extract, embed, and persist one claimed document."""
+    document_id = claim.job_id
     metadata_db = SessionLocal()
     try:
-        document = metadata_db.get(Document, document_id)
-        if not document or document.status != "processing":
+        document = metadata_db.scalar(
+            select(Document).where(
+                Document.id == document_id,
+                Document.status == "processing",
+                Document.processing_started_at == claim.started_at,
+            )
+        )
+        if not document:
             return
         storage_key = document.storage_key
         filename = document.filename
@@ -162,7 +242,7 @@ async def process_document(document_id: str) -> None:
         metadata_db.close()
 
     if not storage_key:
-        _mark_document_failed(document_id, "Document has no stored file.")
+        _mark_document_failed(claim, "Document has no stored file.")
         return
 
     print(f"[doc:{document_id}] downloading {filename!r}")
@@ -172,44 +252,48 @@ async def process_document(document_id: str) -> None:
             timeout=DOWNLOAD_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        _mark_document_failed(document_id, "Download timed out")
+        _mark_document_failed(claim, "Download timed out")
         return
     except StorageError as exc:
-        _mark_document_failed(document_id, str(exc))
+        _mark_document_failed(claim, str(exc))
         return
 
     print(f"[doc:{document_id}] extracting text ({len(file_bytes)} bytes)")
     try:
-        blocks = await asyncio.wait_for(
-            asyncio.to_thread(extract_text_blocks, file_bytes, filename, content_type),
-            timeout=EXTRACTION_TIMEOUT_SECONDS,
+        blocks = await asyncio.to_thread(
+            _extract_text_blocks_with_timeout,
+            file_bytes,
+            filename,
+            content_type,
         )
         print(f"[doc:{document_id}] extracted {len(blocks)} blocks, chunking")
         chunks = chunk_text_blocks(blocks, filename=filename)
         print(f"[doc:{document_id}] embedding {len(chunks)} chunks")
         embeddings = await embed_texts([chunk.text for chunk in chunks])
-    except asyncio.TimeoutError:
-        _mark_document_failed(
-            document_id,
-            f"Extraction timed out after {int(EXTRACTION_TIMEOUT_SECONDS)}s",
-        )
-        return
     except (
         IngestionError,
         EmbeddingError,
         DocumentProcessingError,
         ValueError,
     ) as exc:
-        _mark_document_failed(document_id, str(exc))
+        _mark_document_failed(claim, str(exc))
         return
     except Exception as exc:  # noqa: BLE001 - worker must record terminal failures
-        _mark_document_failed(document_id, f"Unexpected error: {exc}")
+        _mark_document_failed(claim, f"Unexpected error: {exc}")
         return
 
     db = SessionLocal()
     try:
-        document = db.get(Document, document_id)
-        if not document or document.status != "processing":
+        document = db.scalar(
+            select(Document)
+            .where(
+                Document.id == document_id,
+                Document.status == "processing",
+                Document.processing_started_at == claim.started_at,
+            )
+            .with_for_update()
+        )
+        if not document:
             return
 
         # A stale job may be reclaimed after a worker restart. Replacing chunks
@@ -235,15 +319,23 @@ async def process_document(document_id: str) -> None:
         db.commit()
     except Exception as exc:  # noqa: BLE001 - persist worker failures
         db.rollback()
-        _mark_document_failed(document_id, f"Document persistence failed: {exc}")
+        _mark_document_failed(claim, f"Document persistence failed: {exc}")
     finally:
         db.close()
 
 
-def _mark_document_failed(document_id: str, message: str) -> None:
+def _mark_document_failed(claim: WorkerClaim, message: str) -> None:
     db = SessionLocal()
     try:
-        document = db.get(Document, document_id)
+        document = db.scalar(
+            select(Document)
+            .where(
+                Document.id == claim.job_id,
+                Document.status == "processing",
+                Document.processing_started_at == claim.started_at,
+            )
+            .with_for_update()
+        )
         if not document:
             return
         document.status = "failed"

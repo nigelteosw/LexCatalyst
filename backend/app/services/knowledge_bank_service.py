@@ -81,12 +81,21 @@ def _resolve_scope_targets(
     raise KnowledgeBankScopeError("Invalid Knowledge Bank scope")
 
 
+def build_entry_embedding_text(title: str, body_markdown: str) -> str:
+    return f"{title}\n\n{body_markdown}".strip()[:MAX_EMBEDDING_TEXT_CHARS]
+
+
+def build_entry_embedding_hash(title: str, body_markdown: str) -> str:
+    text = build_entry_embedding_text(title, body_markdown)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def _entry_embedding_text(entry: KnowledgeBankEntry) -> str:
-    return f"{entry.title}\n\n{entry.body_markdown}".strip()[:MAX_EMBEDDING_TEXT_CHARS]
+    return build_entry_embedding_text(entry.title, entry.body_markdown)
 
 
 def _entry_embedding_hash(entry: KnowledgeBankEntry) -> str:
-    return hashlib.sha256(_entry_embedding_text(entry).encode("utf-8")).hexdigest()
+    return build_entry_embedding_hash(entry.title, entry.body_markdown)
 
 
 def _embedding_is_stale(entry: KnowledgeBankEntry) -> bool:

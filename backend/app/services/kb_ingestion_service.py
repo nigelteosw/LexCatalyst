@@ -4,7 +4,7 @@ Flow:
   1. `create_pending_kb_entry` runs synchronously in the request handler.
      It creates a `kb_entries` row with `status="processing"`, an empty
      body, and no embedding, then returns it immediately.
-  2. The dedicated KB worker claims processing rows from Postgres and calls
+  2. The embedded combined worker claims processing rows from Postgres and calls
      `process_kb_summary`. It opens its own DB session, summarises a bounded
      set of document extracts using DeepSeek Pro,
      writes the summary into the entry body, computes the embedding, and
@@ -15,6 +15,7 @@ The KB entry's `source_document_id` lets the agent later call
 insufficient.
 """
 
+import asyncio
 import json
 import re
 from collections.abc import Mapping
@@ -29,10 +30,11 @@ from app.models import Document, DocumentChunk, KnowledgeBankEntry, User
 from app.providers.deepseek import DeepSeekError, DeepSeekProvider
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.knowledge_bank_service import (
-    _entry_embedding_hash,
-    _entry_embedding_text,
+    build_entry_embedding_hash,
+    build_entry_embedding_text,
     log_kb_access,
 )
+from app.worker_types import WorkerClaim
 
 # Keep enough source text for a typical long-form legal document while leaving
 # room for the model to produce a detailed legal digest.
@@ -41,6 +43,8 @@ MAX_INGEST_CHUNKS = 80
 MAX_CHUNK_CHARS = 3000
 MAX_ERROR_LENGTH = 1000
 STALE_CLAIM_AFTER = timedelta(minutes=30)
+MAX_PROCESSING_ATTEMPTS = 3
+SUMMARY_TIMEOUT_SECONDS = 180.0
 
 
 class KbIngestionError(RuntimeError):
@@ -79,6 +83,7 @@ def create_pending_kb_entry(
         existing.embedding = None
         existing.embedding_content_hash = None
         existing.processing_started_at = None
+        existing.processing_attempts = 0
         db.commit()
         db.refresh(existing)
         return existing
@@ -114,13 +119,35 @@ def create_pending_kb_entry(
 # --- Durable worker claiming ---------------------------------------------
 
 
-def claim_pending_kb_entry(db: Session) -> str | None:
+def claim_pending_kb_entry(db: Session) -> WorkerClaim | None:
     """Atomically claim one pending entry, including stale jobs after restarts."""
     stale_before = datetime.now(UTC) - STALE_CLAIM_AFTER
+    db.execute(
+        update(KnowledgeBankEntry)
+        .where(
+            KnowledgeBankEntry.status == "processing",
+            KnowledgeBankEntry.processing_attempts >= MAX_PROCESSING_ATTEMPTS,
+            or_(
+                KnowledgeBankEntry.processing_started_at.is_(None),
+                KnowledgeBankEntry.processing_started_at < stale_before,
+            ),
+        )
+        .values(
+            status="failed",
+            error_message=(
+                f"Processing failed after {MAX_PROCESSING_ATTEMPTS} attempts "
+                "(possible worker restart or timeout)"
+            ),
+            processing_started_at=None,
+        )
+    )
+    db.commit()
+
     entry_id = db.scalar(
         select(KnowledgeBankEntry.id)
         .where(
             KnowledgeBankEntry.status == "processing",
+            KnowledgeBankEntry.processing_attempts < MAX_PROCESSING_ATTEMPTS,
             or_(
                 KnowledgeBankEntry.processing_started_at.is_(None),
                 KnowledgeBankEntry.processing_started_at < stale_before,
@@ -132,109 +159,164 @@ def claim_pending_kb_entry(db: Session) -> str | None:
     )
     if not entry_id:
         return None
+    started_at = datetime.now(UTC)
     db.execute(
         update(KnowledgeBankEntry)
         .where(KnowledgeBankEntry.id == entry_id)
         .values(
-            processing_started_at=datetime.now(UTC),
+            processing_started_at=started_at,
             processing_attempts=KnowledgeBankEntry.processing_attempts + 1,
         )
     )
     db.commit()
-    return entry_id
+    return WorkerClaim(job_id=entry_id, started_at=started_at)
 
 
 # --- Async: summarise + embed in the worker ------------------------------
 
 
-async def process_kb_summary(entry_id: str) -> None:
+async def process_kb_summary(claim: WorkerClaim) -> None:
     """Background task: summarise the document and finalise the KB entry."""
+    entry_id = claim.job_id
     db = SessionLocal()
-    entry: KnowledgeBankEntry | None = None
+    validation_error: str | None = None
+    entry_title = ""
+    document_filename = ""
+    chunks: list[Mapping[str, Any]] = []
     try:
-        entry = db.get(KnowledgeBankEntry, entry_id)
+        entry = db.scalar(
+            select(KnowledgeBankEntry).where(
+                KnowledgeBankEntry.id == entry_id,
+                KnowledgeBankEntry.status == "processing",
+                KnowledgeBankEntry.processing_started_at == claim.started_at,
+            )
+        )
         if not entry:
             return
-        if entry.status != "processing":
-            return
+        entry_title = entry.title
         if not entry.source_document_id:
-            _mark_failed(db, entry, "Entry has no source document.")
-            return
-
-        document = db.get(Document, entry.source_document_id)
-        if not document:
-            _mark_failed(db, entry, "Source document not found.")
-            return
-        if document.status != "ready":
-            _mark_failed(db, entry, "Source document is not ready yet.")
-            return
-
-        chunk_rows = list(
-            db.execute(
-                select(
-                    DocumentChunk.chunk_index,
-                    DocumentChunk.citation_label,
-                    DocumentChunk.text,
+            validation_error = "Entry has no source document."
+        else:
+            document = db.get(Document, entry.source_document_id)
+            if not document:
+                validation_error = "Source document not found."
+            elif document.status != "ready":
+                validation_error = "Source document is not ready yet."
+            else:
+                document_filename = document.filename
+                chunk_rows = list(
+                    db.execute(
+                        select(
+                            DocumentChunk.chunk_index,
+                            DocumentChunk.citation_label,
+                            DocumentChunk.text,
+                        )
+                        .where(DocumentChunk.document_id == document.id)
+                        .order_by(DocumentChunk.chunk_index)
+                    ).mappings()
                 )
-                .where(DocumentChunk.document_id == document.id)
-                .order_by(DocumentChunk.chunk_index)
-            ).mappings()
-        )
-        if not chunk_rows:
-            _mark_failed(db, entry, "Document has no extracted text.")
-            return
-        chunks = _sample_chunks(chunk_rows, MAX_INGEST_CHUNKS)
+                if not chunk_rows:
+                    validation_error = "Document has no extracted text."
+                else:
+                    chunks = _sample_chunks(chunk_rows, MAX_INGEST_CHUNKS)
+    finally:
+        db.close()
 
-        provider = DeepSeekProvider()
-        try:
-            content, _ = await provider.chat(
-                _build_prompt(document=document, chunks=chunks),
+    if validation_error:
+        _mark_failed(claim, validation_error)
+        return
+
+    provider = DeepSeekProvider()
+    try:
+        content, _ = await asyncio.wait_for(
+            provider.chat(
+                _build_prompt(filename=document_filename, chunks=chunks),
                 model=SUMMARY_MODEL,
+            ),
+            timeout=SUMMARY_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        _mark_failed(
+            claim,
+            f"Summary generation timed out after {int(SUMMARY_TIMEOUT_SECONDS)}s",
+        )
+        return
+    except DeepSeekError as exc:
+        _mark_failed(claim, f"Summary generation failed: {exc}")
+        return
+    except Exception as exc:  # noqa: BLE001 - persist unexpected provider failures
+        _mark_failed(claim, f"Unexpected summary failure: {exc}")
+        return
+
+    try:
+        parsed = _parse_summary(content)
+    except KbIngestionError as exc:
+        _mark_failed(claim, str(exc))
+        return
+
+    title = parsed["title"] or entry_title
+    body_markdown = parsed["body_markdown"]
+    try:
+        embedding = (
+            await embed_texts([build_entry_embedding_text(title, body_markdown)])
+        )[0]
+        embedding_content_hash = build_entry_embedding_hash(title, body_markdown)
+    except EmbeddingError as exc:
+        _mark_failed(claim, f"Embedding failed: {exc}")
+        return
+    except Exception as exc:  # noqa: BLE001 - persist unexpected provider failures
+        _mark_failed(claim, f"Unexpected embedding failure: {exc}")
+        return
+
+    db = SessionLocal()
+    try:
+        entry = db.scalar(
+            select(KnowledgeBankEntry)
+            .where(
+                KnowledgeBankEntry.id == entry_id,
+                KnowledgeBankEntry.status == "processing",
+                KnowledgeBankEntry.processing_started_at == claim.started_at,
             )
-        except DeepSeekError as exc:
-            _mark_failed(db, entry, f"Summary generation failed: {exc}")
+            .with_for_update()
+        )
+        if not entry:
             return
-
-        try:
-            parsed = _parse_summary(content)
-        except KbIngestionError as exc:
-            _mark_failed(db, entry, str(exc))
-            return
-
-        entry.title = parsed["title"] or entry.title
-        entry.body_markdown = parsed["body_markdown"]
-
-        try:
-            entry.embedding = (
-                await embed_texts([_entry_embedding_text(entry)])
-            )[0]
-            entry.embedding_content_hash = _entry_embedding_hash(entry)
-        except EmbeddingError as exc:
-            _mark_failed(db, entry, f"Embedding failed: {exc}")
-            return
-
+        entry.title = title
+        entry.body_markdown = body_markdown
+        entry.embedding = embedding
+        entry.embedding_content_hash = embedding_content_hash
         entry.status = "ready"
         entry.error_message = None
         entry.processing_started_at = None
         entry.version += 1
         db.commit()
     except Exception as exc:  # noqa: BLE001 — last-resort safety net
-        if entry is not None:
-            try:
-                _mark_failed(db, entry, f"Unexpected error: {exc}")
-            except Exception:  # noqa: BLE001
-                db.rollback()
-        else:
-            db.rollback()
+        db.rollback()
+        _mark_failed(claim, f"Unexpected error: {exc}")
     finally:
         db.close()
 
 
-def _mark_failed(db: Session, entry: KnowledgeBankEntry, message: str) -> None:
-    entry.status = "failed"
-    entry.error_message = message[:MAX_ERROR_LENGTH]
-    entry.processing_started_at = None
-    db.commit()
+def _mark_failed(claim: WorkerClaim, message: str) -> None:
+    db = SessionLocal()
+    try:
+        entry = db.scalar(
+            select(KnowledgeBankEntry)
+            .where(
+                KnowledgeBankEntry.id == claim.job_id,
+                KnowledgeBankEntry.status == "processing",
+                KnowledgeBankEntry.processing_started_at == claim.started_at,
+            )
+            .with_for_update()
+        )
+        if not entry:
+            return
+        entry.status = "failed"
+        entry.error_message = message[:MAX_ERROR_LENGTH]
+        entry.processing_started_at = None
+        db.commit()
+    finally:
+        db.close()
 
 
 # --- Prompt building -----------------------------------------------------
@@ -357,7 +439,7 @@ Document extracts ({chunk_count} supplied):
 
 def _build_prompt(
     *,
-    document: Document,
+    filename: str,
     chunks: list[Mapping[str, Any]],
 ) -> list[dict[str, str]]:
     chunk_blocks = [
@@ -369,7 +451,7 @@ def _build_prompt(
         {
             "role": "user",
             "content": _USER_PROMPT.format(
-                filename=document.filename,
+                filename=filename,
                 chunk_count=len(chunks),
                 chunks="\n\n---\n\n".join(chunk_blocks),
             ),

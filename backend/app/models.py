@@ -871,13 +871,16 @@ class ReviewHandoff(Base):
         server_default=func.now(),
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(String(32), index=True, nullable=False, default="extracting")
+    status: Mapped[str] = mapped_column(
+        String(32), index=True, nullable=False, default="ready_for_review"
+    )
     reviewer_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         index=True,
         nullable=True,
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    return_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     processing_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -904,38 +907,44 @@ class ReviewHandoff(Base):
     document: Mapped[Document] = relationship()
     submitter: Mapped[User] = relationship(foreign_keys=[submitted_by])
     reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewer_id])
-    findings: Mapped[list["ReviewFinding"]] = relationship(
+    annotations: Mapped[list["ReviewAnnotation"]] = relationship(
         back_populates="handoff",
         cascade="all, delete-orphan",
-        order_by="ReviewFinding.sequence",
+        order_by="ReviewAnnotation.page_no, ReviewAnnotation.created_at",
     )
 
 
-class ReviewFinding(Base):
-    __tablename__ = "review_findings"
+class ReviewAnnotation(Base):
+    __tablename__ = "review_annotations"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     handoff_id: Mapped[str] = mapped_column(
         ForeignKey("review_handoffs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
-    original_clause: Mapped[str] = mapped_column(Text, nullable=False)
-    proposed_revision: Mapped[str | None] = mapped_column(Text, nullable=True)
-    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
-    citations: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
-    reviewer_edit: Mapped[str | None] = mapped_column(Text, nullable=True)
-    reviewer_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    page_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    anchor_quote: Mapped[str] = mapped_column(Text, nullable=False)
+    anchor_rects: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    suggested_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    author_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     promoted_kb_entry_id: Mapped[str | None] = mapped_column(
         ForeignKey("kb_entries.id", ondelete="SET NULL"),
         nullable=True,
     )
-    reviewed_by: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
+    previous_annotation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("review_annotations.id", ondelete="SET NULL"),
         nullable=True,
     )
-    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -948,6 +957,40 @@ class ReviewFinding(Base):
         nullable=False,
     )
 
-    handoff: Mapped[ReviewHandoff] = relationship(back_populates="findings")
-    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewed_by])
+    handoff: Mapped[ReviewHandoff] = relationship(back_populates="annotations")
+    author: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
     promoted_kb_entry: Mapped[KnowledgeBankEntry | None] = relationship()
+    replies: Mapped[list["ReviewAnnotationReply"]] = relationship(
+        back_populates="annotation",
+        cascade="all, delete-orphan",
+        order_by="ReviewAnnotationReply.created_at",
+    )
+
+
+class ReviewAnnotationReply(Base):
+    __tablename__ = "review_annotation_replies"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    annotation_id: Mapped[str] = mapped_column(
+        ForeignKey("review_annotations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    author_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    body_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    annotation: Mapped[ReviewAnnotation] = relationship(back_populates="replies")
+    author: Mapped[User | None] = relationship(foreign_keys=[author_user_id])

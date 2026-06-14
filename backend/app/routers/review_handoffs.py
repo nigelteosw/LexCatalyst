@@ -1,53 +1,65 @@
-"""Structured Review Handoff endpoints.
+"""Review Handoff + Annotation endpoints.
 
-See `docs/rfc-review-handoff.md` for the design. In super-user mode any
-authenticated matter member can submit and review; the reviewer fields
-are still recorded so enforcement can layer on later.
+See docs/plans/pdf-redlining-review.md for the full design.
+In super-user mode any authenticated matter member can submit and review;
+the reviewer fields are still recorded so enforcement can layer on later.
 """
 
-from datetime import UTC, datetime
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import ReviewFinding, User
+from app.models import ReviewAnnotation, ReviewAnnotationReply, ReviewHandoff, User
 from app.schemas import (
-    KnowledgeBankEntryCreate,
     KnowledgeBankEntryResponse,
-    ReviewFindingCreate,
-    ReviewFindingResponse,
-    ReviewFindingUpdate,
+    ReviewAnnotationCreate,
+    ReviewAnnotationPromoteRequest,
+    ReviewAnnotationReplyCreate,
+    ReviewAnnotationReplyResponse,
+    ReviewAnnotationResponse,
+    ReviewAnnotationUpdate,
     ReviewHandoffCreate,
-    ReviewHandoffPromoteRequest,
+    ReviewHandoffRejectRequest,
     ReviewHandoffResponse,
     ReviewHandoffUpdate,
     ReviewWaitingCountResponse,
 )
-from app.services.knowledge_bank_service import (
-    KnowledgeBankError,
-    KnowledgeBankScopeError,
-    create_kb_entry,
+from app.services.review_annotation_service import (
+    ReviewAnnotationError,
+    create_annotation,
+    delete_annotation,
+    delete_reply,
+    export_flattened_pdf,
+    get_annotation,
+    list_annotations,
+    list_replies,
+    post_reply,
+    promote_annotation_to_kb,
+    update_annotation,
 )
 from app.services.review_handoff_service import (
     ReviewHandoffError,
     count_reviews_waiting,
-    create_finding,
     create_handoff,
-    delete_finding,
+    delete_handoff,
     get_handoff,
     list_handoffs_for_action,
-    restart_extraction,
+    reject_handoff,
     return_handoff_for_rework,
-    update_finding,
     update_handoff_status,
 )
 
 router = APIRouter(tags=["review-handoffs"])
 
 
-def _serialise(handoff) -> ReviewHandoffResponse:
+# ---------------------------------------------------------------------------
+# Serialisers
+# ---------------------------------------------------------------------------
+
+
+def _serialise_handoff(handoff: ReviewHandoff) -> ReviewHandoffResponse:
     return ReviewHandoffResponse(
         id=handoff.id,
         action_id=handoff.action_id,
@@ -58,21 +70,43 @@ def _serialise(handoff) -> ReviewHandoffResponse:
         status=handoff.status,
         reviewer_id=handoff.reviewer_id,
         completed_at=handoff.completed_at,
+        return_reason=handoff.return_reason,
         error_message=handoff.error_message,
         created_at=handoff.created_at,
         updated_at=handoff.updated_at,
         submitter=handoff.submitter,
         reviewer=handoff.reviewer,
-        findings=[ReviewFindingResponse.model_validate(f) for f in handoff.findings],
+        annotations=[ReviewAnnotationResponse.model_validate(a) for a in handoff.annotations],
         document_filename=handoff.document.filename if handoff.document else None,
     )
 
 
-@router.post(
-    "/handoffs",
-    response_model=ReviewHandoffResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+def _serialise_annotation(annotation: ReviewAnnotation) -> ReviewAnnotationResponse:
+    return ReviewAnnotationResponse.model_validate(annotation)
+
+
+def _get_handoff_or_404(db: Session, handoff_id: str) -> ReviewHandoff:
+    handoff = get_handoff(db, handoff_id)
+    if not handoff:
+        raise HTTPException(status_code=404, detail="Handoff not found")
+    return handoff
+
+
+def _get_annotation_or_404(
+    db: Session, handoff_id: str, annotation_id: str
+) -> ReviewAnnotation:
+    annotation = get_annotation(db, annotation_id)
+    if not annotation or annotation.handoff_id != handoff_id:
+        raise HTTPException(status_code=404, detail="Annotation not found")
+    return annotation
+
+
+# ---------------------------------------------------------------------------
+# Handoff CRUD
+# ---------------------------------------------------------------------------
+
+
+@router.post("/handoffs", response_model=ReviewHandoffResponse, status_code=status.HTTP_201_CREATED)
 def post_handoff(
     schema: ReviewHandoffCreate,
     db: Session = Depends(get_db),
@@ -82,19 +116,7 @@ def post_handoff(
         handoff = create_handoff(db, user=current_user, schema=schema)
     except ReviewHandoffError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return _serialise(handoff)
-
-
-@router.post("/handoffs/{handoff_id}/extract", response_model=ReviewHandoffResponse)
-def post_handoff_extract(
-    handoff_id: str,
-    db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
-) -> ReviewHandoffResponse:
-    handoff = restart_extraction(db, handoff_id)
-    if not handoff:
-        raise HTTPException(status_code=404, detail="Handoff not found")
-    return _serialise(handoff)
+    return _serialise_handoff(handoff)
 
 
 @router.get("/handoffs/reviews/waiting", response_model=ReviewWaitingCountResponse)
@@ -105,16 +127,24 @@ def get_reviews_waiting(
     return ReviewWaitingCountResponse(count=count_reviews_waiting(db, current_user))
 
 
+@router.get("/handoffs", response_model=list[ReviewHandoffResponse])
+def list_handoffs(
+    action_id: str | None = None,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> list[ReviewHandoffResponse]:
+    if not action_id:
+        raise HTTPException(status_code=400, detail="action_id is required")
+    return [_serialise_handoff(h) for h in list_handoffs_for_action(db, action_id)]
+
+
 @router.get("/handoffs/{handoff_id}", response_model=ReviewHandoffResponse)
 def get_one_handoff(
     handoff_id: str,
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> ReviewHandoffResponse:
-    handoff = get_handoff(db, handoff_id)
-    if not handoff:
-        raise HTTPException(status_code=404, detail="Handoff not found")
-    return _serialise(handoff)
+    return _serialise_handoff(_get_handoff_or_404(db, handoff_id))
 
 
 @router.patch("/handoffs/{handoff_id}", response_model=ReviewHandoffResponse)
@@ -124,9 +154,7 @@ def patch_handoff(
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> ReviewHandoffResponse:
-    handoff = get_handoff(db, handoff_id)
-    if not handoff:
-        raise HTTPException(status_code=404, detail="Handoff not found")
+    handoff = _get_handoff_or_404(db, handoff_id)
     try:
         if schema.status == "returned":
             updated = return_handoff_for_rework(db, handoff_id)
@@ -150,23 +178,20 @@ def patch_handoff(
         raise HTTPException(status_code=400, detail=str(exc))
     if not updated:
         raise HTTPException(status_code=404, detail="Handoff not found")
-    return _serialise(updated)
+    return _serialise_handoff(updated)
 
 
-@router.get("/handoffs", response_model=list[ReviewHandoffResponse])
-def list_handoffs(
-    action_id: str | None = None,
+@router.post("/handoffs/{handoff_id}/reject", response_model=ReviewHandoffResponse)
+def post_reject_handoff(
+    handoff_id: str,
+    schema: ReviewHandoffRejectRequest,
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
-) -> list[ReviewHandoffResponse]:
-    """List handoffs.
-
-    For now scoped to `action_id` only — the primary entry path is via an
-    action item. A broader matter/user filter can layer on later.
-    """
-    if not action_id:
-        raise HTTPException(status_code=400, detail="action_id is required")
-    return [_serialise(h) for h in list_handoffs_for_action(db, action_id)]
+) -> ReviewHandoffResponse:
+    updated = reject_handoff(db, handoff_id=handoff_id, reason=schema.reason)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Handoff not found")
+    return _serialise_handoff(updated)
 
 
 @router.delete("/handoffs/{handoff_id}")
@@ -175,136 +200,192 @@ def remove_handoff(
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    from app.services.review_handoff_service import delete_handoff
-
     if not delete_handoff(db, handoff_id):
         raise HTTPException(status_code=404, detail="Handoff not found")
     return {"status": "ok"}
 
 
-@router.post(
-    "/handoffs/{handoff_id}/findings",
-    response_model=ReviewFindingResponse,
-    status_code=status.HTTP_201_CREATED,
+# ---------------------------------------------------------------------------
+# Annotations
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/handoffs/{handoff_id}/annotations",
+    response_model=list[ReviewAnnotationResponse],
 )
-def post_finding(
+def get_annotations(
     handoff_id: str,
-    schema: ReviewFindingCreate,
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
-) -> ReviewFindingResponse:
-    handoff = get_handoff(db, handoff_id)
-    if not handoff:
-        raise HTTPException(status_code=404, detail="Handoff not found")
-    finding = create_finding(db, handoff=handoff, schema=schema)
-    return ReviewFindingResponse.model_validate(finding)
+) -> list[ReviewAnnotationResponse]:
+    _get_handoff_or_404(db, handoff_id)
+    return [_serialise_annotation(a) for a in list_annotations(db, handoff_id=handoff_id)]
+
+
+@router.post(
+    "/handoffs/{handoff_id}/annotations",
+    response_model=ReviewAnnotationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_annotation(
+    handoff_id: str,
+    schema: ReviewAnnotationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReviewAnnotationResponse:
+    handoff = _get_handoff_or_404(db, handoff_id)
+    annotation = create_annotation(db, handoff=handoff, user=current_user, schema=schema)
+    return _serialise_annotation(annotation)
 
 
 @router.patch(
-    "/handoffs/{handoff_id}/findings/{finding_id}",
-    response_model=ReviewFindingResponse,
+    "/handoffs/{handoff_id}/annotations/{annotation_id}",
+    response_model=ReviewAnnotationResponse,
 )
-def patch_finding(
+def patch_annotation(
     handoff_id: str,
-    finding_id: str,
-    schema: ReviewFindingUpdate,
+    annotation_id: str,
+    schema: ReviewAnnotationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> ReviewFindingResponse:
-    finding = db.get(ReviewFinding, finding_id)
-    if not finding or finding.handoff_id != handoff_id:
-        raise HTTPException(status_code=404, detail="Finding not found")
-
-    payload = schema.model_dump(exclude_unset=True)
-    finding = update_finding(db, user=current_user, finding_id=finding_id, payload=payload)
-    if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
-
-    # Flip the handoff into in_review on the first reviewer touch.
-    handoff = get_handoff(db, handoff_id)
-    if handoff and handoff.status == "ready_for_review":
-        update_handoff_status(db, handoff_id=handoff_id, status="in_review")
-
-    return ReviewFindingResponse.model_validate(finding)
+    _current_user: User = Depends(get_current_user),
+) -> ReviewAnnotationResponse:
+    annotation = _get_annotation_or_404(db, handoff_id, annotation_id)
+    updated = update_annotation(db, annotation=annotation, schema=schema)
+    return _serialise_annotation(updated)
 
 
-@router.delete("/handoffs/{handoff_id}/findings/{finding_id}")
-def remove_finding(
+@router.delete("/handoffs/{handoff_id}/annotations/{annotation_id}")
+def remove_annotation(
     handoff_id: str,
-    finding_id: str,
+    annotation_id: str,
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    finding = db.get(ReviewFinding, finding_id)
-    if not finding or finding.handoff_id != handoff_id:
-        raise HTTPException(status_code=404, detail="Finding not found")
-    delete_finding(db, finding_id)
+    annotation = _get_annotation_or_404(db, handoff_id, annotation_id)
+    delete_annotation(db, annotation)
     return {"status": "ok"}
 
 
+# ---------------------------------------------------------------------------
+# Replies
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/handoffs/{handoff_id}/annotations/{annotation_id}/replies",
+    response_model=list[ReviewAnnotationReplyResponse],
+)
+def get_replies(
+    handoff_id: str,
+    annotation_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> list[ReviewAnnotationReplyResponse]:
+    _get_annotation_or_404(db, handoff_id, annotation_id)
+    return [
+        ReviewAnnotationReplyResponse.model_validate(r)
+        for r in list_replies(db, annotation_id=annotation_id)
+    ]
+
+
 @router.post(
-    "/handoffs/{handoff_id}/findings/{finding_id}/promote",
+    "/handoffs/{handoff_id}/annotations/{annotation_id}/replies",
+    response_model=ReviewAnnotationReplyResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_reply_endpoint(
+    handoff_id: str,
+    annotation_id: str,
+    schema: ReviewAnnotationReplyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReviewAnnotationReplyResponse:
+    annotation = _get_annotation_or_404(db, handoff_id, annotation_id)
+    try:
+        reply = post_reply(
+            db,
+            annotation=annotation,
+            user=current_user,
+            body_markdown=schema.body_markdown,
+        )
+    except ReviewAnnotationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return ReviewAnnotationReplyResponse.model_validate(reply)
+
+
+@router.delete(
+    "/handoffs/{handoff_id}/annotations/{annotation_id}/replies/{reply_id}"
+)
+def remove_reply(
+    handoff_id: str,
+    annotation_id: str,
+    reply_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    _get_annotation_or_404(db, handoff_id, annotation_id)
+    reply = db.get(ReviewAnnotationReply, reply_id)
+    if not reply or reply.annotation_id != annotation_id:
+        raise HTTPException(status_code=404, detail="Reply not found")
+    try:
+        delete_reply(db, reply=reply, user=current_user)
+    except ReviewAnnotationError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Promote annotation to KB
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/handoffs/{handoff_id}/annotations/{annotation_id}/promote",
     response_model=KnowledgeBankEntryResponse,
 )
-async def promote_finding_to_kb(
+async def promote_annotation(
     handoff_id: str,
-    finding_id: str,
-    schema: ReviewHandoffPromoteRequest,
+    annotation_id: str,
+    schema: ReviewAnnotationPromoteRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
-    handoff = get_handoff(db, handoff_id)
-    finding = db.get(ReviewFinding, finding_id)
-    if not handoff or not finding or finding.handoff_id != handoff_id:
-        raise HTTPException(status_code=404, detail="Finding not found")
-    if finding.status not in {"approved", "edited"}:
-        raise HTTPException(
-            status_code=400,
-            detail="Only approved or edited findings can be promoted to the KB",
-        )
-
-    final_wording = finding.reviewer_edit or finding.proposed_revision or ""
-    parts: list[str] = []
-    if final_wording:
-        parts.append("## Standard position\n\n" + final_wording.strip())
-    if finding.reasoning:
-        parts.append("## Reasoning\n\n" + finding.reasoning.strip())
-    if finding.original_clause:
-        parts.append(
-            "## Example clause (counter-example)\n\n> "
-            + finding.original_clause.strip().replace("\n", "\n> ")
-        )
-    if finding.citations:
-        cite_lines = [
-            f"- {(c.get('label') or '').strip()}"
-            for c in finding.citations
-            if isinstance(c, dict) and c.get("label")
-        ]
-        if cite_lines:
-            parts.append("## Citations\n\n" + "\n".join(cite_lines))
-    body_markdown = "\n\n".join(parts) or "(empty)"
-
-    title = schema.title or (finding.reasoning.split(".")[0][:120] or "Promoted finding")
-
-    kb_schema = KnowledgeBankEntryCreate(
-        team_id=None,
-        matter_id=handoff.matter_id if schema.target_scope == "matter" else None,
-        scope=schema.target_scope,
-        entry_type=schema.entry_type,
-        title=title,
-        body_markdown=body_markdown,
-        tags=schema.tags,
-        pii_status="clean" if schema.target_scope == "matter" else "pending_review",
-    )
+    handoff = _get_handoff_or_404(db, handoff_id)
+    annotation = _get_annotation_or_404(db, handoff_id, annotation_id)
     try:
-        entry = await create_kb_entry(db, user=current_user, schema=kb_schema)
-    except KnowledgeBankScopeError as exc:
+        entry = await promote_annotation_to_kb(
+            db,
+            annotation=annotation,
+            handoff=handoff,
+            user=current_user,
+            schema=schema,
+        )
+    except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except KnowledgeBankError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    finding.promoted_kb_entry_id = entry.id
-    finding.updated_at = datetime.now(UTC)
-    db.commit()
-
     return KnowledgeBankEntryResponse.model_validate(entry)
+
+
+# ---------------------------------------------------------------------------
+# Flattened PDF export
+# ---------------------------------------------------------------------------
+
+
+@router.post("/handoffs/{handoff_id}/export")
+def post_export_pdf(
+    handoff_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    handoff = _get_handoff_or_404(db, handoff_id)
+    try:
+        pdf_bytes = export_flattened_pdf(db, handoff=handoff)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    filename = (handoff.document.filename or "review").rsplit(".", 1)[0] + "_annotated.pdf"
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

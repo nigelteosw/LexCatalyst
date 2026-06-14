@@ -290,42 +290,52 @@ export type ActionItem = {
 }
 
 export type ReviewHandoffStatus =
-  | 'extracting'
   | 'ready_for_review'
   | 'in_review'
   | 'completed'
   | 'returned'
-  | 'extraction_failed'
 
-export type ReviewFindingStatus =
-  | 'pending'
-  | 'approved'
-  | 'edited'
-  | 'rejected'
-  | 'needs_rework'
+export type ReviewAnnotationKind = 'highlight' | 'strike' | 'suggestion'
 
-export type ReviewCitation = {
-  kind: 'kb_entry' | 'playbook' | 'doc' | 'external'
-  ref?: string | null
-  label: string
+export type ReviewAnnotationStatus = 'open' | 'needs_rework' | 'resolved' | 'rejected'
+
+// Matches HighlightArea from @react-pdf-viewer/highlight (percentages 0–100)
+export type ReviewAnnotationRect = {
+  pageIndex: number
+  left: number
+  top: number
+  width: number
+  height: number
 }
 
-export type ReviewFinding = {
+export type ReviewAnnotationReply = {
   id: string
-  handoffId: string
-  sequence: number
-  originalClause: string
-  proposedRevision?: string | null
-  reasoning: string
-  citations: ReviewCitation[]
-  status: ReviewFindingStatus
-  reviewerEdit?: string | null
-  reviewerComment?: string | null
-  promotedKbEntryId?: string | null
-  reviewedBy?: string | null
-  reviewedAt?: string | null
+  annotationId: string
+  authorUserId?: string | null
+  bodyMarkdown: string
   createdAt: string
   updatedAt: string
+  author?: ActionUser | null
+}
+
+export type ReviewAnnotation = {
+  id: string
+  handoffId: string
+  documentId: string
+  pageNo: number
+  kind: ReviewAnnotationKind
+  anchorQuote: string
+  anchorRects: ReviewAnnotationRect[]
+  suggestedText?: string | null
+  note?: string | null
+  status: ReviewAnnotationStatus
+  authorUserId?: string | null
+  promotedKbEntryId?: string | null
+  previousAnnotationId?: string | null
+  createdAt: string
+  updatedAt: string
+  author?: ActionUser | null
+  replies: ReviewAnnotationReply[]
 }
 
 export type ReviewHandoff = {
@@ -339,12 +349,13 @@ export type ReviewHandoff = {
   status: ReviewHandoffStatus
   reviewerId?: string | null
   completedAt?: string | null
+  returnReason?: string | null
   errorMessage?: string | null
   createdAt: string
   updatedAt: string
   submitter?: ActionUser | null
   reviewer?: ActionUser | null
-  findings: ReviewFinding[]
+  annotations: ReviewAnnotation[]
 }
 
 export type FirmUser = {

@@ -26,6 +26,7 @@ from app.schemas import (
     DreamUpdate,
     MemoryResponse,
 )
+from app.worker_types import WorkerClaim
 from app.services.memory_service import list_memories
 
 RECENT_MESSAGE_LIMIT = 50
@@ -34,6 +35,7 @@ RATE_LIMIT_WINDOW = timedelta(minutes=5)
 DREAM_MODEL = "deepseek-v4-pro"
 DREAM_JOB_RETENTION = timedelta(days=1)
 STALE_CLAIM_AFTER = timedelta(minutes=10)
+MAX_PROCESSING_ATTEMPTS = 3
 
 
 def _gc_dream_jobs(db: Session) -> None:
@@ -249,13 +251,35 @@ async def _run_dream_consolidation(*, user_id: str) -> DreamProposal:
         db.close()
 
 
-def claim_pending_dream_job(db: Session) -> str | None:
+def claim_pending_dream_job(db: Session) -> WorkerClaim | None:
     """Atomically claim one queued Dream job, including stale jobs."""
     stale_before = datetime.now(UTC) - STALE_CLAIM_AFTER
+    db.execute(
+        update(DreamJob)
+        .where(
+            DreamJob.status == "processing",
+            DreamJob.processing_attempts >= MAX_PROCESSING_ATTEMPTS,
+            or_(
+                DreamJob.processing_started_at.is_(None),
+                DreamJob.processing_started_at < stale_before,
+            ),
+        )
+        .values(
+            status="failed",
+            error_message=(
+                f"Dream failed after {MAX_PROCESSING_ATTEMPTS} attempts "
+                "(possible worker restart or timeout)"
+            ),
+            processing_started_at=None,
+        )
+    )
+    db.commit()
+
     job_id = db.scalar(
         select(DreamJob.id)
         .where(
             DreamJob.status == "processing",
+            DreamJob.processing_attempts < MAX_PROCESSING_ATTEMPTS,
             or_(
                 DreamJob.processing_started_at.is_(None),
                 DreamJob.processing_started_at < stale_before,
@@ -268,17 +292,18 @@ def claim_pending_dream_job(db: Session) -> str | None:
     if not job_id:
         return None
 
+    started_at = datetime.now(UTC)
     db.execute(
         update(DreamJob)
         .where(DreamJob.id == job_id)
         .values(
-            processing_started_at=datetime.now(UTC),
+            processing_started_at=started_at,
             processing_attempts=DreamJob.processing_attempts + 1,
             error_message=None,
         )
     )
     db.commit()
-    return job_id
+    return WorkerClaim(job_id=job_id, started_at=started_at)
 
 
 def _mark_dream_failed(job_id: str, claim_started_at: datetime, error: str) -> None:
@@ -365,19 +390,20 @@ def _apply_dream_proposal(
         )
 
 
-async def process_dream_job(job_id: str) -> None:
+async def process_dream_job(claim: WorkerClaim) -> None:
     """Generate and atomically apply one claimed Dream job."""
+    job_id = claim.job_id
     metadata_db = SessionLocal()
     try:
         job = metadata_db.get(DreamJob, job_id)
         if (
             job is None
             or job.status != "processing"
-            or job.processing_started_at is None
+            or job.processing_started_at != claim.started_at
         ):
             return
         user_id = job.user_id
-        claim_started_at = job.processing_started_at
+        claim_started_at = claim.started_at
     finally:
         metadata_db.close()
 
