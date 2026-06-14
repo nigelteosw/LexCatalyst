@@ -60,7 +60,11 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
   // disappear when their column empties.
   const availableTags = useMemo(() => {
     const tags = new Set<string>()
-    for (const item of allItems) item.tags.forEach((t) => tags.add(t))
+    for (const item of allItems) {
+      if (Array.isArray(item.tags)) {
+        item.tags.forEach((t) => tags.add(t))
+      }
+    }
     return Array.from(tags).sort((a, b) => a.localeCompare(b))
   }, [allItems])
 
@@ -72,7 +76,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
       if (assigneeFilter && item.assigneeId !== assigneeFilter) return false
       if (tagFilter) {
         const wanted = tagFilter.toLowerCase()
-        if (!item.tags.some((t) => t.toLowerCase() === wanted)) return false
+        if (!Array.isArray(item.tags) || !item.tags.some((t) => t.toLowerCase() === wanted)) return false
       }
       return true
     })
@@ -80,9 +84,19 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
 
   const grouped = useMemo(() => {
     const buckets: Record<ActionStatus, ActionItem[]> = {
-      pending: [], in_progress: [], review: [], done: [],
+      pending: [],
+      in_progress: [],
+      review: [],
+      done: [],
     }
-    for (const item of filteredItems) buckets[item.status].push(item)
+    for (const item of filteredItems) {
+      if (item.status && buckets[item.status]) {
+        buckets[item.status].push(item)
+      } else {
+        // Fallback to pending if status is invalid or missing, to avoid crash
+        buckets.pending.push(item)
+      }
+    }
     return buckets
   }, [filteredItems])
 
