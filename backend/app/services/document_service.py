@@ -26,7 +26,8 @@ from app.services.storage_service import (
 MAX_ERROR_LENGTH = 1000
 STALE_CLAIM_AFTER = timedelta(minutes=30)
 MAX_PROCESSING_ATTEMPTS = 3
-EXTRACTION_TIMEOUT_SECONDS = 300.0  # 5 minutes — frees the slot if OCR hangs
+DOWNLOAD_TIMEOUT_SECONDS = 60.0
+EXTRACTION_TIMEOUT_SECONDS = 90.0
 
 
 class DocumentProcessingError(RuntimeError):
@@ -164,23 +165,33 @@ async def process_document(document_id: str) -> None:
         _mark_document_failed(document_id, "Document has no stored file.")
         return
 
+    print(f"[doc:{document_id}] downloading {filename!r}")
     try:
-        file_bytes = await asyncio.to_thread(download_document_file, storage_key)
+        file_bytes = await asyncio.wait_for(
+            asyncio.to_thread(download_document_file, storage_key),
+            timeout=DOWNLOAD_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        _mark_document_failed(document_id, "Download timed out")
+        return
     except StorageError as exc:
         _mark_document_failed(document_id, str(exc))
         return
 
+    print(f"[doc:{document_id}] extracting text ({len(file_bytes)} bytes)")
     try:
         blocks = await asyncio.wait_for(
             asyncio.to_thread(extract_text_blocks, file_bytes, filename, content_type),
             timeout=EXTRACTION_TIMEOUT_SECONDS,
         )
+        print(f"[doc:{document_id}] extracted {len(blocks)} blocks, chunking")
         chunks = chunk_text_blocks(blocks, filename=filename)
+        print(f"[doc:{document_id}] embedding {len(chunks)} chunks")
         embeddings = await embed_texts([chunk.text for chunk in chunks])
     except asyncio.TimeoutError:
         _mark_document_failed(
             document_id,
-            f"Extraction timed out after {int(EXTRACTION_TIMEOUT_SECONDS / 60)} minutes",
+            f"Extraction timed out after {int(EXTRACTION_TIMEOUT_SECONDS)}s",
         )
         return
     except (

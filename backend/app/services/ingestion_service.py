@@ -61,13 +61,16 @@ def extract_text_blocks(file_bytes: bytes, filename: str, content_type: str) -> 
 
 
 def extract_pdf_blocks(file_bytes: bytes) -> list[TextBlock]:
+    print("[ingestion] native PDF extraction")
     blocks = _extract_pdf_native(file_bytes)
     page_count = max(len(blocks), 1)
     total_chars = sum(len(b.text) for b in blocks)
 
     if total_chars / page_count >= _OCR_FALLBACK_CHARS_PER_PAGE:
+        print(f"[ingestion] native extraction OK ({total_chars} chars, {len(blocks)} pages)")
         return blocks
 
+    print(f"[ingestion] native extraction sparse ({total_chars} chars) — falling back to OCR")
     ocr_blocks = _extract_pdf_ocr(file_bytes)
     if not ocr_blocks:
         if blocks:
@@ -94,9 +97,10 @@ def _extract_pdf_ocr(file_bytes: bytes) -> list[TextBlock]:
     except Exception as exc:
         raise IngestionError(f"Could not read PDF page count: {exc}") from exc
 
+    print(f"[ingestion] OCR: {page_count} pages to process")
     blocks: list[TextBlock] = []
     for page_num in range(1, page_count + 1):
-        # Convert one page at a time so peak memory is bounded to a single image.
+        print(f"[ingestion] OCR page {page_num}/{page_count}: converting to image")
         try:
             images = convert_from_bytes(
                 file_bytes, dpi=150, first_page=page_num, last_page=page_num
@@ -105,12 +109,14 @@ def _extract_pdf_ocr(file_bytes: bytes) -> list[TextBlock]:
             raise IngestionError(f"PDF to image conversion failed on page {page_num}: {exc}") from exc
 
         for image in images:
+            print(f"[ingestion] OCR page {page_num}/{page_count}: running tesseract")
             try:
                 text = pytesseract.image_to_string(image, lang="eng").strip()
             except Exception as exc:
                 raise IngestionError(f"OCR failed on page {page_num}: {exc}") from exc
             if text:
                 blocks.append(TextBlock(text=text, page_number=page_num))
+    print(f"[ingestion] OCR complete: {len(blocks)} pages with text")
     return blocks
 
 

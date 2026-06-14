@@ -81,7 +81,7 @@ export function DocumentsPanel() {
     queryFn: listDocuments,
     refetchInterval: (query) => {
       const docs = query.state.data ?? []
-      return docs.some((d) => d.status === 'uploaded' || d.status === 'processing') ? 3000 : false
+      return docs.some((d) => d.status === 'uploaded' || d.status === 'processing') ? 8000 : false
     },
   })
   const knowledgeEntriesQuery = useQuery({
