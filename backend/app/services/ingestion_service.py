@@ -92,30 +92,27 @@ def _extract_pdf_native(file_bytes: bytes) -> list[TextBlock]:
 
 
 def _extract_pdf_ocr(file_bytes: bytes) -> list[TextBlock]:
+    # Fail fast if the required system binaries are absent rather than hanging.
     try:
-        page_count = len(PdfReader(BytesIO(file_bytes)).pages)
+        pytesseract.get_tesseract_version()
+    except pytesseract.TesseractNotFoundError as exc:
+        raise IngestionError("Tesseract is not installed — OCR unavailable") from exc
+
+    print("[ingestion] OCR: converting PDF pages to images")
+    try:
+        images = convert_from_bytes(file_bytes, dpi=150)
     except Exception as exc:
-        raise IngestionError(f"Could not read PDF page count: {exc}") from exc
+        raise IngestionError(f"PDF to image conversion failed: {exc}") from exc
 
-    print(f"[ingestion] OCR: {page_count} pages to process")
+    print(f"[ingestion] OCR: running tesseract on {len(images)} pages")
     blocks: list[TextBlock] = []
-    for page_num in range(1, page_count + 1):
-        print(f"[ingestion] OCR page {page_num}/{page_count}: converting to image")
+    for page_num, image in enumerate(images, start=1):
         try:
-            images = convert_from_bytes(
-                file_bytes, dpi=150, first_page=page_num, last_page=page_num
-            )
+            text = pytesseract.image_to_string(image, lang="eng").strip()
         except Exception as exc:
-            raise IngestionError(f"PDF to image conversion failed on page {page_num}: {exc}") from exc
-
-        for image in images:
-            print(f"[ingestion] OCR page {page_num}/{page_count}: running tesseract")
-            try:
-                text = pytesseract.image_to_string(image, lang="eng").strip()
-            except Exception as exc:
-                raise IngestionError(f"OCR failed on page {page_num}: {exc}") from exc
-            if text:
-                blocks.append(TextBlock(text=text, page_number=page_num))
+            raise IngestionError(f"OCR failed on page {page_num}: {exc}") from exc
+        if text:
+            blocks.append(TextBlock(text=text, page_number=page_num))
     print(f"[ingestion] OCR complete: {len(blocks)} pages with text")
     return blocks
 
