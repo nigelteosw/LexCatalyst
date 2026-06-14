@@ -1126,6 +1126,19 @@ export async function updateCurrentUserRole(firmRole: FirmRole): Promise<Current
   }
 }
 
+export async function updateOtherUserRole(userId: string, firmRole: FirmRole): Promise<FirmUser> {
+  const u = await request<BackendFirmUser>(`/users/${userId}/role`, {
+    method: 'PATCH',
+    body: JSON.stringify({ firm_role: firmRole }),
+  })
+  return {
+    id: u.id,
+    fullName: u.full_name,
+    email: u.email,
+    firmRole: u.firm_role,
+  }
+}
+
 // Survey
 
 type BackendSurveyQuestion = {
@@ -1778,4 +1791,15 @@ export async function promoteFindingToKb(
 export async function getReviewsWaitingCount(): Promise<number> {
   const res = await request<{ count: number }>('/handoffs/reviews/waiting')
   return res.count ?? 0
+}
+
+export async function createDummyUsers(count: number = 5): Promise<void> {
+  await request('/system/dummy-users', {
+    method: 'POST',
+    params: { count },
+  })
+}
+
+export async function deleteDummyUsers(): Promise<void> {
+  await request('/system/dummy-users', { method: 'DELETE' })
 }

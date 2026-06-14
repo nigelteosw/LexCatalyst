@@ -54,6 +54,11 @@ class Settings(BaseModel):
         "http://127.0.0.1:5173,http://localhost:5173,https://lexcatalyst.pages.dev",
     ).split(",")
 
+    admin_emails: list[str] = getenv(
+        "ADMIN_EMAILS",
+        "nigelteosw@gmail.com",
+    ).split(",")
+
 
 @lru_cache
 def get_settings() -> Settings:

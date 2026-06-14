@@ -44,6 +44,16 @@ def authenticate_user_token(db: Session, token: str | None) -> User:
     if user is None:
         raise credentials_exception
 
+    # Sync admin status from config
+    settings = get_settings()
+    is_admin = user.email.lower() in [e.strip().lower() for e in settings.admin_emails]
+    if user.is_admin != is_admin:
+        user.is_admin = is_admin
+        if is_admin:
+            user.firm_role = "partner"
+        db.commit()
+        db.refresh(user)
+
     return user
 
 

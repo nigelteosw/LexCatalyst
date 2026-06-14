@@ -200,7 +200,7 @@ export type Matter = {
   team?: Team | null
 }
 
-export type FirmRole = 'partner' | 'senior_associate' | 'associate'
+export type FirmRole = 'partner' | 'senior_associate' | 'associate' | 'admin'
 
 export type CurrentUser = {
   id: string

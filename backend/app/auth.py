@@ -56,6 +56,9 @@ def get_or_create_user(db: Session, google_info: dict[str, Any]) -> User:
     google_id = google_info["sub"]
     email = google_info["email"]
     name = google_info.get("name")
+    
+    settings = get_settings()
+    is_admin = email.lower() in [e.strip().lower() for e in settings.admin_emails]
 
     user = db.query(User).filter(User.google_id == google_id).first()
     if not user:
@@ -63,10 +66,20 @@ def get_or_create_user(db: Session, google_info: dict[str, Any]) -> User:
             google_id=google_id,
             email=email,
             full_name=name,
+            is_admin=is_admin,
+            firm_role="partner" if is_admin else "associate",
         )
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        # Update admin status if it changed in config
+        if user.is_admin != is_admin:
+            user.is_admin = is_admin
+            if is_admin:
+                user.firm_role = "partner"
+            db.commit()
+            db.refresh(user)
 
     ensure_default_team(db, user)
     return user

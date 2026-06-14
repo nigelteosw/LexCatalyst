@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 ChatModel = Literal["deepseek-v4-flash", "deepseek-v4-pro"]
 DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
-FirmRole = Literal["partner", "senior_associate", "associate"]
+FirmRole = Literal["partner", "senior_associate", "associate", "admin"]
 MatterStatus = Literal["active", "closed", "archived"]
 KnowledgeBankScope = Literal["firm_wide", "team", "matter", "private"]
 KnowledgeBankEntryType = Literal["knowledge_bank", "style_guide", "action"]

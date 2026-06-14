@@ -69,3 +69,21 @@ def firm_users(
 ) -> list[FirmUserResponse]:
     """Roster of everyone in the firm. Powers assignee pickers."""
     return [FirmUserResponse.model_validate(u) for u in list_firm_users(db)]
+
+
+@router.patch("/users/{user_id}/role", response_model=FirmUserResponse)
+def update_other_user_role(
+    user_id: str,
+    schema: UserSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> FirmUserResponse:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    target_user = db.get(User, user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user = update_user_role(db, user=target_user, firm_role=schema.firm_role)
+    return FirmUserResponse.model_validate(user)
