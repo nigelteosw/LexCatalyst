@@ -294,7 +294,7 @@ Optimized KB read routes, all requiring Bearer authentication:
 [Combined Railway worker]                 (async)
        │   Claims queued rows from Postgres
        │   Reclaims stale jobs after restarts
-       │   Samples up to 32 chunks (~58KB)
+       │   Samples up to 80 chunks (~240KB)
        │   Calls DeepSeek Pro
        │   Parses JSON → title + body
        │   Computes embedding

@@ -6,7 +6,7 @@ Flow:
      body, and no embedding, then returns it immediately.
   2. The dedicated KB worker claims processing rows from Postgres and calls
      `process_kb_summary`. It opens its own DB session, summarises a bounded
-     sample of the document using DeepSeek Pro,
+     set of document extracts using DeepSeek Pro,
      writes the summary into the entry body, computes the embedding, and
      flips the status to `"ready"`. On failure it records `"failed"`.
 
@@ -34,11 +34,11 @@ from app.services.knowledge_bank_service import (
     log_kb_access,
 )
 
-# Keep the request near 15k input tokens. This is materially faster than
-# filling the model context and still samples the entire document.
+# Keep enough source text for a typical long-form legal document while leaving
+# room for the model to produce a detailed legal digest.
 SUMMARY_MODEL = "deepseek-v4-pro"
-MAX_INGEST_CHUNKS = 32
-MAX_CHUNK_CHARS = 1800
+MAX_INGEST_CHUNKS = 80
+MAX_CHUNK_CHARS = 3000
 MAX_ERROR_LENGTH = 1000
 STALE_CLAIM_AFTER = timedelta(minutes=30)
 
@@ -241,51 +241,116 @@ def _mark_failed(db: Session, entry: KnowledgeBankEntry, message: str) -> None:
 
 
 _SYSTEM_PROMPT = """\
-You are a Knowledge Bank editor at a law firm. You convert document extracts \
-into tight, scannable KB entries that a lawyer can read in under 60 seconds.
+You are a senior legal knowledge lawyer preparing a comprehensive internal \
+Knowledge Bank entry from an uploaded document. Your reader is a practising \
+lawyer who may rely on the entry for drafting, negotiation, due diligence, \
+case preparation, or client advice before opening the source document.
 
-Style rules:
-- Direct, professional prose. No academic hedging or filler.
-- Cite sources inline as [p.X] using the page number from the chunk label. \
-  If no page is available, omit the citation rather than showing an ID.
-- Never output a "Source Notes" section or footnotes listing chunk IDs.
-- 350–600 words total in body_markdown.
-- Use ## section headings and short bullet points (- item).
-- Do not repeat the document filename in every sentence.\
+Your primary objective is coverage and legal usefulness, not brevity. Read \
+across all supplied extracts and capture every material legal, commercial, \
+procedural, and factual point. Do not reduce a complex document to a handful \
+of generic observations.
+
+Analysis rules:
+- Identify the document type, status, purpose, parties, roles, relevant \
+  entities, governing context, and how the document is intended to operate.
+- Preserve legally significant detail exactly where available: defined terms, \
+  dates, periods, amounts, percentages, thresholds, conditions, exceptions, \
+  qualifications, discretion, standards, notice requirements, approval \
+  mechanics, survival periods, governing law, forum, and clause or authority \
+  references.
+- Explain material obligations, prohibitions, rights, remedies, liabilities, \
+  indemnities, warranties, termination rights, dependencies, and procedural \
+  steps. State who must or may do what, when, and with what consequence.
+- For judgments, opinions, advice, policies, or guidance, capture the issues, \
+  material facts, positions, legal tests or authorities, reasoning, outcome, \
+  and practical implications. For agreements, capture the operative bargain \
+  and allocation of risk. Adapt the analysis to the actual document type.
+- Surface internal inconsistencies, ambiguity, missing information, unusual \
+  drafting, one-sided provisions, open items, deadlines, and points requiring \
+  verification or lawyer judgment.
+- Distinguish what the document expressly states from cautious inference. \
+  Never invent facts, clauses, authorities, risks, or legal conclusions.
+- Do not omit a material point merely because a similar provision was already \
+  discussed. Consolidate genuine repetition while preserving distinct \
+  exceptions, conditions, and consequences.
+
+Writing and citation rules:
+- Use precise, neutral, professional legal prose and descriptive ## headings.
+- Prefer specific bullets over long narrative paragraphs, but include enough \
+  explanation to make each point useful without reopening the source.
+- Cite every substantive source-grounded statement inline as [p.X], using the \
+  page number in the chunk label. If no page is available, omit the citation \
+  rather than displaying a chunk ID.
+- If a proposition spans pages, cite each relevant page, for example \
+  [p.4, p.7]. Never create a "Source Notes" section or UUID-style footnotes.
+- Aim for 900–1,800 words for a substantial document, but let complexity \
+  determine length. Completeness takes priority over hitting a word target.
+- Do not repeat the filename mechanically and do not add generic legal \
+  disclaimers or filler.\
 """
 
 _USER_PROMPT = """\
-Create one KB entry from the document chunks below.
+Create one comprehensive, lawyer-ready KB entry from the document extracts \
+below. Treat the extracts as parts of one document and reconcile information \
+across them before writing.
 
-Return ONLY valid JSON — no markdown fences, no commentary outside the JSON:
+Return ONLY valid JSON with this exact shape — no markdown fences and no \
+commentary outside the JSON:
 {{
   "title": "Concise descriptive title (max 80 chars)",
   "body_markdown": "..."
 }}
 
-body_markdown must contain these sections in this order (omit any section \
-that has no real content):
+Use the following structure in body_markdown. Omit a section only when it is \
+genuinely inapplicable, and add a more specific ## section when the document \
+contains a material topic that does not fit the headings below.
 
-## What This Is
-One short paragraph: document type, subject matter, parties or context, and \
-its purpose.
+## Executive Overview
+A concise but substantive orientation: document type and status, subject, \
+parties or actors, purpose, operative context, and overall legal effect.
 
-## Key Points
-4–8 bullets. Each bullet is one concrete takeaway a lawyer would act on or \
-remember. Cite inline as [p.X] at the end of the bullet when the claim comes \
-from a specific page.
+## Parties, Roles, and Scope
+Identify each material party, entity, decision-maker, beneficiary, regulator, \
+court, or other actor; explain their role and the scope of the document.
 
-## Risk Flags
-2–4 bullets on caveats, limitations, open issues, ambiguities, or things \
-requiring caution. Omit entirely if there are none.
+## Material Terms and Legal Analysis
+Organise the operative content by issue. Cover all material rights, \
+obligations, restrictions, conditions, exceptions, standards, procedures, \
+representations, risk allocation, and consequences. Use descriptive \
+subheadings or grouped bullets where that improves clarity.
 
-## How to Use
-1–3 bullets on how this document would be applied in practice — drafting, \
-negotiation, due diligence, advisory work, etc.
+## Key Dates, Amounts, and Deadlines
+List all legally or commercially significant dates, time periods, notice \
+windows, monetary amounts, percentages, thresholds, and dependencies. Explain \
+what each controls. Omit only if none exist.
+
+## Outcome, Remedies, or Consequences
+Explain the result, available remedies, enforcement mechanisms, termination \
+effects, liability exposure, sanctions, or practical consequences, as \
+applicable.
+
+## Risks, Ambiguities, and Open Points
+Identify drafting concerns, factual gaps, conflicting provisions, assumptions, \
+one-sided terms, missing schedules or definitions, unresolved questions, and \
+items that require verification or legal judgment.
+
+## Practical Lawyer Checklist
+Give concrete next steps for review, drafting, negotiation, due diligence, \
+advice, compliance, litigation, or matter management. Tie each step to a \
+specific issue in the document rather than offering generic advice.
+
+Before returning the JSON, silently check that:
+1. Every supplied extract was considered.
+2. No material party, obligation, right, exception, date, amount, remedy, \
+   authority, or risk was omitted.
+3. Each substantive point is accurately cited where page information exists.
+4. Express document content is not presented as your own unsupported legal \
+   conclusion.
 
 Document filename: {filename}
 
-Chunks ({chunk_count} of document):
+Document extracts ({chunk_count} supplied):
 {chunks}\
 """
 

@@ -83,13 +83,16 @@ poll GET /kb/entries every 3s while any status === "processing"
 ```
 
 ### The summary format
-The prompt requires every KB summary to have:
-- **What This Is** — one paragraph
-- **Key Points** — 4–8 bullets, each cited inline as `[p.X]`
-- **Risk Flags** — 2–4 bullets, omit if none
-- **How to Use** — 1–3 bullets on practical application
+The prompt produces a lawyer-ready legal digest covering:
+- **Executive Overview** — document type, status, parties, purpose, and legal effect
+- **Parties, Roles, and Scope** — the relevant actors and how the document applies
+- **Material Terms and Legal Analysis** — rights, obligations, restrictions, conditions, exceptions, procedures, and risk allocation
+- **Key Dates, Amounts, and Deadlines** — precise periods, thresholds, notice windows, and dependencies
+- **Outcome, Remedies, or Consequences** — enforcement, liability, termination effects, or case outcome
+- **Risks, Ambiguities, and Open Points** — gaps, conflicts, unusual drafting, assumptions, and verification items
+- **Practical Lawyer Checklist** — concrete drafting, negotiation, diligence, advisory, compliance, or litigation steps
 
-350–600 words total. Designed to be readable in 60 seconds. The "narrative essay" output that LLMs produce by default is explicitly forbidden in the system prompt.
+Substantial documents generally produce 900–1,800 words, with inline `[p.X]` citations for substantive points. Completeness takes priority over a fixed length, and the prompt adapts its analysis to agreements, judgments, advice, policies, and other legal source types.
 
 ## Why these specific design choices
 
