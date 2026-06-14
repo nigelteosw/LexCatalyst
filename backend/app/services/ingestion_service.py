@@ -61,16 +61,15 @@ def extract_text_blocks(file_bytes: bytes, filename: str, content_type: str) -> 
 
 
 def extract_pdf_blocks(file_bytes: bytes) -> list[TextBlock]:
-    print("[ingestion] native PDF extraction")
     blocks = _extract_pdf_native(file_bytes)
     page_count = max(len(blocks), 1)
     total_chars = sum(len(b.text) for b in blocks)
 
     if total_chars / page_count >= _OCR_FALLBACK_CHARS_PER_PAGE:
-        print(f"[ingestion] native extraction OK ({total_chars} chars, {len(blocks)} pages)")
+        print(f"[ingestion] native text extracted ({total_chars} chars, {len(blocks)} pages)")
         return blocks
 
-    print(f"[ingestion] native extraction sparse ({total_chars} chars) — falling back to OCR")
+    print(f"[ingestion] sparse native text ({total_chars} chars) — falling back to OCR")
     ocr_blocks = _extract_pdf_ocr(file_bytes)
     if not ocr_blocks:
         if blocks:
