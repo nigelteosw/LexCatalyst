@@ -277,10 +277,69 @@ export type ActionItem = {
   status: ActionStatus
   priority: ActionPriority
   tags: string[]
+  activeHandoffId?: string | null
   createdAt: string
   updatedAt: string
   assignee?: ActionUser | null
   assigner?: ActionUser | null
+}
+
+export type ReviewHandoffStatus =
+  | 'extracting'
+  | 'ready_for_review'
+  | 'in_review'
+  | 'completed'
+  | 'returned'
+  | 'extraction_failed'
+
+export type ReviewFindingStatus =
+  | 'pending'
+  | 'approved'
+  | 'edited'
+  | 'rejected'
+  | 'needs_rework'
+
+export type ReviewCitation = {
+  kind: 'kb_entry' | 'playbook' | 'doc' | 'external'
+  ref?: string | null
+  label: string
+}
+
+export type ReviewFinding = {
+  id: string
+  handoffId: string
+  sequence: number
+  originalClause: string
+  proposedRevision?: string | null
+  reasoning: string
+  citations: ReviewCitation[]
+  status: ReviewFindingStatus
+  reviewerEdit?: string | null
+  reviewerComment?: string | null
+  promotedKbEntryId?: string | null
+  reviewedBy?: string | null
+  reviewedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ReviewHandoff = {
+  id: string
+  actionId?: string | null
+  matterId?: string | null
+  documentId: string
+  documentFilename?: string | null
+  submittedBy: string
+  submittedAt: string
+  status: ReviewHandoffStatus
+  reviewerId?: string | null
+  completedAt?: string | null
+  errorMessage?: string | null
+  createdAt: string
+  updatedAt: string
+  submitter?: ActionUser | null
+  reviewer?: ActionUser | null
+  findings: ReviewFinding[]
 }
 
 export type FirmUser = {

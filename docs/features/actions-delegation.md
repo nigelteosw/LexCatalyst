@@ -41,7 +41,7 @@ Each action item has:
 - Priority (low / medium / high)
 - Due date
 
-Filterable by matter. Clicking an action opens a detail dialog where the assignee can update status or the assigner can edit/delete.
+Filterable by matter. Clicking an action opens a detail dialog where the assignee can update status, the assigner can edit, and any authenticated user can delete.
 
 ## Why these specific design choices
 
@@ -78,7 +78,10 @@ PATCH /actions/{id}    (RBAC: assigner OR assignee OR admin)
 [When done, assignee moves to Review or Done]
         │
         ▼
-[Assigner can edit details; only assigner OR admin can delete]
+[Completing a linked review moves the action to Done]
+        │
+        ▼
+[Any authenticated user can delete the action at any stage]
 ```
 
 ## Roles & permissions
@@ -86,10 +89,10 @@ PATCH /actions/{id}    (RBAC: assigner OR assignee OR admin)
 | Action | Required role |
 |---|---|
 | Create | Partner or senior associate |
-| Update status (own action) | Assignee or assigner |
-| Edit details | Assigner |
-| Delete | Assigner or admin |
-| View | Any authenticated user; filtered to actions they assigned, were assigned, or are visible on a matter they belong to |
+| Update status | Assignee for their ticket, or any partner/senior associate |
+| Edit details | Partner or senior associate |
+| Delete | Any authenticated user |
+| View | Any authenticated user; the Workboard is firm-wide |
 
 ## What this is NOT
 

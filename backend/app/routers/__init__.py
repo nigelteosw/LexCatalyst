@@ -16,6 +16,7 @@ from app.routers import (
     knowledge_bank,
     memories,
     organizations,
+    review_handoffs,
     surveys,
     system,
     wiki,
@@ -33,4 +34,5 @@ all_routers: list[APIRouter] = [
     knowledge_bank.router,
     surveys.router,
     actions.router,
+    review_handoffs.router,
 ]

@@ -16,7 +16,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.sql import func
 
 from app.database import SessionLocal
-from app.models import Document, DreamJob, KnowledgeBankEntry
+from app.models import Document, DreamJob, KnowledgeBankEntry, ReviewHandoff
 from app.services.document_service import (
     STALE_CLAIM_AFTER as DOC_STALE_AFTER,
     claim_pending_document,
@@ -32,6 +32,11 @@ from app.services.kb_ingestion_service import (
     claim_pending_kb_entry,
     process_kb_summary,
 )
+from app.services.review_handoff_service import (
+    STALE_CLAIM_AFTER as HANDOFF_STALE_AFTER,
+    claim_pending_handoff,
+    process_handoff_extraction,
+)
 
 POLL_INTERVAL_SECONDS = float(
     os.getenv("WORKER_POLL_SECONDS", os.getenv("KB_WORKER_POLL_SECONDS", "2"))
@@ -40,6 +45,7 @@ DEFAULT_CONCURRENCY = max(1, int(os.getenv("WORKER_CONCURRENCY", "3")))
 DOC_CONCURRENCY = max(1, int(os.getenv("DOC_WORKER_CONCURRENCY", str(DEFAULT_CONCURRENCY))))
 KB_CONCURRENCY = max(1, int(os.getenv("KB_WORKER_CONCURRENCY", str(DEFAULT_CONCURRENCY))))
 DREAM_CONCURRENCY = max(1, int(os.getenv("DREAM_WORKER_CONCURRENCY", "1")))
+HANDOFF_CONCURRENCY = max(1, int(os.getenv("HANDOFF_WORKER_CONCURRENCY", str(DEFAULT_CONCURRENCY))))
 HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("WORKER_HEARTBEAT_SECONDS", "30"))
 
 
@@ -81,23 +87,18 @@ async def _run_queue(name: str, claim: ClaimFn, process: ProcessFn, concurrency:
     await asyncio.gather(*slots)
 
 
-def _claimable_count(model, stale_after) -> int:
+def _claimable_count(model, stale_after, *, status: str = "processing") -> int:
     """Count rows currently claimable: new pending or stale in-progress."""
     db = SessionLocal()
     try:
         stale_before = datetime.now(UTC) - stale_after
-        return int(
-            db.scalar(
-                select(func.count(model.id)).where(
-                    model.status == "processing",
-                    or_(
-                        model.processing_started_at.is_(None),
-                        model.processing_started_at < stale_before,
-                    ),
-                )
+        started_attr = getattr(model, "processing_started_at", None)
+        stmt = select(func.count(model.id)).where(model.status == status)
+        if started_attr is not None:
+            stmt = stmt.where(
+                or_(started_attr.is_(None), started_attr < stale_before),
             )
-            or 0
-        )
+        return int(db.scalar(stmt) or 0)
     finally:
         db.close()
 
@@ -108,13 +109,18 @@ async def _heartbeat_loop() -> None:
             doc_depth = _claimable_count(Document, DOC_STALE_AFTER)
             kb_depth = _claimable_count(KnowledgeBankEntry, KB_STALE_AFTER)
             dream_depth = _claimable_count(DreamJob, DREAM_STALE_AFTER)
+            handoff_depth = _claimable_count(
+                ReviewHandoff, HANDOFF_STALE_AFTER, status="extracting"
+            )
             print(
                 f"Worker heartbeat: doc_slots={DOC_CONCURRENCY} "
                 f"doc_queue_depth={doc_depth} "
                 f"kb_slots={KB_CONCURRENCY} "
                 f"kb_queue_depth={kb_depth} "
                 f"dream_slots={DREAM_CONCURRENCY} "
-                f"dream_queue_depth={dream_depth}"
+                f"dream_queue_depth={dream_depth} "
+                f"handoff_slots={HANDOFF_CONCURRENCY} "
+                f"handoff_queue_depth={handoff_depth}"
             )
         except Exception as exc:  # noqa: BLE001 - never let heartbeat kill the worker
             print(f"Worker heartbeat failed: {exc!r}")
@@ -126,12 +132,19 @@ async def run_worker() -> None:
         f"LexCatalyst worker started "
         f"(doc_concurrency={DOC_CONCURRENCY}, kb_concurrency={KB_CONCURRENCY}, "
         f"dream_concurrency={DREAM_CONCURRENCY}, "
+        f"handoff_concurrency={HANDOFF_CONCURRENCY}, "
         f"heartbeat={HEARTBEAT_INTERVAL_SECONDS}s)"
     )
     await asyncio.gather(
         _run_queue("Document", claim_pending_document, process_document, DOC_CONCURRENCY),
         _run_queue("Knowledge Bank", claim_pending_kb_entry, process_kb_summary, KB_CONCURRENCY),
         _run_queue("Dream", claim_pending_dream_job, process_dream_job, DREAM_CONCURRENCY),
+        _run_queue(
+            "Review Handoff",
+            claim_pending_handoff,
+            process_handoff_extraction,
+            HANDOFF_CONCURRENCY,
+        ),
         _heartbeat_loop(),
     )
 

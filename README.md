@@ -36,6 +36,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ### Workboard — Task Delegation
 - Kanban-style board (To Do / In Progress / Review / Done) with priority pills.
 - **Partners and senior associates** can create and assign actions; assignee or assigner can update.
+- Completing a linked review handoff moves its ticket to Done. Any authenticated user can delete a ticket.
 - Filter by matter, edit through a detail dialog.
 
 ### Documents — In-App Review
@@ -82,7 +83,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - **Docker Compose** for local PostgreSQL
 - **Railway** for the static frontend, FastAPI web service, background worker, and managed PostgreSQL
 - **Cloudflare R2** as the S3-compatible object store
-- **Alembic head:** `p1e2f3a4b5c6`
+- **Alembic head:** `r3a4b5c6d7e8`
 
 Editable high-level architecture diagrams:
 
@@ -366,6 +367,8 @@ The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`.
 | `n1c2d3e4f5a6` | Links new survey responses to users and prevents duplicate weekly answers | No |
 | `o1d2e3f4a5b6` | Adds durable Dream claim fields and stores automated memory justifications | No |
 | `p1e2f3a4b5c6` | Adds document comments | No |
+| `q2f3a4b5c6d7` | Adds review handoffs, structured findings, and active handoff links on actions | No |
+| `r3a4b5c6d7e8` | Adds durable review-handoff worker claim fields | No |
 
 `h5c6d7e8f9a0` intentionally removes historical read/share/redaction audit rows.
 Knowledge and document records are unaffected.
@@ -376,6 +379,14 @@ Authenticated document review routes:
 - `GET /documents/{id}/file` serves the original file inline. It accepts the normal Bearer header or the JWT `token` query parameter used by the PDF iframe.
 - `GET|POST /documents/{id}/comments` lists or creates comments for the uploader or a member of the document's matter.
 - `DELETE /documents/comments/{comment_id}` is restricted to the author or a partner/admin who can access the matter document.
+
+Authenticated Workboard and review-handoff routes:
+
+- `DELETE /actions/{id}` allows any authenticated user to delete a ticket at any workflow stage.
+- `POST|GET /handoffs` creates or lists structured review handoffs linked to Workboard tickets.
+- `GET|PATCH /handoffs/{id}` reads or updates a handoff. Completing it requires every finding to be reviewed and moves the active linked ticket to Done.
+- `POST /handoffs/{id}/findings` creates a structured review finding.
+- `PATCH|DELETE /handoffs/{id}/findings/{finding_id}` updates or deletes a finding.
 
 ### What to verify after deploy
 1. `/me` returns `firm_role` and `is_admin` for the logged-in user.

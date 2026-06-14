@@ -15,8 +15,12 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { deleteChatThread, renameChatThread } from '../../shared/api/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  deleteChatThread,
+  getReviewsWaitingCount,
+  renameChatThread,
+} from '../../shared/api/api'
 import type { ChatThread, Matter } from '../../shared/types/workspace'
 import { useViewStore } from '../../app/viewStore'
 import birdieLogo from '../../assets/Birdie.png'
@@ -76,6 +80,17 @@ export function Sidebar({
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
+
+  // Poll the "reviews waiting for you" count so the Workboard badge stays
+  // current as juniors submit work. Refetches every 30s and on window focus.
+  const reviewsWaiting = useQuery({
+    queryKey: ['reviewsWaiting'],
+    queryFn: getReviewsWaitingCount,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    staleTime: 15_000,
+  })
+  const reviewBadge = reviewsWaiting.data ?? 0
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -264,7 +279,15 @@ export function Sidebar({
               type="button"
             >
               <CheckSquare size={14} />
-              Workboard
+              <span className="flex-1 text-left">Workboard</span>
+              {reviewBadge > 0 && (
+                <span
+                  aria-label={`${reviewBadge} reviews waiting for you`}
+                  className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#f0a000] px-1 text-[9.5px] font-semibold text-[#0f0f0f]"
+                >
+                  {reviewBadge}
+                </span>
+              )}
             </button>
           </nav>
 

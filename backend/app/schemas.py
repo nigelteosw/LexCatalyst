@@ -558,12 +558,113 @@ class ActionItemResponse(BaseModel):
     status: str
     priority: str
     tags: list[str] = Field(default_factory=list)
+    active_handoff_id: str | None = None
     created_at: datetime
     updated_at: datetime
     assignee: ActionUserResponse | None = None
     assigner: ActionUserResponse | None = None
 
     model_config = {"from_attributes": True}
+
+
+ReviewHandoffStatus = Literal[
+    "extracting",
+    "ready_for_review",
+    "in_review",
+    "completed",
+    "returned",
+    "extraction_failed",
+]
+ReviewFindingStatus = Literal[
+    "pending",
+    "approved",
+    "edited",
+    "rejected",
+    "needs_rework",
+]
+
+
+class ReviewCitation(BaseModel):
+    kind: Literal["kb_entry", "playbook", "doc", "external"] = "external"
+    ref: str | None = None
+    label: str
+
+
+class ReviewFindingCreate(BaseModel):
+    original_clause: str = Field(min_length=1, max_length=20_000)
+    proposed_revision: str | None = Field(default=None, max_length=20_000)
+    reasoning: str = Field(min_length=1, max_length=20_000)
+    citations: list[ReviewCitation] = Field(default_factory=list)
+
+
+class ReviewFindingUpdate(BaseModel):
+    status: ReviewFindingStatus | None = None
+    reviewer_edit: str | None = Field(default=None, max_length=20_000)
+    reviewer_comment: str | None = Field(default=None, max_length=10_000)
+
+
+class ReviewFindingResponse(BaseModel):
+    id: str
+    handoff_id: str
+    sequence: int
+    original_clause: str
+    proposed_revision: str | None = None
+    reasoning: str
+    citations: list[dict] = Field(default_factory=list)
+    status: str
+    reviewer_edit: str | None = None
+    reviewer_comment: str | None = None
+    promoted_kb_entry_id: str | None = None
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewHandoffCreate(BaseModel):
+    document_id: str
+    action_id: str | None = None
+    matter_id: str | None = None
+    reviewer_id: str | None = None
+
+
+class ReviewHandoffUpdate(BaseModel):
+    status: ReviewHandoffStatus | None = None
+    reviewer_id: str | None = None
+
+
+class ReviewHandoffResponse(BaseModel):
+    id: str
+    action_id: str | None = None
+    matter_id: str | None = None
+    document_id: str
+    submitted_by: str
+    submitted_at: datetime
+    status: str
+    reviewer_id: str | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    submitter: ActionUserResponse | None = None
+    reviewer: ActionUserResponse | None = None
+    findings: list[ReviewFindingResponse] = Field(default_factory=list)
+    document_filename: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewHandoffPromoteRequest(BaseModel):
+    target_scope: KnowledgeBankScope = "matter"
+    entry_type: KnowledgeBankEntryType = "knowledge_bank"
+    title: str | None = Field(default=None, max_length=200)
+    tags: list[str] = Field(default_factory=list, max_length=30)
+
+
+class ReviewWaitingCountResponse(BaseModel):
+    count: int
 
 
 class FirmUserResponse(BaseModel):

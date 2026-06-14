@@ -829,6 +829,125 @@ class ActionItem(Base):
         nullable=False,
     )
 
+    active_handoff_id: Mapped[str | None] = mapped_column(
+        ForeignKey("review_handoffs.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
     assignee: Mapped[User | None] = relationship(foreign_keys=[assignee_id])
     assigner: Mapped[User] = relationship(foreign_keys=[assigner_id])
     matter: Mapped[Matter | None] = relationship()
+    active_handoff: Mapped["ReviewHandoff | None"] = relationship(
+        foreign_keys=[active_handoff_id],
+        post_update=True,
+    )
+
+
+class ReviewHandoff(Base):
+    __tablename__ = "review_handoffs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    action_id: Mapped[str | None] = mapped_column(
+        ForeignKey("action_items.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    matter_id: Mapped[str | None] = mapped_column(
+        ForeignKey("matters.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    submitted_by: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(32), index=True, nullable=False, default="extracting")
+    reviewer_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    processing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    action: Mapped["ActionItem | None"] = relationship(
+        foreign_keys=[action_id],
+        post_update=True,
+    )
+    matter: Mapped[Matter | None] = relationship()
+    document: Mapped[Document] = relationship()
+    submitter: Mapped[User] = relationship(foreign_keys=[submitted_by])
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewer_id])
+    findings: Mapped[list["ReviewFinding"]] = relationship(
+        back_populates="handoff",
+        cascade="all, delete-orphan",
+        order_by="ReviewFinding.sequence",
+    )
+
+
+class ReviewFinding(Base):
+    __tablename__ = "review_findings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    handoff_id: Mapped[str] = mapped_column(
+        ForeignKey("review_handoffs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    original_clause: Mapped[str] = mapped_column(Text, nullable=False)
+    proposed_revision: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+    citations: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    reviewer_edit: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    promoted_kb_entry_id: Mapped[str | None] = mapped_column(
+        ForeignKey("kb_entries.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reviewed_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    handoff: Mapped[ReviewHandoff] = relationship(back_populates="findings")
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewed_by])
+    promoted_kb_entry: Mapped[KnowledgeBankEntry | None] = relationship()

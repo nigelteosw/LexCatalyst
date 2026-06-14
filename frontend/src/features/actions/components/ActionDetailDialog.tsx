@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Pencil, Tag, X } from 'lucide-react'
+import { Check, ClipboardList, Pencil, Tag, Trash2, X } from 'lucide-react'
 import type {
   ActionItem,
   ActionPriority,
@@ -9,6 +9,7 @@ import type {
   Matter,
 } from '../../../shared/types/workspace'
 import { isManager, priorityColors, statusColumns, userLabel } from '../config'
+import { ReviewHandoffPane } from './ReviewHandoffPane'
 
 type ActionPatch = {
   title?: string
@@ -29,6 +30,7 @@ type ActionDetailDialogProps = {
   onClose: () => void
   onUpdate: (patch: ActionPatch) => void
   onDelete: () => void
+  onActionStateChange: (patch: Partial<ActionItem>) => void
   isDeleting: boolean
   isUpdating: boolean
 }
@@ -41,6 +43,7 @@ export function ActionDetailDialog({
   onClose,
   onUpdate,
   onDelete,
+  onActionStateChange,
   isDeleting,
   isUpdating,
 }: ActionDetailDialogProps) {
@@ -48,6 +51,9 @@ export function ActionDetailDialog({
   const isAssignee = item.assigneeId === currentUser?.id
   const canMove = manager || isAssignee
   const [tagDraft, setTagDraft] = useState('')
+  const [tab, setTab] = useState<'details' | 'handoff'>(
+    item.activeHandoffId ? 'handoff' : 'details',
+  )
 
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(item.title)
@@ -102,7 +108,7 @@ export function ActionDetailDialog({
 
   return (
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/35 p-4 backdrop-blur-sm">
-      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[14px] border border-black/10 bg-[#fafaf8] shadow-2xl">
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[14px] border border-black/10 bg-[#fafaf8] shadow-2xl">
         <header className="flex items-start justify-between gap-3 border-b border-black/10 px-5 py-4">
           <div className="min-w-0 flex-1">
             {editingTitle ? (
@@ -152,15 +158,48 @@ export function ActionDetailDialog({
               </div>
             )}
           </div>
-          <button
-            aria-label="Close"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#8c8c86] hover:bg-[#eeecea]"
-            onClick={onClose}
-            type="button"
-          >
-            <X size={15} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+              disabled={isDeleting}
+              onClick={onDelete}
+              title="Delete ticket"
+              type="button"
+            >
+              <Trash2 size={15} />
+            </button>
+            <button
+              aria-label="Close"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#8c8c86] hover:bg-[#eeecea]"
+              onClick={onClose}
+              type="button"
+            >
+              <X size={15} />
+            </button>
+          </div>
         </header>
+        <div className="flex items-center gap-1 border-b border-black/10 bg-white px-3 py-1.5">
+          <TabButton active={tab === 'details'} onClick={() => setTab('details')}>
+            Details
+          </TabButton>
+          <TabButton active={tab === 'handoff'} onClick={() => setTab('handoff')}>
+            <ClipboardList size={11} />
+            Review handoff
+            {item.activeHandoffId && (
+              <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[#f0a000]" />
+            )}
+          </TabButton>
+        </div>
+        {tab === 'handoff' && (
+          <div className="p-5">
+            <ReviewHandoffPane
+              action={item}
+              currentUser={currentUser}
+              onActionStateChange={onActionStateChange}
+            />
+          </div>
+        )}
+        {tab === 'details' && (
         <div className="space-y-4 p-5">
           <div>
             <div className="mb-1.5 flex items-center justify-between">
@@ -383,19 +422,32 @@ export function ActionDetailDialog({
             )}
           </div>
         </div>
-        {manager && (
-          <footer className="border-t border-black/10 px-5 py-3">
-            <button
-              className="text-xs text-red-700 hover:underline disabled:opacity-50"
-              disabled={isDeleting}
-              onClick={onDelete}
-              type="button"
-            >
-              {isDeleting ? 'Deleting...' : 'Delete ticket'}
-            </button>
-          </footer>
         )}
       </div>
     </div>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+        active
+          ? 'bg-[#0f0f0f] text-white'
+          : 'text-[#5a5a56] hover:bg-[#f4f3ef]'
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
   )
 }

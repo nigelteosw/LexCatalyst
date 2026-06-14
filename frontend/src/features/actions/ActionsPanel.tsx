@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CheckSquare, ChevronRight, Plus, Tag } from 'lucide-react'
+import { CheckSquare, ChevronRight, ClipboardList, Plus, Tag, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteActionItem,
@@ -264,19 +264,24 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           </div>
         ) : (
           statusColumns.map((col) => (
-            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72">
+            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72 sm:min-h-0">
               <div className="mb-3 flex items-center gap-2">
                 <h3 className="text-xs font-semibold text-[#5a5a56]">{col.label}</h3>
                 <span className="rounded-full bg-[#f4f3ef] px-1.5 py-0.5 text-[10px] text-[#9a9a94]">
                   {grouped[col.id].length}
                 </span>
               </div>
-              <div className="flex flex-1 flex-col gap-2">
+              <div className="flex flex-1 flex-col gap-2 sm:min-h-0 sm:overflow-y-auto sm:pr-1">
                 {grouped[col.id].map((item) => (
                   <ActionCard
                     key={item.id}
                     item={item}
                     onClick={() => setSelectedItem(item)}
+                    onDelete={() => {
+                      if (window.confirm(`Delete "${item.title}"? This cannot be undone.`)) {
+                        deleteMutation.mutate(item.id)
+                      }
+                    }}
                   />
                 ))}
                 {grouped[col.id].length === 0 && (
@@ -319,6 +324,12 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
               deleteMutation.mutate(selectedItem.id)
             }
           }}
+          onActionStateChange={(patch) => {
+            applyOptimistic(selectedItem.id, patch)
+            setSelectedItem((current) =>
+              current?.id === selectedItem.id ? { ...current, ...patch } : current,
+            )
+          }}
           isDeleting={deleteMutation.isPending}
           isUpdating={updateMutation.isPending}
         />
@@ -360,20 +371,41 @@ function BoardSkeleton() {
 function ActionCard({
   item,
   onClick,
+  onDelete,
 }: {
   item: ActionItem
   onClick: () => void
+  onDelete: () => void
 }) {
   return (
     <button
-      className="rounded-[12px] border border-black/10 bg-white p-3.5 text-left transition-all hover:border-black/20 hover:shadow-sm"
+      className="group relative rounded-[12px] border border-black/10 bg-white p-3.5 text-left transition-all hover:border-black/20 hover:shadow-sm"
       onClick={onClick}
       type="button"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="line-clamp-2 text-xs font-medium text-[#0f0f0f]">{item.title}</p>
-        <ChevronRight size={13} className="mt-0.5 shrink-0 text-[#aaa9a3]" />
+        <div className="flex items-center gap-1 mt-0.5 shrink-0">
+          <button
+            className="grid h-5 w-5 place-items-center rounded text-red-600/40 transition-colors hover:bg-red-50 hover:text-red-600"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            title="Delete ticket"
+            type="button"
+          >
+            <Trash2 size={12} />
+          </button>
+          <ChevronRight size={13} className="text-[#aaa9a3]" />
+        </div>
       </div>
+      {item.activeHandoffId && (
+        <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#fff1d6] px-2 py-0.5 text-[9.5px] font-medium text-[#8a5a00]">
+          <ClipboardList size={10} />
+          Handoff ready
+        </div>
+      )}
       {item.description && (
         <p className="mt-1 line-clamp-1 text-[11px] text-[#8c8c86]">{item.description}</p>
       )}

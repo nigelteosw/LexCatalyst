@@ -3,7 +3,8 @@
 Visibility model:
   - **List/read**: every authenticated user sees every action item. The
     point of the board is workload transparency across the team.
-  - **Create / reassign / delete**: gated to seniors+ at the route layer.
+  - **Create / reassign**: gated to seniors+ at the route layer.
+  - **Delete**: any authenticated user can remove a ticket.
   - **Status update**: the assignee can move their own ticket through the
     kanban; seniors+ can move any ticket.
 """
@@ -120,10 +121,10 @@ def update_action_item(
 
 
 def delete_action_item(db: Session, *, user: User, item_id: str) -> bool:
+    """Delete a visible Workboard ticket for any authenticated user."""
+    del user  # Authentication is enforced by the route dependency.
     item = db.get(ActionItem, item_id)
     if not item:
-        return False
-    if not (is_senior_or_above(user) or user.is_admin):
         return False
     db.delete(item)
     db.commit()
