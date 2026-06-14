@@ -518,10 +518,7 @@ export async function listDocuments(): Promise<WorkspaceDocument[]> {
   return documents.map(mapDocument)
 }
 
-export async function uploadDocument(
-  file: File,
-  matterId?: string | null,
-): Promise<WorkspaceDocument> {
+export async function uploadDocument(file: File): Promise<WorkspaceDocument> {
   const token = localStorage.getItem('token')
   const body = new FormData()
   body.append('file', file)
@@ -531,8 +528,7 @@ export async function uploadDocument(
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const matterQuery = matterId ? `?matter_id=${encodeURIComponent(matterId)}` : ''
-  const response = await fetch(`${API_BASE_URL}/documents/upload${matterQuery}`, {
+  const response = await fetch(`${API_BASE_URL}/documents/upload`, {
     method: 'POST',
     headers,
     body,

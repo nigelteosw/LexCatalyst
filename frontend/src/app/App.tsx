@@ -410,7 +410,7 @@ function App() {
     setError(null)
 
     try {
-      const uploaded = await uploadDocument(file, selectedMatterId)
+      const uploaded = await uploadDocument(file)
       const statusLabel =
         uploaded.status === 'ready'
           ? 'ready for search'
@@ -554,7 +554,7 @@ function App() {
           {current.view === 'memories' ? (
             <MemoriesPanel />
           ) : current.view === 'documents' ? (
-            <DocumentsPanel selectedMatterId={selectedMatterId} />
+            <DocumentsPanel />
           ) : current.view === 'wiki' ? (
             <WikiPanel currentUser={currentUser} />
           ) : current.view === 'wellbeing' ? (

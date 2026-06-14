@@ -83,12 +83,11 @@ def create_pending_kb_entry(
         db.refresh(existing)
         return existing
 
-    scope = "matter" if document.matter_id else "private"
     entry = KnowledgeBankEntry(
-        team_id=document.team_id or user.default_team_id,
-        matter_id=document.matter_id,
+        team_id=None,
+        matter_id=None,
         source_document_id=document.id,
-        scope=scope,
+        scope="private",
         entry_type="knowledge_bank",
         title=f"{document.filename} — Summary",
         body_markdown="",

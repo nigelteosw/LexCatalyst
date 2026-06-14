@@ -2,11 +2,11 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import and_, delete, exists, func, or_, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Document, DocumentChunk, MatterMember
+from app.models import Document, DocumentChunk
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
     IngestionError,
@@ -34,18 +34,7 @@ class DocumentProcessingError(RuntimeError):
 
 
 def document_access_filter(user_id: str):
-    return or_(
-        Document.user_id == user_id,
-        and_(
-            Document.matter_id.is_not(None),
-            exists(
-                select(MatterMember.id).where(
-                    MatterMember.matter_id == Document.matter_id,
-                    MatterMember.user_id == user_id,
-                )
-            ),
-        ),
-    )
+    return Document.user_id == user_id
 
 
 def can_access_document(
@@ -54,16 +43,7 @@ def can_access_document(
     user_id: str,
     document: Document,
 ) -> bool:
-    if document.user_id == user_id:
-        return True
-    if not document.matter_id:
-        return False
-    return db.scalar(
-        select(MatterMember.id).where(
-            MatterMember.matter_id == document.matter_id,
-            MatterMember.user_id == user_id,
-        )
-    ) is not None
+    return document.user_id == user_id
 
 
 async def create_pending_document(

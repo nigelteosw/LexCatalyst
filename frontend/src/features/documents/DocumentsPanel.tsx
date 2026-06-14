@@ -27,11 +27,7 @@ import type { WorkspaceDocument } from '../../shared/types/workspace'
 import { useViewStore } from '../../app/viewStore'
 import { DocumentDrawer } from './DocumentDrawer'
 
-export type DocumentsPanelProps = {
-  selectedMatterId: string | null
-}
-
-export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
+export function DocumentsPanel() {
   const { selectKnowledgeBank } = useViewStore()
   const queryClient = useQueryClient()
 
@@ -129,7 +125,7 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
     null
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadDocument(file, selectedMatterId),
+    mutationFn: (file: File) => uploadDocument(file),
     onSuccess: () => {
       setSelectedFile(null)
       setMutationError(null)
@@ -258,7 +254,7 @@ export function DocumentsPanel({ selectedMatterId }: DocumentsPanelProps) {
                   {isDragOver ? 'Drop to upload' : 'Drop a file here, or click to browse'}
                 </div>
                 <div className="mt-0.5 text-xs text-neutral-400">
-                  PDF or DOCX · max 25 MB{selectedMatterId ? ' · attached to active matter' : ''}
+                  PDF or DOCX · max 25 MB
                 </div>
               </div>
             )}

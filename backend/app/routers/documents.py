@@ -42,7 +42,6 @@ from app.services.document_service import (
     rename_user_document,
 )
 from app.services.ingestion_service import UnsupportedDocumentError
-from app.services.organization_service import get_matter
 from app.services.storage_service import StorageError, download_document_file
 
 router = APIRouter(tags=["documents"])
@@ -91,7 +90,6 @@ def build_comment_response(db: Session, comment, current_user: User) -> Document
 )
 async def upload_document(
     file: UploadFile = File(...),
-    matter_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DocumentResponse:
@@ -100,12 +98,6 @@ async def upload_document(
     content_type = file.content_type or "application/octet-stream"
 
     try:
-        matter = None
-        if matter_id:
-            matter = get_matter(db, matter_id)
-            if not matter:
-                raise HTTPException(status_code=404, detail="Matter not found")
-
         file_bytes = await file.read()
         if not file_bytes:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
@@ -118,8 +110,6 @@ async def upload_document(
             filename=filename,
             content_type=content_type,
             file_bytes=file_bytes,
-            matter_id=matter.id if matter else None,
-            team_id=matter.team_id if matter else None,
         )
         document_with_count = get_user_document(db, current_user.id, document.id)
         chunk_count = document_with_count[1] if document_with_count else 0
