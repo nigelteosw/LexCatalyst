@@ -1,5 +1,4 @@
 import asyncio
-from concurrent.futures import BrokenExecutor, ProcessPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -27,17 +26,7 @@ from app.services.storage_service import (
 MAX_ERROR_LENGTH = 1000
 STALE_CLAIM_AFTER = timedelta(minutes=30)
 MAX_PROCESSING_ATTEMPTS = 3
-
-# One child process handles extraction. If it OOM-dies the pool is broken; we
-# rebuild it so the next document gets a fresh child rather than hanging forever.
-_extraction_pool = ProcessPoolExecutor(max_workers=1)
-
-
-def _get_extraction_pool() -> ProcessPoolExecutor:
-    global _extraction_pool
-    if _extraction_pool._broken:  # type: ignore[attr-defined]
-        _extraction_pool = ProcessPoolExecutor(max_workers=1)
-    return _extraction_pool
+EXTRACTION_TIMEOUT_SECONDS = 300.0  # 5 minutes — frees the slot if OCR hangs
 
 
 class DocumentProcessingError(RuntimeError):
@@ -202,19 +191,17 @@ async def process_document(document_id: str) -> None:
         return
 
     try:
-        # Run in a subprocess so an OOM kill only breaks the child, not this worker.
-        loop = asyncio.get_running_loop()
-        pool = _get_extraction_pool()
-        blocks = await loop.run_in_executor(
-            pool, extract_text_blocks, file_bytes, filename, content_type
+        blocks = await asyncio.wait_for(
+            asyncio.to_thread(extract_text_blocks, file_bytes, filename, content_type),
+            timeout=EXTRACTION_TIMEOUT_SECONDS,
         )
         chunks = chunk_text_blocks(blocks, filename=filename)
         embeddings = await embed_texts([chunk.text for chunk in chunks])
-    except BrokenExecutor:
-        # The child process was killed (OOM). Rebuild the pool and fail this doc.
-        global _extraction_pool
-        _extraction_pool = ProcessPoolExecutor(max_workers=1)
-        _mark_document_failed(document_id, "Extraction process was killed (likely OOM)")
+    except asyncio.TimeoutError:
+        _mark_document_failed(
+            document_id,
+            f"Extraction timed out after {int(EXTRACTION_TIMEOUT_SECONDS / 60)} minutes",
+        )
         return
     except (
         IngestionError,
