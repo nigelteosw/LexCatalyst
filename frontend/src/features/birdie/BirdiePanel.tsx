@@ -323,6 +323,7 @@ function AskTab({ matterId }: { matterId: string | null }) {
   const [isResponding, setIsResponding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -336,6 +337,12 @@ function AskTab({ matterId }: { matterId: string | null }) {
   useEffect(() => {
     abortRef.current?.abort()
   }, [matterId])
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 80)}px`
+  }, [prompt])
 
   async function send(text: string) {
     if (!text.trim() || isResponding) return
@@ -442,10 +449,12 @@ function AskTab({ matterId }: { matterId: string | null }) {
         )}
       </div>
 
-      <div className="shrink-0 border-t border-black/10 p-2.5">
-        <div className="flex items-end gap-2 rounded-[10px] border border-black/15 bg-[#f4f3ef] px-3 py-2 focus-within:border-black/30 focus-within:bg-white">
+      <div className="shrink-0 border-t border-black/10 bg-white p-2">
+        <div className="flex items-end gap-1.5 rounded-[10px] border border-black/15 bg-[#f4f3ef] p-1.5 pl-3 focus-within:border-black/30 focus-within:bg-white">
           <textarea
-            className="max-h-20 flex-1 resize-none overflow-y-auto bg-transparent text-[12px] leading-5 text-[#0f0f0f] outline-none placeholder:text-[#aaa9a3]"
+            ref={textareaRef}
+            aria-label="Ask Birdie"
+            className="min-h-8 max-h-20 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-[12px] leading-5 text-[#0f0f0f] outline-none placeholder:text-[#aaa9a3]"
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -458,7 +467,8 @@ function AskTab({ matterId }: { matterId: string | null }) {
             value={prompt}
           />
           <button
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] bg-[#1a6b4a] disabled:bg-[#aaa9a3]"
+            aria-label="Send message"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-[7px] bg-[#1a6b4a] disabled:bg-[#aaa9a3]"
             disabled={!prompt.trim() || isResponding}
             onClick={() => send(prompt)}
             type="button"
