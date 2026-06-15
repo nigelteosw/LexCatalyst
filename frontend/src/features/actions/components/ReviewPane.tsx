@@ -189,6 +189,7 @@ function HandoffViewer({
   const [fileError, setFileError] = useState<string | null>(null)
   const [annotationError, setAnnotationError] = useState<string | null>(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'document' | 'annotations'>('document')
 
   // Build the current annotations list from the handoff (kept fresh by query)
   const annotations = handoff.annotations
@@ -349,6 +350,27 @@ function HandoffViewer({
             .filter((r) => r.pageIndex === pageIndex)
             .map((rect, i) => {
               const css = getCssProperties(rect, rotation)
+              if (annotation.kind === 'strike') {
+                // Render a wrapper at the exact text rect position, then draw the
+                // strike line as a child centered vertically inside it.
+                // Do NOT override top/height from getCssProperties — those encode
+                // the actual page coordinates of the selected text.
+                return (
+                  <div key={`${annotation.id}-${i}`} style={{ ...css, background: 'transparent' }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: 0,
+                        right: 0,
+                        height: '2px',
+                        background: 'rgba(239, 68, 68, 0.85)',
+                        transform: 'translateY(-50%)',
+                      }}
+                    />
+                  </div>
+                )
+              }
               return (
                 <div
                   key={`${annotation.id}-${i}`}
@@ -379,13 +401,18 @@ function HandoffViewer({
   useEffect(() => {
     const controller = new AbortController()
     let objectUrl: string | null = null
-    void fetchDocumentFile(handoff.documentId, { signal: controller.signal })
+    // Pre-attach a no-op catch so the browser marks this promise as "handled"
+    // before any microtask runs. Without this, React 18 StrictMode's synchronous
+    // effect double-invoke causes the AbortError to be logged as uncaught.
+    const p = fetchDocumentFile(handoff.documentId, { signal: controller.signal })
+    p.catch(() => {})
+    void p
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob)
         setFileUrl(objectUrl)
       })
-      .catch((err) => {
-        if (err instanceof Error && err.name === 'AbortError') return
+      .catch((err: unknown) => {
+        if ((err as { name?: string })?.name === 'AbortError') return
         setFileError(getErrorMessage(err, 'Could not load PDF'))
       })
     return () => {
@@ -395,7 +422,8 @@ function HandoffViewer({
   }, [handoff.documentId])
 
   function jumpToAnnotation(area: HighlightArea) {
-    highlightPluginInstance.jumpToHighlightArea(area)
+    setMobileTab('document')
+    requestAnimationFrame(() => highlightPluginInstance.jumpToHighlightArea(area))
   }
 
   return (
@@ -427,13 +455,13 @@ function HandoffViewer({
 
       {/* Action strip */}
       {(isReviewer && isActive) || annotations.length > 0 ? (
-        <div className="flex items-center gap-3 border-b border-black/10 bg-[#fafaf8] px-4 py-2">
+        <div className="flex flex-col gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-2 sm:flex-row sm:items-center">
           {annotations.length > 0 && isActive && (
             <span className="text-[10.5px] text-[#9a9a94]">
               {addressedCount} / {annotations.length} addressed
             </span>
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto sm:gap-2">
             {/* Export — available whenever there are annotations */}
             {annotations.length > 0 && (
               <button
@@ -501,10 +529,39 @@ function HandoffViewer({
         />
       )}
 
+      {/* Mobile sub-tabs: Document | Annotations */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-black/10 bg-white px-3 py-1.5 sm:hidden">
+        <button
+          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            mobileTab === 'document' ? 'bg-[#0f0f0f] text-white' : 'text-[#5a5a56] hover:bg-[#f4f3ef]'
+          }`}
+          onClick={() => setMobileTab('document')}
+          type="button"
+        >
+          Document
+        </button>
+        <button
+          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            mobileTab === 'annotations' ? 'bg-[#0f0f0f] text-white' : 'text-[#5a5a56] hover:bg-[#f4f3ef]'
+          }`}
+          onClick={() => setMobileTab('annotations')}
+          type="button"
+        >
+          Annotations
+          {annotations.length > 0 && (
+            <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[9px] ${
+              mobileTab === 'annotations' ? 'bg-white/20 text-white' : 'bg-[#eeecff] text-[#4a3db0]'
+            }`}>
+              {annotations.length}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Body: PDF viewer + rail */}
       <div className="flex min-h-0 flex-1">
-        {/* PDF */}
-        <div className="min-w-0 flex-1 overflow-hidden">
+        {/* PDF — hidden on mobile when viewing annotations */}
+        <div className={`min-w-0 flex-1 overflow-hidden ${mobileTab === 'annotations' ? 'hidden sm:block' : ''}`}>
           {fileError ? (
             <div className="flex items-center justify-center p-8 text-xs text-red-600">
               {fileError}
@@ -514,7 +571,7 @@ function HandoffViewer({
               <Loader2 size={16} className="animate-spin" />
             </div>
           ) : (
-            <div style={{ height: 'calc(100vh - 14rem)' }}>
+            <div style={{ height: 'calc(100dvh - 14rem)' }}>
               <Worker workerUrl={PDFJS_WORKER_URL}>
                 <Viewer
                   fileUrl={fileUrl}
@@ -525,8 +582,12 @@ function HandoffViewer({
           )}
         </div>
 
-        {/* Rail */}
-        <div className="w-72 shrink-0 overflow-y-auto border-l border-black/10 bg-[#f9f8f5]">
+        {/* Rail — full-width on mobile annotations tab, fixed sidebar on desktop */}
+        <div className={`overflow-y-auto border-black/10 bg-[#f9f8f5] ${
+          mobileTab === 'document'
+            ? 'hidden sm:flex sm:w-72 sm:shrink-0 sm:flex-col sm:border-l'
+            : 'flex w-full flex-col sm:w-72 sm:shrink-0 sm:border-l'
+        }`}>
           <div className="border-b border-black/10 px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
               Annotations
@@ -660,19 +721,12 @@ function ToolbarButton({
   )
 }
 
-function overlayStyle(kind: ReviewAnnotation['kind']): React.CSSProperties {
+function overlayStyle(kind: Exclude<ReviewAnnotation['kind'], 'strike'>): React.CSSProperties {
   switch (kind) {
     case 'highlight':
-      return { background: 'rgba(250, 204, 21, 0.4)' } // amber-400/40
-    case 'strike':
-      return {
-        background: 'transparent',
-        borderBottom: '2px solid rgba(239, 68, 68, 0.8)', // red-500
-        height: '50%',
-        top: '25%',
-      }
+      return { background: 'rgba(250, 204, 21, 0.4)' }
     case 'suggestion':
-      return { background: 'rgba(59, 130, 246, 0.25)' } // blue-500/25
+      return { background: 'rgba(59, 130, 246, 0.25)' }
   }
 }
 

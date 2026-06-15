@@ -322,6 +322,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           matters={matters}
           users={users}
           onClose={() => selectActions()}
+          onBack={() => selectActions()}
           onUpdate={(patch) => updateMutation.mutate({ id: selectedItem.id, patch })}
           onDelete={() => {
             if (window.confirm(`Delete "${selectedItem.title}"? This cannot be undone.`)) {
