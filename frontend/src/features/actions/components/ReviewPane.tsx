@@ -32,6 +32,7 @@ import type {
   ReviewAnnotation,
   ReviewHandoff,
 } from '../../../shared/types/workspace'
+import { isManager } from '../config'
 import { AlertTriangle, CheckCircle2, Download, FileText, Highlighter, Lightbulb, Loader2, RotateCcw, Strikethrough, Upload, X } from 'lucide-react'
 import { AnnotationRail } from './AnnotationRail'
 import { SuggestionEditor } from './SuggestionEditor'
@@ -148,9 +149,9 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
   }
 
   const isReviewer =
+    isManager(currentUser) ||
     handoff.reviewerId === currentUser?.id ||
-    action.assignerId === currentUser?.id ||
-    currentUser?.isAdmin === true
+    action.assignerId === currentUser?.id
 
   return (
     <HandoffViewer

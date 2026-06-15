@@ -25,6 +25,8 @@ from app.models import (
 from app.models import new_uuid as _new_uuid
 from app.schemas import ReviewHandoffCreate
 
+SENIOR_ROLES = {"partner", "senior_associate"}
+
 DEFAULT_LIMIT = 100
 
 
@@ -259,17 +261,24 @@ def count_reviews_waiting(db: Session, user: User) -> int:
 
     Includes both ready_for_review (not yet opened) and in_review (senior has
     started but not completed) so the badge does not vanish mid-review.
+    Partners and senior associates see all pending reviews, not just explicitly
+    assigned ones.
     Uses SELECT COUNT(*) rather than hydrating full ORM rows.
     """
-    stmt = (
-        select(func.count(ReviewHandoff.id))
-        .outerjoin(ActionItem, ActionItem.id == ReviewHandoff.action_id)
-        .where(
+    if user.is_admin or user.firm_role in SENIOR_ROLES:
+        stmt = select(func.count(ReviewHandoff.id)).where(
             ReviewHandoff.status.in_(("ready_for_review", "in_review")),
-            or_(
-                ReviewHandoff.reviewer_id == user.id,
-                ActionItem.assigner_id == user.id,
-            ),
         )
-    )
+    else:
+        stmt = (
+            select(func.count(ReviewHandoff.id))
+            .outerjoin(ActionItem, ActionItem.id == ReviewHandoff.action_id)
+            .where(
+                ReviewHandoff.status.in_(("ready_for_review", "in_review")),
+                or_(
+                    ReviewHandoff.reviewer_id == user.id,
+                    ActionItem.assigner_id == user.id,
+                ),
+            )
+        )
     return db.scalar(stmt) or 0
