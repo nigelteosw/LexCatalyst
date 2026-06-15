@@ -74,7 +74,7 @@ This matches how legal knowledge actually flows:
 | **No "deny" rules — only positive grants** | Default-deny. If the system can't prove the user should see an entry, they don't. No "everyone except X" logic — too easy to break. |
 | **Admin flag, not "admin" role** | Admins are humans with their own firm_role. An admin partner is `is_admin=true` AND `firm_role="partner"`. Means we never have to ask "which is more powerful, admin or partner?" |
 | **No team-level write restriction beyond membership** | Inside a team, anyone can edit team-scope entries. Lawyers self-police; we don't model "team lead" as a distinct permission tier. |
-| **Settings panel for self-service role change** | This is a hackathon demo. Real production deployment would source role from the identity provider (Okta, Google Workspace groups). For now, the user can switch roles in `/settings` to demo the permission flows. |
+| **Admin-managed role changes** | Users cannot change their own role. Admins manage roles through the authenticated user roster. |
 | **All KB edits audited** | `kb_access_log` records edit, share, and redact changes without logging reads. |
 
 ## How it works
@@ -133,5 +133,5 @@ get_or_create_user
 | Permission helpers | `backend/app/dependencies.py` → `is_partner_or_admin`, `require_kb_write`, etc. |
 | KB scope filter | `backend/app/services/knowledge_bank_service.py` → `_user_kb_scope_filter` |
 | Audit log | `backend/app/models.py` → `KnowledgeBankAccessLog` |
-| Role-change route | `backend/app/main.py` → `PATCH /me` |
-| Settings UI | `frontend/src/components/SettingsPanel.tsx` |
+| Role-change route | `backend/app/routers/auth.py` → `PATCH /users/{user_id}/role` |
+| Settings UI | `frontend/src/features/settings/SettingsPanel.tsx` |

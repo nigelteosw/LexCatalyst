@@ -412,7 +412,7 @@ async def create_kb_entry(
         title=schema.title,
         body_markdown=schema.body_markdown,
         tags=schema.tags,
-        pii_status=schema.pii_status,
+        pii_status="clean",
         created_by=user.id,
         created_by_role=user.firm_role,
     )

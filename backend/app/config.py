@@ -22,11 +22,13 @@ class Settings(BaseModel):
     auto_create_tables: bool = getenv_bool("AUTO_CREATE_TABLES", False)
 
     @model_validator(mode="after")
-    def fix_database_url(self) -> "Settings":
+    def validate_settings(self) -> "Settings":
         if self.database_url.startswith("postgres://"):
             self.database_url = self.database_url.replace("postgres://", "postgresql+psycopg://", 1)
         elif self.database_url.startswith("postgresql://"):
             self.database_url = self.database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        if len(self.jwt_secret_key.strip()) < 32:
+            raise ValueError("JWT_SECRET_KEY must be configured with at least 32 characters")
         return self
 
     deepseek_api_key: str | None = getenv("DEEPSEEK_API_KEY")
@@ -45,7 +47,7 @@ class Settings(BaseModel):
 
     # Auth Settings
     google_client_id: str | None = getenv("GOOGLE_CLIENT_ID")
-    jwt_secret_key: str = getenv("JWT_SECRET_KEY", "change-me-at-least-32-chars-long")
+    jwt_secret_key: str = getenv("JWT_SECRET_KEY", "")
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 

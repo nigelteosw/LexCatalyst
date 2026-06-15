@@ -49,7 +49,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ### Role-Based Access Control
 - Three lawyer roles: **partner**, **senior_associate**, **associate**. Plus an `is_admin` flag for firm IT/ops (super-user bypass).
 - KB read/write enforced per-scope: `firm_wide` (partners only write), `team` (team members), `matter` (matter members), `private` (creator).
-- Settings panel lets the current user change their role for demo purposes.
+- Settings shows the current role read-only; admins manage user roles.
 
 ### Matters & Teams
 - Matter-scoped chat with encrypted `client_name` fields.

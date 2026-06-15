@@ -330,7 +330,6 @@ class KnowledgeBankEntryCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body_markdown: str = Field(min_length=1, max_length=80_000)
     tags: list[str] = Field(default_factory=list, max_length=30)
-    pii_status: PiiStatus = "clean"
 
 
 class KnowledgeBankEntryUpdate(BaseModel):
@@ -341,7 +340,6 @@ class KnowledgeBankEntryUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     body_markdown: str | None = Field(default=None, min_length=1, max_length=80_000)
     tags: list[str] | None = Field(default=None, max_length=30)
-    pii_status: PiiStatus | None = None
 
 
 class KnowledgeBankEntryResponse(BaseModel):

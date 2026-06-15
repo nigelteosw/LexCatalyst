@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.dependencies import is_partner_or_admin
 from app.models import Matter, MatterMember, Team, TeamMember, User
 from app.schemas import MatterCreate, MatterMemberCreate, MatterUpdate
 
@@ -36,7 +37,14 @@ def ensure_default_team(db: Session, user: User) -> Team:
 
 def list_teams(db: Session, user: User) -> list[Team]:
     ensure_default_team(db, user)
-    return list(db.scalars(select(Team).order_by(Team.name)))
+    stmt = select(Team).order_by(Team.name)
+    if not is_partner_or_admin(user):
+        stmt = stmt.where(
+            select(TeamMember.id)
+            .where(TeamMember.team_id == Team.id, TeamMember.user_id == user.id)
+            .exists()
+        )
+    return list(db.scalars(stmt))
 
 
 def list_matters(db: Session, user: User, status: str | None = None) -> list[Matter]:
@@ -44,6 +52,12 @@ def list_matters(db: Session, user: User, status: str | None = None) -> list[Mat
     stmt = select(Matter).options(joinedload(Matter.team))
     if status:
         stmt = stmt.where(Matter.status == status)
+    if not is_partner_or_admin(user):
+        stmt = stmt.where(
+            select(MatterMember.id)
+            .where(MatterMember.matter_id == Matter.id, MatterMember.user_id == user.id)
+            .exists()
+        )
     return list(db.scalars(stmt.order_by(Matter.updated_at.desc())))
 
 

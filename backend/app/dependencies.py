@@ -79,6 +79,14 @@ def _is_matter_member(db: Session, user_id: str, matter_id: str) -> bool:
     ) is not None
 
 
+def require_matter_member(db: Session, user: User, matter_id: str) -> None:
+    """Raise 403 unless the user is a matter member or a partner/admin."""
+    if is_partner_or_admin(user):
+        return
+    if not _is_matter_member(db, user.id, matter_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Matter access denied")
+
+
 def _is_team_member(db: Session, user_id: str, team_id: str) -> bool:
     return db.scalar(
         select(TeamMember.id).where(

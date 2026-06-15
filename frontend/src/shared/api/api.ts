@@ -1132,30 +1132,6 @@ export async function getCurrentUser(): Promise<CurrentUser> {
   }
 }
 
-export async function updateCurrentUserRole(firmRole: FirmRole): Promise<CurrentUser> {
-  const u = await request<{
-    id: string
-    email: string
-    full_name: string | null
-    firm_role: FirmRole
-    is_admin: boolean
-    default_team_id: string | null
-    created_at: string
-  }>('/me', {
-    method: 'PATCH',
-    body: JSON.stringify({ firm_role: firmRole }),
-  })
-  return {
-    id: u.id,
-    email: u.email,
-    fullName: u.full_name,
-    firmRole: u.firm_role,
-    isAdmin: u.is_admin,
-    defaultTeamId: u.default_team_id,
-    createdAt: u.created_at,
-  }
-}
-
 export async function updateOtherUserRole(userId: string, firmRole: FirmRole): Promise<FirmUser> {
   const u = await request<BackendFirmUser>(`/users/${userId}/role`, {
     method: 'PATCH',

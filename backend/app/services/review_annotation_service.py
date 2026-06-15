@@ -70,7 +70,7 @@ def create_annotation(
 ) -> ReviewAnnotation:
     annotation = ReviewAnnotation(
         handoff_id=handoff.id,
-        document_id=schema.document_id,
+        document_id=handoff.document_id,
         page_no=schema.page_no,
         kind=schema.kind,
         anchor_quote=schema.anchor_quote,

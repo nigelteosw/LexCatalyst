@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, get_or_create_user, verify_google_token
@@ -47,19 +46,6 @@ async def auth_google(request: GoogleAuthRequest, db: Session = Depends(get_db))
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)) -> UserResponse:
     return UserResponse.model_validate(current_user)
-
-
-@router.patch("/me", response_model=UserResponse)
-def update_me(
-    schema: UserSettingsUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> UserResponse:
-    try:
-        user = update_user_role(db, user=current_user, firm_role=schema.firm_role)
-        return UserResponse.model_validate(user)
-    except SQLAlchemyError as exc:
-        raise HTTPException(status_code=503, detail="User settings are unavailable") from exc
 
 
 @router.get("/users", response_model=list[FirmUserResponse])

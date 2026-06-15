@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { Check, Settings, UserPlus, UserMinus, UserRound, Users } from 'lucide-react'
+import { Settings, UserPlus, UserMinus, UserRound, Users } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createDummyUsers,
   deleteDummyUsers,
   listFirmUsers,
-  updateCurrentUserRole,
   updateOtherUserRole,
 } from '../../shared/api/api'
 import type { CurrentUser, FirmRole } from '../../shared/types/workspace'
@@ -17,60 +16,9 @@ type SettingsPanelProps = {
   currentUser: CurrentUser | null
 }
 
-const roles: Array<{
-  id: FirmRole | 'admin'
-  label: string
-  description: string
-}> = [
-  {
-    id: 'admin',
-    label: 'Administrator',
-    description: 'System-wide configuration, roster management, and development tools.',
-  },
-  {
-    id: 'partner',
-    label: 'Partner',
-    description: 'Firm-wide knowledge, survey oversight, and full workflow controls.',
-  },
-  {
-    id: 'senior_associate',
-    label: 'Senior Associate',
-    description: 'Create and manage knowledge and action items.',
-  },
-  {
-    id: 'associate',
-    label: 'Junior Associate',
-    description: 'Use assigned matters, documents, knowledge, and personal workflows.',
-  },
-]
-
 export function SettingsPanel({ currentUser }: SettingsPanelProps) {
   const queryClient = useQueryClient()
-  const [selectedRole, setSelectedRole] = useState<FirmRole | 'admin' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const effectiveRole = selectedRole ?? (currentUser?.isAdmin ? 'admin' : currentUser?.firmRole ?? 'associate')
-
-  const mutation = useMutation({
-    mutationFn: (role: FirmRole) => updateCurrentUserRole(role),
-    onSuccess: (updatedUser) => {
-      queryClient.setQueryData(['currentUser'], updatedUser)
-      const savedUser = JSON.parse(localStorage.getItem('user') ?? '{}')
-      localStorage.setItem(
-        'user',
-        JSON.stringify({
-          ...savedUser,
-          firmRole: updatedUser.firmRole,
-          isAdmin: updatedUser.isAdmin,
-          fullName: updatedUser.fullName,
-        }),
-      )
-      setSelectedRole(null)
-      setMessage('Your role has been updated.')
-    },
-    onError: (error) => {
-      setMessage(error instanceof Error ? error.message : 'Could not update your role.')
-    },
-  })
 
   const addDummyMutation = useMutation({
     mutationFn: () => createDummyUsers(2),
@@ -140,70 +88,22 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
             </div>
           </div>
 
-          <div>
-            <div>
-              <h3 className="text-sm font-semibold text-[#0f0f0f]">Professional role</h3>
-              <p className="mt-1 text-xs leading-5 text-[#6f6f69]">
-                Your role controls which workspace actions and management views are available.
-              </p>
-            </div>
-
-            <div className="mt-4 grid gap-3">
-              {roles.map((role) => {
-                const selected = effectiveRole === role.id
-                return (
-                  <button
-                    key={role.id}
-                    aria-pressed={selected}
-                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${
-                      selected
-                        ? 'border-[#0f0f0f] bg-white'
-                        : 'border-black/10 bg-white hover:border-black/25'
-                    }`}
-                    onClick={() => {
-                      setSelectedRole(role.id)
-                      setMessage(null)
-                    }}
-                    type="button"
-                  >
-                    <span
-                      className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
-                        selected
-                          ? 'border-[#0f0f0f] bg-[#0f0f0f] text-white'
-                          : 'border-black/20 text-transparent'
-                      }`}
-                    >
-                      <Check size={12} />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-medium text-[#0f0f0f]">
-                        {role.label}
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-[#6f6f69]">
-                        {role.description}
-                      </span>
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="mt-5 flex items-center gap-3">
-              <button
-                className="h-9 rounded-lg bg-[#0f0f0f] px-4 text-xs font-medium text-white transition-colors hover:bg-[#333] disabled:cursor-not-allowed disabled:bg-[#d5d4cf]"
-                disabled={
-                  mutation.isPending ||
-                  !currentUser ||
-                  effectiveRole === (currentUser.isAdmin ? 'admin' : currentUser.firmRole)
-                }
-                onClick={() => mutation.mutate(effectiveRole)}
-                type="button"
-              >
-                {mutation.isPending ? 'Saving...' : 'Save role'}
-              </button>
-              {message && <span className="text-xs text-[#6f6f69]">{message}</span>}
-            </div>
+          <div className="rounded-xl border border-black/10 bg-white p-4">
+            <h3 className="text-sm font-semibold text-[#0f0f0f]">Professional role</h3>
+            <p className="mt-1 text-xs leading-5 capitalize text-[#6f6f69]">
+              {(currentUser?.isAdmin ? 'administrator' : currentUser?.firmRole ?? 'associate')
+                .replace('_', ' ')}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-[#8c8c86]">
+              Roles are managed by an administrator.
+            </p>
           </div>
+
+          {message && (
+            <p className="rounded-lg bg-[#f4f3ef] px-3 py-2 text-xs text-[#6f6f69]">
+              {message}
+            </p>
+          )}
 
           {currentUser?.isAdmin && (
             <div className="pt-8 border-t border-black/10">

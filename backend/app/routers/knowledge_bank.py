@@ -114,6 +114,8 @@ async def post_kb_entry(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
+    if schema.scope == "firm_wide":
+        require_partner_or_admin(current_user)
     try:
         entry = await create_kb_entry(db, user=current_user, schema=schema)
         return KnowledgeBankEntryResponse.model_validate(entry)
@@ -336,7 +338,7 @@ def kb_redaction_detail(
     redaction = get_redaction_proposal(db, entry_id)
     if not entry or not redaction:
         raise HTTPException(status_code=404, detail="Redaction proposal not found")
-    require_kb_read(db, current_user, entry)
+    require_kb_owner(current_user, entry)
     return RedactionProposalResponse(
         entry=KnowledgeBankEntryResponse.model_validate(entry),
         redacted_fields=redaction.redacted_fields,

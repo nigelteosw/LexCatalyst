@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_matter_member, require_partner_or_admin
 from app.models import User
 from app.schemas import (
     MatterCreate,
@@ -79,6 +79,7 @@ def matter_detail(
         raise HTTPException(status_code=503, detail="Matter database is unavailable") from exc
     if not matter:
         raise HTTPException(status_code=404, detail="Matter not found")
+    require_matter_member(db, current_user, matter_id)
     return MatterResponse.model_validate(matter)
 
 
@@ -89,6 +90,7 @@ def patch_matter(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MatterResponse:
+    require_partner_or_admin(current_user)
     try:
         matter = update_matter(db, matter_id, schema)
     except SQLAlchemyError as exc:
@@ -106,6 +108,7 @@ def matter_members(
 ) -> list[MatterMemberResponse]:
     if not get_matter(db, matter_id):
         raise HTTPException(status_code=404, detail="Matter not found")
+    require_matter_member(db, current_user, matter_id)
     return [
         MatterMemberResponse.model_validate(member)
         for member in list_matter_members(db, matter_id)
@@ -123,6 +126,7 @@ def post_matter_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MatterMemberResponse:
+    require_partner_or_admin(current_user)
     if not get_matter(db, matter_id):
         raise HTTPException(status_code=404, detail="Matter not found")
     return MatterMemberResponse.model_validate(
@@ -139,6 +143,7 @@ def delete_matter_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
+    require_partner_or_admin(current_user)
     if not remove_matter_member(db, matter_id, user_id):
         raise HTTPException(status_code=404, detail="Matter membership not found")
     return {"status": "ok"}

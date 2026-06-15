@@ -11,12 +11,14 @@ Status transitions:
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select
+from fastapi import HTTPException, status
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import (
     ActionItem,
     Document,
+    MatterMember,
     ReviewAnnotation,
     ReviewAnnotationReply,
     ReviewHandoff,
@@ -24,11 +26,6 @@ from app.models import (
 )
 from app.models import new_uuid as _new_uuid
 from app.schemas import ReviewHandoffCreate
-
-SENIOR_ROLES = {"partner", "senior_associate"}
-
-DEFAULT_LIMIT = 100
-
 
 class ReviewHandoffError(RuntimeError):
     pass
@@ -55,10 +52,59 @@ def get_handoff(db: Session, handoff_id: str) -> ReviewHandoff | None:
     return db.scalar(_handoff_query().where(ReviewHandoff.id == handoff_id))
 
 
-def list_handoffs_for_action(db: Session, action_id: str) -> list[ReviewHandoff]:
+def _handoff_access_filter(user: User):
+    if user.is_admin:
+        return ReviewHandoff.id.is_not(None)
+    return or_(
+        ReviewHandoff.submitted_by == user.id,
+        ReviewHandoff.reviewer_id == user.id,
+        ReviewHandoff.document.has(Document.user_id == user.id),
+        and_(
+            ReviewHandoff.matter_id.is_not(None),
+            exists(
+                select(MatterMember.id).where(
+                    MatterMember.matter_id == ReviewHandoff.matter_id,
+                    MatterMember.user_id == user.id,
+                )
+            ),
+        ),
+        ReviewHandoff.action.has(
+            or_(
+                ActionItem.assignee_id == user.id,
+                ActionItem.assigner_id == user.id,
+            )
+        ),
+    )
+
+
+def require_handoff_access(
+    db: Session,
+    *,
+    user: User,
+    handoff: ReviewHandoff,
+) -> None:
+    allowed = db.scalar(
+        select(ReviewHandoff.id).where(
+            ReviewHandoff.id == handoff.id,
+            _handoff_access_filter(user),
+        )
+    )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
+def list_handoffs_for_action(
+    db: Session,
+    action_id: str,
+    *,
+    user: User,
+) -> list[ReviewHandoff]:
     stmt = (
         _handoff_query()
-        .where(ReviewHandoff.action_id == action_id)
+        .where(
+            ReviewHandoff.action_id == action_id,
+            _handoff_access_filter(user),
+        )
         .order_by(ReviewHandoff.submitted_at.desc())
     )
     return list(db.scalars(stmt).unique())
@@ -84,18 +130,61 @@ def create_handoff(
     document = db.get(Document, schema.document_id)
     if not document:
         raise ReviewHandoffError("Document not found")
+    if document.user_id != user.id:
+        raise ReviewHandoffError("Document not found")
+
+    if (
+        schema.matter_id
+        and document.matter_id
+        and schema.matter_id != document.matter_id
+    ):
+        raise ReviewHandoffError("Document belongs to a different matter")
 
     matter_id = schema.matter_id or document.matter_id
     action: ActionItem | None = None
+    action_participant = False
     reviewer_id = schema.reviewer_id
     if schema.action_id:
         action = db.get(ActionItem, schema.action_id)
         if not action:
             raise ReviewHandoffError("Action not found")
+        action_participant = (
+            action.assignee_id == user.id or action.assigner_id == user.id
+        )
+        action_access = (
+            user.is_admin
+            or action_participant
+            or (
+                action.matter_id
+                and db.scalar(
+                    select(MatterMember.id).where(
+                        MatterMember.matter_id == action.matter_id,
+                        MatterMember.user_id == user.id,
+                    )
+                )
+            )
+        )
+        if not action_access:
+            raise ReviewHandoffError("Action not found")
+        if matter_id and action.matter_id and matter_id != action.matter_id:
+            raise ReviewHandoffError("Document and action belong to different matters")
         if not matter_id:
             matter_id = action.matter_id
         if not reviewer_id:
             reviewer_id = action.assigner_id
+    if matter_id and not user.is_admin:
+        is_member = db.scalar(
+            select(MatterMember.id).where(
+                MatterMember.matter_id == matter_id,
+                MatterMember.user_id == user.id,
+            )
+        )
+        if not is_member and not (
+            action
+            and action.matter_id == matter_id
+            and action_participant
+        ):
+            raise ReviewHandoffError("Matter access required")
 
     handoff = ReviewHandoff(
         action_id=action.id if action else None,
@@ -265,20 +354,8 @@ def count_reviews_waiting(db: Session, user: User) -> int:
     assigned ones.
     Uses SELECT COUNT(*) rather than hydrating full ORM rows.
     """
-    if user.is_admin or user.firm_role in SENIOR_ROLES:
-        stmt = select(func.count(ReviewHandoff.id)).where(
-            ReviewHandoff.status.in_(("ready_for_review", "in_review")),
-        )
-    else:
-        stmt = (
-            select(func.count(ReviewHandoff.id))
-            .outerjoin(ActionItem, ActionItem.id == ReviewHandoff.action_id)
-            .where(
-                ReviewHandoff.status.in_(("ready_for_review", "in_review")),
-                or_(
-                    ReviewHandoff.reviewer_id == user.id,
-                    ActionItem.assigner_id == user.id,
-                ),
-            )
-        )
+    stmt = select(func.count(ReviewHandoff.id)).where(
+        ReviewHandoff.status.in_(("ready_for_review", "in_review")),
+        _handoff_access_filter(user),
+    )
     return db.scalar(stmt) or 0
