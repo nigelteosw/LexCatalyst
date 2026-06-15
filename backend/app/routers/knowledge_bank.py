@@ -155,13 +155,13 @@ async def ingest_document_kb_entry(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
-    """Kick off async summarization of a document into a KB entry.
+    """Kick off async ingestion of a document into a KB entry.
 
     Returns a placeholder entry with `status="processing"` immediately. The
-    actual summarization is claimed by the embedded combined worker using
-    DeepSeek Pro and flips the entry to `status="ready"` (or `"failed"`)
-    when done. Clients should poll `GET /kb/entries/{id}` to observe
-    completion.
+    worker claims the job, formats the full document text using DeepSeek Flash,
+    computes the embedding, and flips the entry to `status="ready"` (or
+    `"failed"`) when done. Clients should poll `GET /kb/entries/{id}` to
+    observe completion.
     """
     document = db.scalar(
         select(Document).where(

@@ -5,22 +5,16 @@ Flow:
      It creates a `kb_entries` row with `status="processing"`, an empty
      body, and no embedding, then returns it immediately.
   2. The embedded combined worker claims processing rows from Postgres and calls
-     `process_kb_summary`. It opens its own DB session, summarises a bounded
-     set of document extracts using DeepSeek Pro,
-     writes the summary into the entry body, computes the embedding, and
+     `process_kb_summary`. It opens its own DB session, concatenates all
+     document chunk text and sends it to DeepSeek Flash for light formatting
+     (clean up OCR artefacts, repeated headers/footers — no summarising),
+     writes the result into the entry body, computes the embedding, and
      flips the status to `"ready"`. On failure it records `"failed"`.
-
-The KB entry's `source_document_id` lets the agent later call
-`read_document` to pull the full extracted text when the summary is
-insufficient.
 """
 
 import asyncio
 import json
-import re
-from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, defer
@@ -36,19 +30,13 @@ from app.services.knowledge_bank_service import (
 )
 from app.worker_types import WorkerClaim
 
-# Keep enough source text for a typical long-form legal document while leaving
-# room for the model to produce a detailed legal digest.
-SUMMARY_MODEL = "deepseek-v4-pro"
-MAX_INGEST_CHUNKS = 80
-MAX_CHUNK_CHARS = 3000
+FORMAT_MODEL = "deepseek-v4-flash"
+# Cap raw text sent to the formatter — fits comfortably in Flash's context.
+MAX_INGEST_CHARS = 150_000
+FORMAT_TIMEOUT_SECONDS = 120.0
 MAX_ERROR_LENGTH = 1000
 STALE_CLAIM_AFTER = timedelta(minutes=30)
 MAX_PROCESSING_ATTEMPTS = 3
-SUMMARY_TIMEOUT_SECONDS = 180.0
-
-
-class KbIngestionError(RuntimeError):
-    pass
 
 
 # --- Sync: create the placeholder entry ----------------------------------
@@ -94,7 +82,7 @@ def create_pending_kb_entry(
         source_document_id=document.id,
         scope="private",
         entry_type="knowledge_bank",
-        title=f"{document.filename} — Summary",
+        title=document.filename,
         body_markdown="",
         tags=["from document"],
         pii_status="clean",
@@ -172,17 +160,17 @@ def claim_pending_kb_entry(db: Session) -> WorkerClaim | None:
     return WorkerClaim(job_id=entry_id, started_at=started_at)
 
 
-# --- Async: summarise + embed in the worker ------------------------------
+# --- Async: format + embed in the worker ---------------------------------
 
 
 async def process_kb_summary(claim: WorkerClaim) -> None:
-    """Background task: summarise the document and finalise the KB entry."""
+    """Background task: lightly format document text and embed the KB entry."""
     entry_id = claim.job_id
     db = SessionLocal()
     validation_error: str | None = None
     entry_title = ""
     document_filename = ""
-    chunks: list[Mapping[str, Any]] = []
+    raw_text = ""
     try:
         entry = db.scalar(
             select(KnowledgeBankEntry).where(
@@ -208,7 +196,6 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
                     db.execute(
                         select(
                             DocumentChunk.chunk_index,
-                            DocumentChunk.citation_label,
                             DocumentChunk.text,
                         )
                         .where(DocumentChunk.document_id == document.id)
@@ -218,7 +205,9 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
                 if not chunk_rows:
                     validation_error = "Document has no extracted text."
                 else:
-                    chunks = _sample_chunks(chunk_rows, MAX_INGEST_CHUNKS)
+                    raw_text = _concat_chunks(chunk_rows)
+                    if not raw_text:
+                        validation_error = "Document text is empty after extraction."
     finally:
         db.close()
 
@@ -230,32 +219,27 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
     try:
         content, _ = await asyncio.wait_for(
             provider.chat(
-                _build_prompt(filename=document_filename, chunks=chunks),
-                model=SUMMARY_MODEL,
+                _build_format_prompt(filename=document_filename, raw_text=raw_text),
+                model=FORMAT_MODEL,
             ),
-            timeout=SUMMARY_TIMEOUT_SECONDS,
+            timeout=FORMAT_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        _mark_failed(
-            claim,
-            f"Summary generation timed out after {int(SUMMARY_TIMEOUT_SECONDS)}s",
-        )
+        _mark_failed(claim, f"Formatting timed out after {int(FORMAT_TIMEOUT_SECONDS)}s")
         return
     except DeepSeekError as exc:
-        _mark_failed(claim, f"Summary generation failed: {exc}")
+        _mark_failed(claim, f"Formatting failed: {exc}")
         return
-    except Exception as exc:  # noqa: BLE001 - persist unexpected provider failures
-        _mark_failed(claim, f"Unexpected summary failure: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        _mark_failed(claim, f"Unexpected formatting failure: {exc}")
         return
 
     try:
-        parsed = _parse_summary(content)
-    except KbIngestionError as exc:
+        title, body_markdown = _parse_format_response(content, fallback_title=entry_title)
+    except ValueError as exc:
         _mark_failed(claim, str(exc))
         return
 
-    title = parsed["title"] or entry_title
-    body_markdown = parsed["body_markdown"]
     try:
         embedding = (
             await embed_texts([build_entry_embedding_text(title, body_markdown)])
@@ -264,7 +248,7 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
     except EmbeddingError as exc:
         _mark_failed(claim, f"Embedding failed: {exc}")
         return
-    except Exception as exc:  # noqa: BLE001 - persist unexpected provider failures
+    except Exception as exc:  # noqa: BLE001
         _mark_failed(claim, f"Unexpected embedding failure: {exc}")
         return
 
@@ -290,7 +274,7 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         entry.processing_started_at = None
         entry.version += 1
         db.commit()
-    except Exception as exc:  # noqa: BLE001 — last-resort safety net
+    except Exception as exc:  # noqa: BLE001
         db.rollback()
         _mark_failed(claim, f"Unexpected error: {exc}")
     finally:
@@ -323,166 +307,61 @@ def _mark_failed(claim: WorkerClaim, message: str) -> None:
 
 
 _SYSTEM_PROMPT = """\
-You are a senior legal knowledge lawyer preparing a comprehensive internal \
-Knowledge Bank entry from an uploaded document. Your reader is a practising \
-lawyer who may rely on the entry for drafting, negotiation, due diligence, \
-case preparation, or client advice before opening the source document.
+You are a document formatter for a legal knowledge base. You receive raw text \
+extracted from a PDF and return a clean, readable markdown version.
 
-Your primary objective is coverage and legal usefulness, not brevity. Read \
-across all supplied extracts and capture every material legal, commercial, \
-procedural, and factual point. Do not reduce a complex document to a handful \
-of generic observations.
-
-Analysis rules:
-- Identify the document type, status, purpose, parties, roles, relevant \
-  entities, governing context, and how the document is intended to operate.
-- Preserve legally significant detail exactly where available: defined terms, \
-  dates, periods, amounts, percentages, thresholds, conditions, exceptions, \
-  qualifications, discretion, standards, notice requirements, approval \
-  mechanics, survival periods, governing law, forum, and clause or authority \
-  references.
-- Explain material obligations, prohibitions, rights, remedies, liabilities, \
-  indemnities, warranties, termination rights, dependencies, and procedural \
-  steps. State who must or may do what, when, and with what consequence.
-- For judgments, opinions, advice, policies, or guidance, capture the issues, \
-  material facts, positions, legal tests or authorities, reasoning, outcome, \
-  and practical implications. For agreements, capture the operative bargain \
-  and allocation of risk. Adapt the analysis to the actual document type.
-- Surface internal inconsistencies, ambiguity, missing information, unusual \
-  drafting, one-sided provisions, open items, deadlines, and points requiring \
-  verification or lawyer judgment.
-- Distinguish what the document expressly states from cautious inference. \
-  Never invent facts, clauses, authorities, risks, or legal conclusions.
-- Do not omit a material point merely because a similar provision was already \
-  discussed. Consolidate genuine repetition while preserving distinct \
-  exceptions, conditions, and consequences.
-
-Writing and citation rules:
-- Use precise, neutral, professional legal prose and descriptive ## headings.
-- Prefer specific bullets over long narrative paragraphs, but include enough \
-  explanation to make each point useful without reopening the source.
-- Cite every substantive source-grounded statement inline as [p.X], using the \
-  page number in the chunk label. If no page is available, omit the citation \
-  rather than displaying a chunk ID.
-- If a proposition spans pages, cite each relevant page, for example \
-  [p.4, p.7]. Never create a "Source Notes" section or UUID-style footnotes.
-- Aim for 900–1,800 words for a substantial document, but let complexity \
-  determine length. Completeness takes priority over hitting a word target.
-- Do not repeat the filename mechanically and do not add generic legal \
-  disclaimers or filler.\
+Rules:
+- Preserve ALL content and information. Do not summarise, condense, or omit \
+  anything. Every sentence, clause, and data point must appear in your output.
+- Remove artefacts that are clearly not document content: repeated page \
+  headers, footers, page numbers, watermarks, and OCR noise characters.
+- Fix obvious OCR errors (e.g. "tbe" → "the", broken hyphenation across lines).
+- Add appropriate markdown structure: use ## headings for major sections you \
+  can identify, bullet points where the source uses lists. Do not invent \
+  structure that is not implied by the source text.
+- Write a concise descriptive title (max 80 chars) that identifies the \
+  document type and subject matter.\
 """
 
 _USER_PROMPT = """\
-Create one comprehensive, lawyer-ready KB entry from the document extracts \
-below. Treat the extracts as parts of one document and reconcile information \
-across them before writing.
+Format the raw extracted text below into clean markdown.
 
-Return ONLY valid JSON with this exact shape — no markdown fences and no \
-commentary outside the JSON:
+Return ONLY valid JSON with this exact shape (no markdown fences, no \
+commentary outside the JSON):
 {{
   "title": "Concise descriptive title (max 80 chars)",
-  "body_markdown": "..."
+  "body": "...full formatted markdown..."
 }}
 
-Use the following structure in body_markdown. Omit a section only when it is \
-genuinely inapplicable, and add a more specific ## section when the document \
-contains a material topic that does not fit the headings below.
+Filename: {filename}
 
-## Executive Overview
-A concise but substantive orientation: document type and status, subject, \
-parties or actors, purpose, operative context, and overall legal effect.
-
-## Parties, Roles, and Scope
-Identify each material party, entity, decision-maker, beneficiary, regulator, \
-court, or other actor; explain their role and the scope of the document.
-
-## Material Terms and Legal Analysis
-Organise the operative content by issue. Cover all material rights, \
-obligations, restrictions, conditions, exceptions, standards, procedures, \
-representations, risk allocation, and consequences. Use descriptive \
-subheadings or grouped bullets where that improves clarity.
-
-## Key Dates, Amounts, and Deadlines
-List all legally or commercially significant dates, time periods, notice \
-windows, monetary amounts, percentages, thresholds, and dependencies. Explain \
-what each controls. Omit only if none exist.
-
-## Outcome, Remedies, or Consequences
-Explain the result, available remedies, enforcement mechanisms, termination \
-effects, liability exposure, sanctions, or practical consequences, as \
-applicable.
-
-## Risks, Ambiguities, and Open Points
-Identify drafting concerns, factual gaps, conflicting provisions, assumptions, \
-one-sided terms, missing schedules or definitions, unresolved questions, and \
-items that require verification or legal judgment.
-
-## Practical Lawyer Checklist
-Give concrete next steps for review, drafting, negotiation, due diligence, \
-advice, compliance, litigation, or matter management. Tie each step to a \
-specific issue in the document rather than offering generic advice.
-
-Before returning the JSON, silently check that:
-1. Every supplied extract was considered.
-2. No material party, obligation, right, exception, date, amount, remedy, \
-   authority, or risk was omitted.
-3. Each substantive point is accurately cited where page information exists.
-4. Express document content is not presented as your own unsupported legal \
-   conclusion.
-
-Document filename: {filename}
-
-Document extracts ({chunk_count} supplied):
-{chunks}\
+Raw text ({char_count} chars):
+{raw_text}\
 """
 
 
-def _build_prompt(
-    *,
-    filename: str,
-    chunks: list[Mapping[str, Any]],
-) -> list[dict[str, str]]:
-    chunk_blocks = [
-        f"[{chunk['citation_label']}]\n{chunk['text'][:MAX_CHUNK_CHARS]}"
-        for chunk in chunks
-    ]
+def _build_format_prompt(*, filename: str, raw_text: str) -> list[dict[str, str]]:
+    truncated = raw_text[:MAX_INGEST_CHARS]
     return [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {
             "role": "user",
             "content": _USER_PROMPT.format(
                 filename=filename,
-                chunk_count=len(chunks),
-                chunks="\n\n---\n\n".join(chunk_blocks),
+                char_count=len(truncated),
+                raw_text=truncated,
             ),
         },
     ]
 
 
-def _sample_chunks(
-    chunks: list[Mapping[str, Any]],
-    limit: int,
-) -> list[Mapping[str, Any]]:
-    if len(chunks) <= limit:
-        return chunks
-    indexes = {
-        round(position * (len(chunks) - 1) / (limit - 1))
-        for position in range(limit)
-    }
-    return [chunks[index] for index in sorted(indexes)]
-
-
-def _parse_summary(content: str) -> dict[str, Any]:
+def _parse_format_response(content: str, *, fallback_title: str) -> tuple[str, str]:
     cleaned = content.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:].strip()
     if cleaned.startswith("```"):
-        cleaned = cleaned[3:].strip()
+        cleaned = cleaned.split("```", 2)[-1] if cleaned.count("```") >= 2 else cleaned
+        cleaned = cleaned.lstrip("json").strip()
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3].strip()
-
-    # Some models leak a leading sentence before the JSON. Try to recover
-    # by locating the first {.
     if not cleaned.startswith("{"):
         first = cleaned.find("{")
         if first >= 0:
@@ -491,25 +370,26 @@ def _parse_summary(content: str) -> dict[str, Any]:
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        raise KbIngestionError(f"Summary was not valid JSON: {exc}") from exc
+        raise ValueError(f"Formatter returned invalid JSON: {exc}") from exc
 
     if not isinstance(data, dict):
-        raise KbIngestionError("Summary JSON was not an object.")
+        raise ValueError("Formatter JSON was not an object.")
 
-    body = data.get("body_markdown")
+    body = data.get("body") or data.get("body_markdown") or ""
     if not isinstance(body, str) or not body.strip():
-        raise KbIngestionError("Summary body_markdown was empty.")
+        raise ValueError("Formatter returned empty body.")
 
-    title = data.get("title")
-    if not isinstance(title, str):
-        title = ""
+    title = data.get("title") or ""
+    if not isinstance(title, str) or not title.strip():
+        title = fallback_title
 
-    return {
-        "title": _clean_title(title),
-        "body_markdown": body.strip(),
-    }
+    return title.strip(), body.strip()
 
 
-def _clean_title(value: str) -> str:
-    """Collapse whitespace and trim. Preserves nothing fancy — titles are plain text."""
-    return re.sub(r"\s+", " ", value).strip() if value else ""
+# --- Text assembly -------------------------------------------------------
+
+
+def _concat_chunks(chunks: list) -> str:
+    """Join chunk texts in order, separated by a blank line."""
+    parts = [(chunk["text"] or "").strip() for chunk in chunks]
+    return "\n\n".join(p for p in parts if p)

@@ -584,7 +584,7 @@ class KnowledgeBankEntry(Base):
         nullable=True,
     )
     source_document_id: Mapped[str | None] = mapped_column(
-        ForeignKey("documents.id", ondelete="SET NULL"),
+        ForeignKey("documents.id", ondelete="CASCADE"),
         index=True,
         nullable=True,
     )

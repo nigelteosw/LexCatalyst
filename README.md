@@ -5,20 +5,20 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ## Core Features
 
 ### Knowledge & Documents
-- **Async document, Knowledge Bank, and Dream jobs**: The FastAPI service runs an embedded worker thread that claims durable Postgres jobs for extraction, OCR, embeddings, optional **DeepSeek Pro** Knowledge Bank summaries, and automatic memory consolidation.
+- **Async document, Knowledge Bank, and Dream jobs**: The FastAPI service runs an embedded worker thread that claims durable Postgres jobs for extraction, OCR, embeddings, **DeepSeek Flash** KB formatting, and automatic memory consolidation.
 - **Auditable memory consolidation**: Dream applies conservative memory additions, merges, updates, and drops without a manual approval step. Automated memories retain the agent's justification.
 - **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
 - **Drag-and-drop uploads**: Drop PDF/DOCX directly onto the Documents panel. OCR fallback via Tesseract for scanned PDFs.
 - **Semantic search**: pgvector cosine similarity over document chunks AND KB entries. Embeddings fingerprinted by content hash so they auto-refresh when content changes.
-- **Source citations**: Inline `[p.X]` references in KB summaries; full source-chunk attribution available via the Wiki feature.
+- **Source citations**: Full source-chunk attribution available via the Wiki feature.
 
 ### Agentic Chat
 - **ReAct agent loop** with cycle detection and forced-final-answer on max rounds. Tools:
   - `search_documents` — semantic search over uploaded files
   - `search_knowledge_bank` — search KB entries the user has access to
   - `search_memories` — keyword search over personal memory
-  - `get_kb_entry` — fetch the full KB summary; returns `source_document_id` for chaining
-  - `read_document` — fetch the **full extracted text** of a document (up to 100KB) when the summary is insufficient
+  - `get_kb_entry` — fetch the full KB entry body; returns `source_document_id` for chaining
+  - `read_document` — fetch the **full extracted text** of a document (up to 100KB) for fine-grained passage lookup
 - **Streaming SSE** with token-by-token output and per-tool step visualisation.
 - **Audit trail**: Knowledge Bank edits are logged in `kb_access_log`; reads are not recorded.
 
@@ -62,7 +62,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - **React 19** + **TypeScript 6** + **Vite 8**, installed and built with **Bun 1.3**
 - **React Router 7** for URL-backed workspace navigation and **TanStack Query v5** for paginated server state and job-status polling
 - **Tailwind CSS 4** through the Vite plugin
-- **react-markdown** + **remark-gfm** for KB summary rendering
+- **react-markdown** + **remark-gfm** for KB entry rendering
 - **Server-Sent Events** for the streaming chat and Birdie agent
 
 ### Backend
@@ -74,17 +74,17 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - **Google OAuth2** + **JWT** auth; field-level Fernet encryption for `client_name`
 
 ### AI & Search
-- **DeepSeek V4 Pro** for KB summaries and Dream memory consolidation
-- **DeepSeek V4 Flash** for Birdie mentor chat and thread summarisation
+- **DeepSeek V4 Pro** for Dream memory consolidation
+- **DeepSeek V4 Flash** for KB document formatting, Birdie mentor chat, and thread summarisation
 - **DeepSeek V4 Flash/Pro** user-selectable for the main agent chat
-- **OpenAI `text-embedding-3-small`** (1536 dim) for both document chunks and KB entry summaries
+- **OpenAI `text-embedding-3-small`** (1536 dim) for both document chunks and KB entries
 - **Cloudflare R2** for original document storage
 
 ### Infrastructure
 - **Docker Compose** for local PostgreSQL
 - **Railway** for the static frontend, FastAPI web service with its embedded worker, and managed PostgreSQL
 - **Cloudflare R2** as the S3-compatible object store
-- **Alembic head:** `s4b5c6d7e8f9`
+- **Alembic head:** `t5c6d7e8f9a0`
 
 Editable high-level architecture diagrams:
 
@@ -114,7 +114,7 @@ Editable high-level architecture diagrams:
 │   │       ├── agent_service.py               # ReAct loop with cycle detection
 │   │       ├── birdie_service.py              # Mentor agent (separate prompt + endpoint)
 │   │       ├── chat_service.py                # Thread mgmt, history, summary
-│   │       ├── kb_ingestion_service.py        # Worker claim + Pro summarisation
+│   │       ├── kb_ingestion_service.py        # Worker claim + Flash formatting + embedding
 │   │       ├── knowledge_bank_service.py      # KB CRUD + RBAC scope filter
 │   │       ├── document_service.py            # Upload + full-text reader
 │   │       ├── ingestion_service.py           # PDF/DOCX extraction (OCR fallback)
@@ -292,8 +292,8 @@ Optimized KB read routes, all requiring Bearer authentication:
 [Embedded FastAPI worker]                 (async)
        │   Claims queued rows from Postgres
        │   Reclaims stale jobs after restarts
-       │   Samples up to 80 chunks (~240KB)
-       │   Calls DeepSeek Pro
+       │   Concatenates all chunk text (up to 150K chars)
+       │   Calls DeepSeek Flash to reformat (no summarising)
        │   Parses JSON → title + body
        │   Computes embedding
        │
@@ -306,7 +306,7 @@ Frontend polls `GET /documents` while a document is processing. It polls
 page or detail after a terminal state.
 ```
 
-Retry: clicking "Retry summary" resets a failed entry to `processing`; the
+Retry: clicking "Retry" on a failed KB entry resets it to `processing`; the
 embedded worker claims it from the durable Postgres queue.
 
 ### ReAct Agent Loop

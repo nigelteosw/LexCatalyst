@@ -10,10 +10,12 @@ import {
   BookMarked,
   Check,
   ChevronRight,
+  ExternalLink,
   FileCheck2,
   FileText,
   GitBranch,
   History,
+  LoaderCircle,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -24,6 +26,7 @@ import {
   SlidersHorizontal,
   Tags,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   useInfiniteQuery,
@@ -35,6 +38,7 @@ import {
   approveKnowledgeBankRedaction,
   backfillKnowledgeBankEmbeddings,
   deleteKnowledgeBankEntry,
+  fetchDocumentFile,
   getKnowledgeBankEntry,
   getKnowledgeBankEntryStatuses,
   getKbGraph,
@@ -617,6 +621,41 @@ function KnowledgeBankReader({
   const [isEditing, setIsEditing] = useState(false)
   const [draftTitle, setDraftTitle] = useState(entry.title)
   const [draftBody, setDraftBody] = useState(entry.bodyMarkdown)
+  const [docPreviewUrl, setDocPreviewUrl] = useState<string | null>(null)
+  const [docPreviewOpen, setDocPreviewOpen] = useState(false)
+  const [docPreviewLoading, setDocPreviewLoading] = useState(false)
+  const [docPreviewError, setDocPreviewError] = useState<string | null>(null)
+
+  // Reset preview state when navigating to a different entry.
+  useEffect(() => {
+    setDocPreviewOpen(false)
+    setDocPreviewError(null)
+    setDocPreviewLoading(false)
+    setDocPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+  }, [entry.id])
+
+  async function openSourceDocument() {
+    if (!entry.sourceDocumentId) return
+    setDocPreviewError(null)
+    if (docPreviewUrl) {
+      setDocPreviewOpen(true)
+      return
+    }
+    setDocPreviewLoading(true)
+    try {
+      const blob = await fetchDocumentFile(entry.sourceDocumentId)
+      const url = URL.createObjectURL(blob)
+      setDocPreviewUrl(url)
+      setDocPreviewOpen(true)
+    } catch {
+      setDocPreviewError('Could not load source document.')
+    } finally {
+      setDocPreviewLoading(false)
+    }
+  }
 
   const sourcesQuery = useQuery({
     queryKey: ['kbEntrySources', entry.id],
@@ -749,16 +788,16 @@ function KnowledgeBankReader({
                     />
                   ))}
                 </span>
-                Summarising this document with DeepSeek Pro. This usually takes 30–60 seconds.
+                Formatting and indexing this document. This usually takes 30–60 seconds.
               </div>
             ) : entry.status === 'failed' ? (
               <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-                <p className="font-medium">Summary generation failed.</p>
+                <p className="font-medium">Document processing failed.</p>
                 {entry.errorMessage && (
                   <p className="mt-1 text-xs leading-5 text-red-600">{entry.errorMessage}</p>
                 )}
                 <p className="mt-2 text-xs">
-                  Reopen the document in the Documents tab and click "Retry summary".
+                  Reopen the document in the Documents tab and click "Retry".
                 </p>
               </div>
             ) : isEditing ? (
@@ -774,8 +813,50 @@ function KnowledgeBankReader({
         </article>
       </main>
 
+      {docPreviewOpen && docPreviewUrl && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/60">
+          <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3 shadow">
+            <span className="text-sm font-medium text-[#0f0f0f]">Source document</span>
+            <button
+              className="rounded-lg p-1.5 text-[#5a5a56] hover:bg-[#f4f3ef]"
+              onClick={() => setDocPreviewOpen(false)}
+              type="button"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <iframe
+            className="min-h-0 flex-1 border-0"
+            src={docPreviewUrl}
+            title="Source document preview"
+          />
+        </div>
+      )}
+
       <aside className="border-t border-black/10 bg-[#f8f8f6] xl:min-h-0 xl:overflow-y-auto xl:border-l xl:border-t-0">
         <div className="space-y-6 p-4">
+          {entry.sourceDocumentId && (
+            <section>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#777770]">
+                Source document
+              </div>
+              {docPreviewError && (
+                <p className="mb-2 text-xs text-red-600">{docPreviewError}</p>
+              )}
+              <button
+                className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-medium text-[#5a5a56] hover:border-black/20 hover:bg-[#f7f6f3] disabled:opacity-50"
+                disabled={docPreviewLoading}
+                onClick={() => void openSourceDocument()}
+                type="button"
+              >
+                {docPreviewLoading
+                  ? <LoaderCircle size={13} className="animate-spin" />
+                  : <ExternalLink size={13} />}
+                {docPreviewLoading ? 'Loading...' : 'View source PDF'}
+              </button>
+            </section>
+          )}
+
           <section>
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#777770]">
               <GitBranch size={13} />
