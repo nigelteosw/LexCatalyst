@@ -2,10 +2,16 @@ from datetime import datetime, timedelta, timezone
 import random
 
 from sqlalchemy import desc, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.models import SurveyQuestion, SurveyResponse, User
-from app.schemas import SurveyQuestionCreate, SurveyQuestionUpdate, SurveyResponseCreate
+from app.schemas import (
+    SurveyQuestionCreate,
+    SurveyQuestionUpdate,
+    SurveyResponseCreate,
+    SurveyResponseItem,
+)
 
 
 def current_week_start() -> datetime:
@@ -147,6 +153,53 @@ def submit_survey_response(
     return response
 
 
+def submit_survey_responses(
+    db: Session,
+    *,
+    user: User,
+    responses: list[SurveyResponseItem],
+) -> int:
+    response_by_question = {response.question_id: response.score for response in responses}
+    if len(response_by_question) != len(responses):
+        raise ValueError("Each survey question may only be submitted once")
+
+    question_ids = set(response_by_question)
+    active_question_ids = set(
+        db.scalars(
+            select(SurveyQuestion.id).where(
+                SurveyQuestion.id.in_(question_ids),
+                SurveyQuestion.is_active.is_(True),
+            )
+        )
+    )
+    if active_question_ids != question_ids:
+        raise ValueError("One or more survey questions are missing or inactive")
+
+    week_of = current_week_start()
+    submitted_at = datetime.now(timezone.utc)
+    rows = [
+        {
+            "user_id": user.id,
+            "question_id": question_id,
+            "score": score,
+            "week_of": week_of,
+            "submitted_at": submitted_at,
+        }
+        for question_id, score in response_by_question.items()
+    ]
+    statement = insert(SurveyResponse).values(rows)
+    statement = statement.on_conflict_do_update(
+        constraint="uq_survey_response_user_question_week",
+        set_={
+            "score": statement.excluded.score,
+            "submitted_at": statement.excluded.submitted_at,
+        },
+    )
+    db.execute(statement)
+    db.commit()
+    return len(rows)
+
+
 def get_survey_results(db: Session) -> dict:
     week_of = current_week_start()
     questions = list_survey_questions(db, active_only=False)
@@ -173,33 +226,35 @@ def get_survey_results(db: Session) -> dict:
     ).all()
     user_scores = {row.user_id: row for row in user_rows}
 
-    question_results = []
-    for question in questions:
-        rows = db.execute(
-            select(
-                SurveyResponse.week_of,
-                func.avg(SurveyResponse.score).label("avg_score"),
-                func.count(SurveyResponse.id).label("response_count"),
-            )
-            .where(SurveyResponse.question_id == question.id)
-            .group_by(SurveyResponse.week_of)
-            .order_by(desc(SurveyResponse.week_of))
-        ).all()
-        question_results.append(
+    trend_rows = db.execute(
+        select(
+            SurveyResponse.question_id,
+            SurveyResponse.week_of,
+            func.avg(SurveyResponse.score).label("avg_score"),
+            func.count(SurveyResponse.id).label("response_count"),
+        )
+        .group_by(SurveyResponse.question_id, SurveyResponse.week_of)
+        .order_by(SurveyResponse.question_id, desc(SurveyResponse.week_of))
+    ).all()
+    trends_by_question: dict[str, list[dict]] = {}
+    for row in trend_rows:
+        trends_by_question.setdefault(row.question_id, []).append(
             {
-                "question_id": question.id,
-                "question_text": question.text,
-                "category": question.category,
-                "weeks": [
-                    {
-                        "week_of": row.week_of,
-                        "avg_score": float(row.avg_score),
-                        "response_count": row.response_count,
-                    }
-                    for row in rows
-                ],
+                "week_of": row.week_of,
+                "avg_score": float(row.avg_score),
+                "response_count": row.response_count,
             }
         )
+
+    question_results = [
+        {
+            "question_id": question.id,
+            "question_text": question.text,
+            "category": question.category,
+            "weeks": trends_by_question.get(question.id, []),
+        }
+        for question in questions
+    ]
     return {
         "current_week_of": week_of,
         "users": [

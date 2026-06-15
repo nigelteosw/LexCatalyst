@@ -15,7 +15,7 @@ import {
   deleteSurveyQuestion,
   getSurveyResults,
   listSurveyQuestions,
-  submitSurveyResponse,
+  submitSurveyResponses,
   updateSurveyQuestion,
 } from '../../shared/api/api'
 import type { CurrentUser, SurveyCategory, SurveyQuestion } from '../../shared/types/workspace'
@@ -25,15 +25,6 @@ import { PanelHeader } from '../../shared/ui/PanelHeader'
 type WellbeingPanelProps = {
   currentUser: CurrentUser | null
 }
-
-const CURRENT_WEEK_OF = (() => {
-  const d = new Date()
-  const day = d.getDay()
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-  const monday = new Date(d.setDate(diff))
-  monday.setHours(0, 0, 0, 0)
-  return monday.toISOString()
-})()
 
 const categoryLabels: Record<SurveyCategory, string> = {
   workload: 'Workload',
@@ -106,8 +97,9 @@ function TabButton({
 }
 
 function SurveyTab() {
+  const queryClient = useQueryClient()
   const questionsQuery = useQuery({
-    queryKey: ['surveyQuestions'],
+    queryKey: ['surveyQuestions', 'active'],
     queryFn: () => listSurveyQuestions(true),
   })
 
@@ -117,13 +109,18 @@ function SurveyTab() {
   const [error, setError] = useState<string | null>(null)
 
   const submitMutation = useMutation({
-    mutationFn: async () => {
-      for (const question of questions) {
-        const score = scores[question.id] ?? 3
-        await submitSurveyResponse({ questionId: question.id, score, weekOf: CURRENT_WEEK_OF })
-      }
+    mutationFn: () =>
+      submitSurveyResponses(
+        questions.map((question) => ({
+          questionId: question.id,
+          score: scores[question.id] ?? 3,
+        })),
+      ),
+    onMutate: () => setError(null),
+    onSuccess: () => {
+      setSubmitted(true)
+      queryClient.invalidateQueries({ queryKey: ['surveyResults'] })
     },
-    onSuccess: () => setSubmitted(true),
     onError: (err) => setError(err instanceof Error ? err.message : 'Could not submit'),
   })
 
@@ -200,7 +197,7 @@ function SurveyTab() {
                 <div className="flex items-center justify-between gap-4 text-sm text-[#171717]">
                   <span>{q.text}</span>
                   <span className="shrink-0 font-serif text-lg italic text-[#5a5a56]">
-                    {scores[q.id] ?? '–'}/5
+                    {scores[q.id] ?? 3}/5
                   </span>
                 </div>
                 <input
@@ -380,7 +377,7 @@ function ResultsTab() {
 function ManageQuestionsTab() {
   const queryClient = useQueryClient()
   const questionsQuery = useQuery({
-    queryKey: ['surveyQuestions'],
+    queryKey: ['surveyQuestions', 'all'],
     queryFn: () => listSurveyQuestions(false),
   })
   const [isAdding, setIsAdding] = useState(false)

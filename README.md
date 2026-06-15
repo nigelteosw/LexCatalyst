@@ -30,6 +30,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 
 ### Wellbeing — Weekly Team Check-ins
 - Survey responses are linked to the submitting user and upserted per user, question, and week.
+- `POST /survey/responses/batch` submits one authenticated user's complete check-in in a single transaction; partner/admin access is still required for `/survey/results` and question management routes.
 - Partners/admins can view every user’s completion state and average score, create questions, and toggle questions on/off.
 - All authenticated users can submit. Existing responses from before migration `n1c2d3e4f5a6` remain aggregate-only.
 

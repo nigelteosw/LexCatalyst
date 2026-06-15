@@ -366,6 +366,7 @@ export function KnowledgeBankPanel({
 
         {activeTab === 'library' && selectedEntryId && selectedEntry ? (
           <KnowledgeBankReader
+            key={selectedEntry.id}
             entries={entries}
             entry={selectedEntry}
             canEdit={isWriter || selectedEntry.createdBy === currentUser?.id}
@@ -626,16 +627,11 @@ function KnowledgeBankReader({
   const [docPreviewLoading, setDocPreviewLoading] = useState(false)
   const [docPreviewError, setDocPreviewError] = useState<string | null>(null)
 
-  // Reset preview state when navigating to a different entry.
   useEffect(() => {
-    setDocPreviewOpen(false)
-    setDocPreviewError(null)
-    setDocPreviewLoading(false)
-    setDocPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return null
-    })
-  }, [entry.id])
+    return () => {
+      if (docPreviewUrl) URL.revokeObjectURL(docPreviewUrl)
+    }
+  }, [docPreviewUrl])
 
   async function openSourceDocument() {
     if (!entry.sourceDocumentId) return

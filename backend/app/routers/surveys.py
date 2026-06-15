@@ -10,6 +10,7 @@ from app.schemas import (
     SurveyQuestionCreate,
     SurveyQuestionResponse,
     SurveyQuestionUpdate,
+    SurveyResponseBatchCreate,
     SurveyResponseCreate,
     SurveyResultsResponse,
 )
@@ -18,6 +19,7 @@ from app.services.survey_service import (
     delete_survey_question,
     get_survey_results,
     list_survey_questions,
+    submit_survey_responses,
     submit_survey_response,
     update_survey_question,
 )
@@ -29,8 +31,10 @@ router = APIRouter(tags=["surveys"])
 def get_survey_questions(
     active_only: bool = True,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[SurveyQuestionResponse]:
+    if not active_only:
+        require_partner_or_admin(current_user)
     return [
         SurveyQuestionResponse.model_validate(q)
         for q in list_survey_questions(db, active_only=active_only)
@@ -86,6 +90,23 @@ def post_survey_response(
 ) -> dict[str, str]:
     submit_survey_response(db, user=current_user, schema=schema)
     return {"status": "ok"}
+
+
+@router.post("/survey/responses/batch", status_code=status.HTTP_201_CREATED)
+def post_survey_responses(
+    schema: SurveyResponseBatchCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, int | str]:
+    try:
+        submitted_count = submit_survey_responses(
+            db,
+            user=current_user,
+            responses=schema.responses,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "ok", "submitted_count": submitted_count}
 
 
 @router.get("/survey/results", response_model=SurveyResultsResponse)

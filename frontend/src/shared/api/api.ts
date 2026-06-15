@@ -1231,14 +1231,17 @@ export async function deleteSurveyQuestion(id: string): Promise<void> {
   await request(`/survey/questions/${id}`, { method: 'DELETE' })
 }
 
-export async function submitSurveyResponse(payload: {
-  questionId: string
-  score: number
-  weekOf: string
-}): Promise<void> {
-  await request('/survey/responses', {
+export async function submitSurveyResponses(
+  responses: Array<{ questionId: string; score: number }>,
+): Promise<void> {
+  await request('/survey/responses/batch', {
     method: 'POST',
-    body: JSON.stringify({ question_id: payload.questionId, score: payload.score, week_of: payload.weekOf }),
+    body: JSON.stringify({
+      responses: responses.map((response) => ({
+        question_id: response.questionId,
+        score: response.score,
+      })),
+    }),
   })
 }
 

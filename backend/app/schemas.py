@@ -488,6 +488,15 @@ class SurveyResponseCreate(BaseModel):
     week_of: datetime
 
 
+class SurveyResponseItem(BaseModel):
+    question_id: str
+    score: int = Field(ge=1, le=5)
+
+
+class SurveyResponseBatchCreate(BaseModel):
+    responses: list[SurveyResponseItem] = Field(min_length=1, max_length=100)
+
+
 class SurveyWeekResult(BaseModel):
     week_of: datetime
     avg_score: float

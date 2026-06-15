@@ -4,6 +4,7 @@ import { Gauge, Menu, Sparkles } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
+import { PanelErrorBoundary } from '../shared/ui/PanelErrorBoundary'
 import { Sidebar } from '../features/navigation/Sidebar'
 import { LoginPage } from '../features/auth/LoginPage'
 import {
@@ -578,29 +579,30 @@ function App() {
           </div>
         )}
 
-        <Suspense fallback={<PanelLoading />}>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {current.view === 'memories' ? (
-            <MemoriesPanel />
-          ) : current.view === 'documents' ? (
-            <DocumentsPanel currentUser={currentUser} />
-          ) : current.view === 'wiki' ? (
-            <WikiPanel currentUser={currentUser} />
-          ) : current.view === 'wellbeing' ? (
-            <WellbeingPanel currentUser={currentUser} />
-          ) : current.view === 'knowledge_bank' ? (
-            <KnowledgeBankPanel
-              matters={matters}
-              selectedMatterId={selectedMatterId}
-              onMatterChange={handleMatterChange}
-              currentUser={currentUser}
-            />
-          ) : current.view === 'actions' ? (
-            <ActionsPanel matters={matters} currentUser={currentUser} />
-          ) : current.view === 'settings' ? (
-            <SettingsPanel currentUser={currentUser} />
-          ) : (
-            <>
+        <PanelErrorBoundary key={current.view}>
+          <Suspense fallback={<PanelLoading />}>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              {current.view === 'memories' ? (
+                <MemoriesPanel />
+              ) : current.view === 'documents' ? (
+                <DocumentsPanel currentUser={currentUser} />
+              ) : current.view === 'wiki' ? (
+                <WikiPanel currentUser={currentUser} />
+              ) : current.view === 'wellbeing' ? (
+                <WellbeingPanel currentUser={currentUser} />
+              ) : current.view === 'knowledge_bank' ? (
+                <KnowledgeBankPanel
+                  matters={matters}
+                  selectedMatterId={selectedMatterId}
+                  onMatterChange={handleMatterChange}
+                  currentUser={currentUser}
+                />
+              ) : current.view === 'actions' ? (
+                <ActionsPanel matters={matters} currentUser={currentUser} />
+              ) : current.view === 'settings' ? (
+                <SettingsPanel currentUser={currentUser} />
+              ) : (
+                <>
               <header className="z-30 flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-neutral-100 bg-white/80 px-4 py-2 backdrop-blur-md lg:px-6">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <Button
@@ -711,10 +713,11 @@ function App() {
                 sendLabel="Send"
                 userInitials={userInitials}
               />
-            </>
-          )}
-        </div>
-        </Suspense>
+                </>
+              )}
+            </div>
+          </Suspense>
+        </PanelErrorBoundary>
       </main>
     </div>
   )
