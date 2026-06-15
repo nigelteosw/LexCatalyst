@@ -1154,6 +1154,7 @@ type BackendSurveyQuestion = {
   category: SurveyCategory
   order_index: number
   is_active: boolean
+  reverse_scored: boolean
   created_at: string
 }
 
@@ -1164,6 +1165,7 @@ function mapSurveyQuestion(q: BackendSurveyQuestion): SurveyQuestion {
     category: q.category,
     orderIndex: q.order_index,
     isActive: q.is_active,
+    reverseScored: q.reverse_scored,
     createdAt: q.created_at,
   }
 }
@@ -1177,18 +1179,30 @@ export async function createSurveyQuestion(payload: {
   text: string
   category: SurveyCategory
   orderIndex?: number
+  reverseScored?: boolean
 }): Promise<SurveyQuestion> {
   return mapSurveyQuestion(
     await request<BackendSurveyQuestion>('/survey/questions', {
       method: 'POST',
-      body: JSON.stringify({ text: payload.text, category: payload.category, order_index: payload.orderIndex ?? 0 }),
+      body: JSON.stringify({
+        text: payload.text,
+        category: payload.category,
+        order_index: payload.orderIndex ?? 0,
+        reverse_scored: payload.reverseScored ?? false,
+      }),
     }),
   )
 }
 
 export async function updateSurveyQuestion(
   id: string,
-  payload: { text?: string; category?: SurveyCategory; orderIndex?: number; isActive?: boolean },
+  payload: {
+    text?: string
+    category?: SurveyCategory
+    orderIndex?: number
+    isActive?: boolean
+    reverseScored?: boolean
+  },
 ): Promise<SurveyQuestion> {
   return mapSurveyQuestion(
     await request<BackendSurveyQuestion>(`/survey/questions/${id}`, {
@@ -1198,6 +1212,7 @@ export async function updateSurveyQuestion(
         category: payload.category,
         order_index: payload.orderIndex,
         is_active: payload.isActive,
+        reverse_scored: payload.reverseScored,
       }),
     }),
   )
@@ -1224,16 +1239,8 @@ export async function submitSurveyResponses(
 export async function getSurveyResults(): Promise<SurveyResults> {
   const results = await request<{
     current_week_of: string
-    users: Array<{
-      user_id: string
-      full_name: string | null
-      email: string
-      firm_role: FirmRole
-      week_of: string
-      average_score: number | null
-      response_count: number
-      question_count: number
-    }>
+    minimum_cohort_size: number
+    current_cohort_size: number | null
     questions: Array<{
       question_id: string
       question_text: string
@@ -1248,16 +1255,8 @@ export async function getSurveyResults(): Promise<SurveyResults> {
 
   return {
     currentWeekOf: results.current_week_of,
-    users: results.users.map((user) => ({
-      userId: user.user_id,
-      fullName: user.full_name,
-      email: user.email,
-      firmRole: user.firm_role,
-      weekOf: user.week_of,
-      averageScore: user.average_score,
-      responseCount: user.response_count,
-      questionCount: user.question_count,
-    })),
+    minimumCohortSize: results.minimum_cohort_size,
+    currentCohortSize: results.current_cohort_size,
     questions: results.questions.map((question) => ({
       questionId: question.question_id,
       questionText: question.question_text,

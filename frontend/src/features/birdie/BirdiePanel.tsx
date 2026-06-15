@@ -4,7 +4,40 @@ import { useQuery } from '@tanstack/react-query'
 import { listKnowledgeBankEntries, streamBirdieMessage } from '../../shared/api/api'
 import type { KnowledgeBankEntry } from '../../shared/types/workspace'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
+import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import birdieLogo from '../../assets/Birdie.png'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const BIRDIE_HELP: HelpContent = {
+  intro: 'Your personal AI mentor for navigating life as a junior lawyer — ask anything, get straight answers.',
+  steps: [
+    {
+      emoji: '🐦',
+      title: 'Ask tab — live chat',
+      body: 'Type any question you\'d be embarrassed to ask a partner. Birdie answers directly using your firm\'s Knowledge Bank as context, so responses are grounded in your firm\'s actual guidance.',
+    },
+    {
+      emoji: '📋',
+      title: 'Review tab — mentor cards',
+      body: 'Curated tips and prompts based on common junior associate challenges. Browse these when you\'re not sure where to start.',
+    },
+    {
+      emoji: '💡',
+      title: 'Examples tab — KB-backed examples',
+      body: 'Real examples drawn from your firm\'s Knowledge Bank, filtered to entries relevant to your current matter context.',
+    },
+    {
+      emoji: '📈',
+      title: 'Progress tab — skills map',
+      body: 'A visual map of skills and competencies. Use it to identify gaps and ask Birdie targeted questions about areas you want to develop.',
+    },
+  ],
+  tips: [
+    'Birdie uses DeepSeek Flash for fast, conversational responses — it\'s designed for quick back-and-forth, not long-form drafting.',
+    'Birdie is confidential to you. Your questions are not logged or shared with supervisors.',
+    'Drag Birdie anywhere on screen — it remembers its position within the session.',
+  ],
+}
 
 type BirdiePanelProps = {
   isOpen: boolean
@@ -131,7 +164,10 @@ export function BirdiePanel({ isOpen, onToggle, matterId }: BirdiePanelProps) {
           />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-semibold text-[#0f0f0f]">Birdie</div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-[#0f0f0f]">Birdie</span>
+            <FeatureHelp title="Birdie" content={BIRDIE_HELP} size="compact" />
+          </div>
         </div>
         <div className="flex items-center gap-1 text-[10px] font-medium text-[#1a6b4a]">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2d9e6b]" />

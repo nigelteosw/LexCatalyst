@@ -229,6 +229,7 @@ export type SurveyQuestion = {
   category: SurveyCategory
   orderIndex: number
   isActive: boolean
+  reverseScored: boolean
   createdAt: string
 }
 
@@ -245,20 +246,10 @@ export type SurveyQuestionResult = {
   weeks: SurveyWeekResult[]
 }
 
-export type SurveyUserResult = {
-  userId: string
-  fullName?: string | null
-  email: string
-  firmRole: FirmRole
-  weekOf: string
-  averageScore: number | null
-  responseCount: number
-  questionCount: number
-}
-
 export type SurveyResults = {
   currentWeekOf: string
-  users: SurveyUserResult[]
+  minimumCohortSize: number
+  currentCohortSize: number | null
   questions: SurveyQuestionResult[]
 }
 

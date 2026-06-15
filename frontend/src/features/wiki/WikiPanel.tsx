@@ -4,6 +4,38 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '../../shared/ui/Button'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const WIKI_HELP: HelpContent = {
+  intro: 'An AI-generated knowledge graph that maps the key issues, entities, and arguments in your documents into linked wiki pages.',
+  steps: [
+    {
+      emoji: '📄',
+      title: 'Ingest a document',
+      body: 'Open a document and click "Generate wiki". The AI reads the full text and creates structured pages for each major topic — parties, issues, clauses, authorities, and timelines.',
+    },
+    {
+      emoji: '🕸️',
+      title: 'Explore the graph',
+      body: 'The graph view shows how pages link to each other. Click any node to jump to that page. Zoom and drag to navigate large matter maps.',
+    },
+    {
+      emoji: '✏️',
+      title: 'Edit and publish',
+      body: 'Pages start as drafts. Open one, refine the AI\'s output, then change status to "Published" to make it the authoritative version for your matter.',
+    },
+    {
+      emoji: '🔗',
+      title: 'Source citations',
+      body: 'Each page tracks which document chunks, KB entries, and chat messages it was built from. Click "Sources" on a page to see exactly where each fact came from.',
+    },
+  ],
+  tips: [
+    'Wiki pages are not automatically shared — they are private to you by default. Publishing makes them visible to your matter team.',
+    'The graph is especially useful for complex multi-party matters: each counterparty, key issue, and deadline gets its own linked node.',
+    'You can ingest the same document into multiple page types — try Source Summary for a quick overview and then Issue pages for the legal arguments.',
+  ],
+}
 import { StatusBadge } from '../../shared/ui/StatusBadge'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { WikiGraphCanvas } from './WikiGraphCanvas'
@@ -161,6 +193,7 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
           </>
         }
         description="Draft, publish, and browse generated matter knowledge."
+        helpContent={WIKI_HELP}
         icon={GitBranch}
         title="Lex-Wiki"
       />

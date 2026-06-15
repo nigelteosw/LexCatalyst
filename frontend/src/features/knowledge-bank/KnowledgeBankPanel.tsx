@@ -19,7 +19,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Plus,
-  CircleHelp,
+
   RefreshCcw,
   Search,
   ShieldCheck,
@@ -49,6 +49,72 @@ import {
   promoteKnowledgeBankEntry,
   updateKnowledgeBankEntry,
 } from '../../shared/api/api'
+import { FeatureHelp } from '../../shared/ui/FeatureHelp'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const KB_HELP: HelpContent = {
+  intro: 'A searchable library of reusable legal knowledge. The AI draws on it automatically every time you chat.',
+  steps: [
+    {
+      emoji: '📄',
+      title: 'Add from a document',
+      body: 'Go to Documents, upload a PDF or DOCX, and click "Add to KB". The AI reads the full text and formats it into a clean, structured entry.',
+    },
+    {
+      emoji: '✏️',
+      title: 'Create an entry manually',
+      body: 'Click "+ New entry" to write your own playbook, precedent note, or style guide from scratch.',
+    },
+    {
+      emoji: '🔒',
+      title: 'Choose who can see it',
+      body: 'Private — only you. Matter — everyone on that matter. Team — your practice group. Firm-wide — the whole firm (partners only).',
+    },
+    {
+      emoji: '🤖',
+      title: 'The AI uses it automatically',
+      body: 'Every chat message triggers a semantic search over your accessible KB entries. Relevant content is added to the AI\'s context before it answers.',
+    },
+    {
+      emoji: '📤',
+      title: 'Promote matter knowledge firm-wide',
+      body: 'Open an entry and click "Promote". The AI proposes redactions to remove client-identifying information before a lawyer approves the clean version.',
+    },
+  ],
+  roles: [
+    {
+      label: 'Partner',
+      tier: 'top',
+      abilities: [
+        'Create and edit firm-wide entries',
+        'Approve promoted entries from matters',
+        'View all entries across all scopes',
+      ],
+    },
+    {
+      label: 'Senior Associate',
+      tier: 'mid',
+      abilities: [
+        'Create team and matter-scoped entries',
+        'Promote matter entries to firm-wide (partner approves)',
+        'Edit entries in their team and matters',
+      ],
+    },
+    {
+      label: 'Associate',
+      tier: 'base',
+      abilities: [
+        'Create private and matter-scoped entries',
+        'Read firm-wide, team, and matter entries they have access to',
+        'Edit their own entries',
+      ],
+    },
+  ],
+  tips: [
+    'The KB search uses semantic similarity — you don\'t need to use exact words. Ask naturally and the AI finds the relevant knowledge.',
+    'Audit log (partners only) records every edit, promotion, and redaction approval with a timestamp and author.',
+  ],
+}
 import type {
   CurrentUser,
   KnowledgeBankEntry,
@@ -98,7 +164,7 @@ export function KnowledgeBankPanel({
   const [scopeFilter, setScopeFilter] = useState<KnowledgeBankScope | 'all'>('all')
   const [isCreatingEntry, setIsCreatingEntry] = useState(false)
   const [isCreatingMatter, setIsCreatingMatter] = useState(false)
-  const [isHelpOpen, setIsHelpOpen] = useState(false)
+
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [isContextOpen, setIsContextOpen] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
@@ -234,17 +300,9 @@ export function KnowledgeBankPanel({
               <BookMarked size={16} />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-[#0f0f0f]">Knowledge Bank</h2>
-                <button
-                  aria-label="How to use the Knowledge Bank"
-                  className="grid h-5 w-5 place-items-center rounded-full text-[#aaa9a3] transition-colors hover:bg-[#f1f0ed] hover:text-[#666660]"
-                  onClick={() => setIsHelpOpen(true)}
-                  title="How to use the Knowledge Bank"
-                  type="button"
-                >
-                  <CircleHelp size={13} strokeWidth={1.8} />
-                </button>
+                <FeatureHelp title="Knowledge Bank" content={KB_HELP} />
               </div>
               <p className="text-[10px] text-[#8c8c86]">Controlled legal knowledge and precedents</p>
             </div>
@@ -539,59 +597,7 @@ export function KnowledgeBankPanel({
         </Dialog>
       )}
 
-      {isHelpOpen && (
-        <Dialog title="How to use the Knowledge Bank" onClose={() => setIsHelpOpen(false)}>
-          <div className="space-y-4 text-sm leading-6 text-[#5f5f59]">
-            <p>
-              The Knowledge Bank holds reusable legal knowledge. Your uploaded files remain private
-              in Documents until you choose to add them here.
-            </p>
-            <HelpStep
-              number="1"
-              title="Add knowledge"
-              body="Use Add to Knowledge Bank from Documents to generate a cited summary, or create an entry manually."
-            />
-            <HelpStep
-              number="2"
-              title="Choose the right scope"
-              body="Keep an entry private, attach it to a matter, share it with a team, or publish approved knowledge firm-wide."
-            />
-            <HelpStep
-              number="3"
-              title="Review the entry"
-              body="Open a card to read the full content, check source citations, edit the summary, and confirm its context."
-            />
-            <HelpStep
-              number="4"
-              title="Share carefully"
-              body="Matter knowledge is checked for confidential details before promotion. A lawyer must review proposed redactions."
-            />
-          </div>
-        </Dialog>
-      )}
     </section>
-  )
-}
-
-function HelpStep({
-  number,
-  title,
-  body,
-}: {
-  number: string
-  title: string
-  body: string
-}) {
-  return (
-    <div className="flex gap-3 rounded-xl border border-black/8 bg-white p-3.5">
-      <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#ecebe7] text-[11px] font-semibold text-[#666660]">
-        {number}
-      </div>
-      <div>
-        <div className="text-xs font-semibold text-[#20201d]">{title}</div>
-        <p className="mt-0.5 text-xs leading-5 text-[#777770]">{body}</p>
-      </div>
-    </div>
   )
 }
 

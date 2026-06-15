@@ -53,18 +53,37 @@ This matches how legal knowledge actually flows:
 - **Matter** = work product specific to one deal — never visible outside the team working on it.
 - **Private** = your own draft, your own annotations.
 
+### Matter & membership rules
+
+| Action | Who can |
+|---|---|
+| Create a matter | Senior associate or partner (not associates) |
+| View matter list | Partners/admins see all; others see only matters they belong to |
+| View matter detail / member list | Matter members, partners, admins |
+| Edit matter metadata | Partners and admins only |
+| Add / remove matter members | Partners and admins — OR a senior associate who is already a member of that matter |
+| Create a KB `firm_wide` entry | Partners and admins only |
+| KB backfill (operational) | Admins only |
+
 ### Enforcement points
 
 | Layer | Enforced where |
 |---|---|
+| **Matter list** | `list_matters` / `list_teams` add EXISTS subquery filtering to SQL; partners/admins skip the filter. |
+| **Matter detail / members** | `require_matter_member` on GET routes — 403 if not a member (partners/admins exempt). |
+| **Matter edit** | `require_partner_or_admin` on PATCH /matters. |
+| **Member add/remove** | `_require_membership_manager` — partner/admin unconditionally; senior associate only if a member of that matter. |
 | **KB list** | `list_kb_entries` adds a scope-filter WHERE clause built from the user's team and matter memberships. Users literally cannot retrieve entries they don't have access to. |
 | **KB write** | `require_kb_write` on PATCH/DELETE routes. Hidden from the UI as well, but the route enforces. |
 | **KB read (specific)** | `require_kb_read` on the detail route — even if the user knows the UUID, the route returns 403. |
 | **Scope changes** | `require_kb_owner` permits only the creator to change `scope`, `team_id`, or `matter_id`; the service then validates target membership. |
+| **KB firm-wide create** | `require_partner_or_admin` on POST /kb/entries when scope=firm_wide. |
+| **KB redaction detail** | `require_kb_owner` — only entry creator can see original_content. |
+| **KB backfill** | `current_user.is_admin` check on POST /kb/backfill-embeddings. |
 | **Agent tool calls** | Semantic search reuses `_user_kb_scope_filter`, and `get_kb_entry` calls `check_kb_read`. An LLM that hallucinates a UUID cannot fetch private content. |
 | **Survey results** | `require_partner_or_admin`. |
 | **Action creation** | `is_senior_or_above`. |
-| **Action delete** | Assigner or admin only. |
+| **Action delete** | Assignee, assigner, or senior+ only (returns 404 for everyone else, same as not found). |
 
 ## Why these specific design choices
 

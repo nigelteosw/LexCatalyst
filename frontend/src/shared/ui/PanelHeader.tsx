@@ -1,11 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { FeatureHelp } from './FeatureHelp'
+import type { HelpContent } from './FeatureHelp'
 
 type PanelHeaderProps = {
   actions?: ReactNode
   children?: ReactNode
   className?: string
   description?: string
+  helpContent?: HelpContent
   icon?: LucideIcon
   title: string
 }
@@ -15,6 +18,7 @@ export function PanelHeader({
   children,
   className = '',
   description,
+  helpContent,
   icon: Icon,
   title,
 }: PanelHeaderProps) {
@@ -29,7 +33,10 @@ export function PanelHeader({
           </div>
         )}
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-neutral-900">{title}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-sm font-semibold text-neutral-900">{title}</h2>
+            {helpContent && <FeatureHelp title={title} content={helpContent} />}
+          </div>
           {description && (
             <p className="truncate text-xs text-neutral-500">{description}</p>
           )}

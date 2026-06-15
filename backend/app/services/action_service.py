@@ -121,10 +121,16 @@ def update_action_item(
 
 
 def delete_action_item(db: Session, *, user: User, item_id: str) -> bool:
-    """Delete a visible Workboard ticket for any authenticated user."""
-    del user  # Authentication is enforced by the route dependency.
+    """Delete a Workboard ticket. Permitted for assignee, assigner, or senior+."""
+    from app.dependencies import is_senior_or_above
     item = db.get(ActionItem, item_id)
     if not item:
+        return False
+    if not (
+        is_senior_or_above(user)
+        or item.assignee_id == user.id
+        or item.assigner_id == user.id
+    ):
         return False
     db.delete(item)
     db.commit()

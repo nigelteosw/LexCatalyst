@@ -21,6 +21,57 @@ import {
 import type { CurrentUser, SurveyCategory, SurveyQuestion } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const WELLBEING_HELP: HelpContent = {
+  intro: 'A weekly pulse check to help the firm track team health — workload, mental wellbeing, team dynamics, and learning — anonymously.',
+  steps: [
+    {
+      emoji: '📝',
+      title: 'Complete your weekly check-in',
+      body: 'A short set of questions appears each week. Rate each item on a simple scale. It takes under two minutes and resets every Monday.',
+    },
+    {
+      emoji: '🔒',
+      title: 'Your answers are private',
+      body: 'Individual responses are never shown to colleagues. Only your own ratings are visible to you. Partners and admins see team-level averages only.',
+    },
+    {
+      emoji: '📊',
+      title: 'Partners see team trends',
+      body: 'The Results tab (partners and admins only) shows weekly averages across all four categories so leadership can spot burnout risk or engagement drops early.',
+    },
+    {
+      emoji: '❓',
+      title: 'Questions are managed by admins',
+      body: 'Partners and admins can add, edit, enable, or disable questions from the Questions tab. Changes take effect from the next weekly cycle.',
+    },
+  ],
+  roles: [
+    {
+      label: 'Partner / Admin',
+      tier: 'top',
+      abilities: [
+        'View team-level aggregated results and trends',
+        'Add, edit, and toggle survey questions on or off',
+        'See completion rates across the team',
+      ],
+    },
+    {
+      label: 'All team members',
+      tier: 'base',
+      abilities: [
+        'Submit a weekly check-in (one submission per week)',
+        'View your own past responses',
+        'Update your response any time during the week',
+      ],
+    },
+  ],
+  tips: [
+    'The check-in resets every Monday — you can update your response any time before the week ends.',
+    'Skipping a week is fine. There is no pressure to respond every cycle.',
+  ],
+}
 
 type WellbeingPanelProps = {
   currentUser: CurrentUser | null
@@ -43,6 +94,7 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
       <PanelHeader
         className="items-stretch sm:items-center"
         description="Weekly team check-in"
+        helpContent={WELLBEING_HELP}
         icon={ClipboardList}
         title="Wellbeing"
       >
@@ -256,10 +308,6 @@ function ResultsTab() {
     )
   }
 
-  const completedUsers = resultsQuery.data.users.filter(
-    (user) => user.questionCount > 0 && user.responseCount >= user.questionCount,
-  ).length
-
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3 rounded-[12px] border border-[#4a3db0]/15 bg-[#eeecff] px-4 py-3">
@@ -270,69 +318,18 @@ function ResultsTab() {
             month: 'short',
             day: 'numeric',
           })}
-          . {completedUsers} of {resultsQuery.data.users.length} users completed every active question.
+          .{' '}
+          {resultsQuery.data.currentCohortSize === null
+            ? `Results stay hidden until at least ${resultsQuery.data.minimumCohortSize} people respond.`
+            : `${resultsQuery.data.currentCohortSize} people are included in this anonymous cohort.`}
         </p>
       </div>
 
-      <section className="overflow-hidden rounded-[14px] border border-black/10 bg-white">
-        <div className="flex items-center justify-between border-b border-black/8 px-5 py-4">
-          <div>
-            <h3 className="text-sm font-semibold text-[#0f0f0f]">Team dashboard</h3>
-            <p className="mt-0.5 text-[11px] text-[#8c8c86]">Every firm user, including missing check-ins</p>
-          </div>
-          <span className="rounded-full bg-[#f4f3ef] px-2.5 py-1 text-[11px] font-medium text-[#5a5a56]">
-            {resultsQuery.data.users.length} users
-          </span>
-        </div>
-
-        {resultsQuery.data.users.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-[#8c8c86]">No users found.</p>
-        ) : (
-          <div className="divide-y divide-black/8">
-            {resultsQuery.data.users.map((user) => {
-              const isComplete = user.questionCount > 0 && user.responseCount >= user.questionCount
-              const isPartial = user.responseCount > 0 && !isComplete
-              const statusLabel = isComplete ? 'Complete' : isPartial ? 'Partial' : 'Not submitted'
-              const statusClass = isComplete
-                ? 'bg-[#e8f5ee] text-[#1a6b4a]'
-                : isPartial
-                  ? 'bg-[#fff4d6] text-[#8a5a00]'
-                  : 'bg-[#f4f3ef] text-[#777770]'
-
-              return (
-                <div
-                  key={user.userId}
-                  className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_120px_110px] sm:items-center"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-[#171717]">
-                      {user.fullName}
-                    </p>
-                    <p className="truncate text-[11px] text-[#8c8c86] capitalize">
-                      {user.firmRole.replace('_', ' ')}
-                    </p>
-                  </div>
-                  <div className="text-xs text-[#5a5a56] sm:text-right">
-                    {user.averageScore === null ? 'No score' : `${user.averageScore.toFixed(1)}/5 average`}
-                  </div>
-                  <div className="flex items-center gap-2 sm:justify-end">
-                    <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${statusClass}`}>
-                      {statusLabel}
-                    </span>
-                    <span className="text-[10px] text-[#9a9a94]">
-                      {user.responseCount}/{user.questionCount}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </section>
-
       <div>
         <h3 className="text-sm font-semibold text-[#0f0f0f]">Question trends</h3>
-        <p className="mt-0.5 text-[11px] text-[#8c8c86]">Weekly averages across submitted responses</p>
+        <p className="mt-0.5 text-[11px] text-[#8c8c86]">
+          Cohort averages normalized so higher scores always mean greater concern
+        </p>
       </div>
 
       {resultsQuery.data.questions.length === 0 && (
@@ -383,15 +380,23 @@ function ManageQuestionsTab() {
   const [isAdding, setIsAdding] = useState(false)
   const [newText, setNewText] = useState('')
   const [newCategory, setNewCategory] = useState<SurveyCategory>('workload')
+  const [newReverseScored, setNewReverseScored] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [editCategory, setEditCategory] = useState<SurveyCategory>('workload')
+  const [editReverseScored, setEditReverseScored] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const createMutation = useMutation({
-    mutationFn: () => createSurveyQuestion({ text: newText, category: newCategory }),
+    mutationFn: () =>
+      createSurveyQuestion({
+        text: newText,
+        category: newCategory,
+        reverseScored: newReverseScored,
+      }),
     onSuccess: () => {
       setNewText('')
+      setNewReverseScored(false)
       setIsAdding(false)
       setError(null)
       queryClient.invalidateQueries({ queryKey: ['surveyQuestions'] })
@@ -405,12 +410,14 @@ function ManageQuestionsTab() {
       text,
       category,
       isActive,
+      reverseScored,
     }: {
       id: string
       text?: string
       category?: SurveyCategory
       isActive?: boolean
-    }) => updateSurveyQuestion(id, { text, category, isActive }),
+      reverseScored?: boolean
+    }) => updateSurveyQuestion(id, { text, category, isActive, reverseScored }),
     onSuccess: () => {
       setEditingId(null)
       setError(null)
@@ -469,6 +476,14 @@ function ManageQuestionsTab() {
               ))}
             </select>
           </div>
+          <label className="flex items-center gap-2 text-xs text-[#5a5a56]">
+            <input
+              checked={newReverseScored}
+              onChange={(event) => setNewReverseScored(event.target.checked)}
+              type="checkbox"
+            />
+            Positive statement (reverse score in reports)
+          </label>
           <div className="flex gap-2">
             <button
               className="rounded-lg px-3 py-2 text-xs text-[#5a5a56] hover:bg-[#f4f3ef]"
@@ -529,6 +544,14 @@ function ManageQuestionsTab() {
                       ))}
                     </select>
                   </div>
+                  <label className="flex items-center gap-2 text-xs text-[#5a5a56]">
+                    <input
+                      checked={editReverseScored}
+                      onChange={(event) => setEditReverseScored(event.target.checked)}
+                      type="checkbox"
+                    />
+                    Positive statement (reverse score in reports)
+                  </label>
                   <div className="flex gap-2">
                     <button
                       className="rounded-lg px-3 py-1.5 text-xs text-[#5a5a56] hover:bg-[#f4f3ef]"
@@ -540,7 +563,14 @@ function ManageQuestionsTab() {
                     <button
                       className="rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-xs text-white disabled:opacity-50"
                       disabled={!editText.trim() || updateMutation.isPending}
-                      onClick={() => updateMutation.mutate({ id: q.id, text: editText, category: editCategory })}
+                      onClick={() =>
+                        updateMutation.mutate({
+                          id: q.id,
+                          text: editText,
+                          category: editCategory,
+                          reverseScored: editReverseScored,
+                        })
+                      }
                       type="button"
                     >
                       Save changes
@@ -553,6 +583,8 @@ function ManageQuestionsTab() {
                     <p className="text-sm text-[#0f0f0f]">{q.text}</p>
                     <p className="mt-0.5 text-[10px] text-[#9a9a94]">
                       {categoryLabels[q.category as SurveyCategory] ?? q.category}
+                      {' · '}
+                      {q.reverseScored ? 'Reverse scored' : 'Direct scored'}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -574,6 +606,7 @@ function ManageQuestionsTab() {
                         setEditingId(q.id)
                         setEditText(q.text)
                         setEditCategory(q.category as SurveyCategory)
+                        setEditReverseScored(q.reverseScored)
                       }}
                       title="Edit question"
                       type="button"

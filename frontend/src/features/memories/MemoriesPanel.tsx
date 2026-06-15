@@ -16,6 +16,38 @@ import { waitForDelay } from '../../shared/lib/async'
 import { getErrorMessage, isAbortError } from '../../shared/lib/errors'
 import { ErrorBanner } from '../../shared/ui/ErrorBanner'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const MEMORY_HELP: HelpContent = {
+  intro: 'LexCatalyst remembers things about you so every conversation picks up where the last one left off.',
+  steps: [
+    {
+      emoji: '🧠',
+      title: 'Memories are built automatically',
+      body: 'After each chat session, the AI reviews the conversation and saves any new facts, preferences, or context it learned about you — your role, how you like drafts structured, matters you\'re working on.',
+    },
+    {
+      emoji: '💤',
+      title: 'Dream reviews your recent activity',
+      body: 'Click "Dream" to run a one-off memory review right now. Dream merges duplicates, drops stale facts, and proposes updates for you to approve before anything changes.',
+    },
+    {
+      emoji: '✏️',
+      title: 'Edit or delete any memory',
+      body: 'Click the pencil icon on any memory card to correct it, or the bin to remove it. You have full control — the AI only keeps what you allow.',
+    },
+    {
+      emoji: '💬',
+      title: 'Memories shape every answer',
+      body: 'The AI injects your relevant memories into its context before each response, so it knows your seniority level, preferred style, and active matters without you having to repeat yourself.',
+    },
+  ],
+  tips: [
+    'Memories are personal — only you can see them. They are never shared with colleagues or attached to matters.',
+    'Three categories: Semantic (facts), Procedural (how you work), Episodic (what happened in a session).',
+    'If the AI gets something wrong, delete that memory and correct it manually — the AI will pick up the correction in the next session.',
+  ],
+}
 
 const DREAM_POLL_INTERVAL_MS = 1000
 const DREAM_POLL_TIMEOUT_MS = 120_000
@@ -182,6 +214,7 @@ export function MemoriesPanel() {
           </>
         }
         description="Review facts, working preferences, and session context."
+        helpContent={MEMORY_HELP}
         icon={Brain}
         title="User Memory"
       />

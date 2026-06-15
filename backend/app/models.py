@@ -714,6 +714,12 @@ class SurveyQuestion(Base):
     category: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    reverse_scored: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     created_by_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         index=True,

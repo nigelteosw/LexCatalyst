@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
-import random
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -12,6 +11,8 @@ from app.schemas import (
     SurveyResponseCreate,
     SurveyResponseItem,
 )
+
+MINIMUM_COHORT_SIZE = 3
 
 
 def current_week_start() -> datetime:
@@ -45,6 +46,7 @@ def create_survey_question(
         text=schema.text,
         category=schema.category,
         order_index=schema.order_index,
+        reverse_scored=schema.reverse_scored,
         created_by_id=user.id,
     )
     db.add(question)
@@ -119,6 +121,7 @@ def seed_survey_questions(db: Session) -> None:
             category=cat,
             text=text,
             order_index=idx,
+            reverse_scored=cat in {"team_dynamics", "learning"},
         ))
     db.commit()
 
@@ -200,42 +203,41 @@ def submit_survey_responses(
     return len(rows)
 
 
+def _survey_trends_statement():
+    normalized_score = case(
+        (SurveyQuestion.reverse_scored.is_(True), 6 - SurveyResponse.score),
+        else_=SurveyResponse.score,
+    )
+    respondent_count = func.count(func.distinct(SurveyResponse.user_id))
+    return (
+        select(
+            SurveyResponse.question_id,
+            SurveyResponse.week_of,
+            func.avg(normalized_score).label("avg_score"),
+            respondent_count.label("response_count"),
+        )
+        .join(SurveyQuestion, SurveyQuestion.id == SurveyResponse.question_id)
+        .where(SurveyResponse.user_id.is_not(None))
+        .group_by(SurveyResponse.question_id, SurveyResponse.week_of)
+        .having(respondent_count >= MINIMUM_COHORT_SIZE)
+        .order_by(SurveyResponse.question_id, desc(SurveyResponse.week_of))
+    )
+
+
 def get_survey_results(db: Session) -> dict:
     week_of = current_week_start()
     questions = list_survey_questions(db, active_only=False)
-    active_question_count = sum(question.is_active for question in questions)
-    
-    # Redact identities to ensure anonymity as requested.
-    # We fetch all users but shuffle them so the order doesn't match the firm directory.
-    users = list(db.scalars(select(User)))
-    random.shuffle(users)
-    
-    user_rows = db.execute(
-        select(
-            SurveyResponse.user_id,
-            func.avg(SurveyResponse.score).label("average_score"),
-            func.count(SurveyResponse.id).label("response_count"),
-        )
+    current_cohort_size = db.scalar(
+        select(func.count(func.distinct(SurveyResponse.user_id)))
         .join(SurveyQuestion, SurveyQuestion.id == SurveyResponse.question_id)
         .where(
             SurveyResponse.user_id.is_not(None),
             SurveyResponse.week_of == week_of,
             SurveyQuestion.is_active.is_(True),
         )
-        .group_by(SurveyResponse.user_id)
-    ).all()
-    user_scores = {row.user_id: row for row in user_rows}
+    ) or 0
 
-    trend_rows = db.execute(
-        select(
-            SurveyResponse.question_id,
-            SurveyResponse.week_of,
-            func.avg(SurveyResponse.score).label("avg_score"),
-            func.count(SurveyResponse.id).label("response_count"),
-        )
-        .group_by(SurveyResponse.question_id, SurveyResponse.week_of)
-        .order_by(SurveyResponse.question_id, desc(SurveyResponse.week_of))
-    ).all()
+    trend_rows = db.execute(_survey_trends_statement()).all()
     trends_by_question: dict[str, list[dict]] = {}
     for row in trend_rows:
         trends_by_question.setdefault(row.question_id, []).append(
@@ -257,26 +259,11 @@ def get_survey_results(db: Session) -> dict:
     ]
     return {
         "current_week_of": week_of,
-        "users": [
-            {
-                "user_id": f"anon-{i}",
-                "full_name": f"Contributor {i+1}",
-                "email": "redacted@lexcatalyst.local",
-                "firm_role": user.firm_role,
-                "week_of": week_of,
-                "average_score": (
-                    float(user_scores[user.id].average_score)
-                    if user.id in user_scores
-                    else None
-                ),
-                "response_count": (
-                    user_scores[user.id].response_count
-                    if user.id in user_scores
-                    else 0
-                ),
-                "question_count": active_question_count,
-            }
-            for i, user in enumerate(users)
-        ],
+        "minimum_cohort_size": MINIMUM_COHORT_SIZE,
+        "current_cohort_size": (
+            current_cohort_size
+            if current_cohort_size >= MINIMUM_COHORT_SIZE
+            else None
+        ),
         "questions": question_results,
     }

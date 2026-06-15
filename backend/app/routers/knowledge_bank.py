@@ -130,8 +130,10 @@ async def post_kb_entry(
 @router.post("/kb/backfill-embeddings", response_model=KnowledgeBankBackfillResponse)
 async def backfill_kb_embeddings(
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankBackfillResponse:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     try:
         embedded_count, normalized_scope_count, remaining_count = (
             await backfill_missing_kb_embeddings(db)

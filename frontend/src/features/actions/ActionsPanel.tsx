@@ -20,6 +20,67 @@ import { CreateActionDialog } from './components/CreateActionDialog'
 import { Button } from '../../shared/ui/Button'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
 import { useWorkspaceNavigation } from '../../app/routes'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const WORKBOARD_HELP: HelpContent = {
+  intro: 'A shared Kanban board for delegating, tracking, and reviewing legal work across your team.',
+  steps: [
+    {
+      emoji: '📋',
+      title: 'Create a ticket',
+      body: 'Click "+ New action" (senior associates and partners only). Give it a title, set a priority (Low / Medium / High), and assign it to a team member.',
+    },
+    {
+      emoji: '🗂️',
+      title: 'Move it through the columns',
+      body: 'Drag tickets between To Do → In Progress → Review → Done, or use the status menu inside a ticket. The board is shared — everyone can see all tickets.',
+    },
+    {
+      emoji: '📎',
+      title: 'Submit work for review',
+      body: 'Once a ticket reaches Review, the assignee uploads their draft as a PDF. The senior reviewer can then open it, highlight passages, and add redline comments directly in the app.',
+    },
+    {
+      emoji: '✏️',
+      title: 'Redline and annotate',
+      body: 'Seniors highlight text, choose Highlight, Strikethrough, or Suggestion, and leave a note. The junior sees all comments and resolves them one by one.',
+    },
+    {
+      emoji: '✅',
+      title: 'Mark complete',
+      body: 'Once all annotations are resolved, the senior marks the review complete and the ticket moves to Done automatically.',
+    },
+  ],
+  roles: [
+    {
+      label: 'Partner / Senior Associate',
+      tier: 'top',
+      abilities: [
+        'Create and assign tickets to team members',
+        'Move any ticket to any status',
+        'Open submitted PDFs and add redline annotations',
+        'Mark reviews complete or return for rework',
+        'Delete any ticket they assigned or are assigned to',
+      ],
+    },
+    {
+      label: 'Associate',
+      tier: 'base',
+      abilities: [
+        'See all tickets on the board',
+        'Update the status of tickets assigned to them',
+        'Upload a PDF when their ticket reaches Review',
+        'Resolve redline comments left by the senior',
+        'Delete tickets they are the assignee of',
+      ],
+    },
+  ],
+  tips: [
+    'The board is firm-wide — it\'s designed for transparency so everyone can see what\'s in flight.',
+    'Filter by matter using the dropdown in the header to focus on a single case.',
+    'Priority colours: red = High, amber = Medium, grey = Low.',
+  ],
+}
 
 type ActionsPanelProps = {
   matters: Matter[]
@@ -216,6 +277,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           </>
         }
         description="Firm-wide workload. Everyone sees the same board."
+        helpContent={WORKBOARD_HELP}
         icon={CheckSquare}
         title="Workboard"
       />

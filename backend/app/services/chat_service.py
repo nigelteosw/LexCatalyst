@@ -148,12 +148,7 @@ async def _generate_summary(older_messages: list[ChatMessage]) -> str | None:
 
 
 async def _maybe_refresh_summary(db: Session, thread: ChatThread) -> None:
-    """Regenerate and persist the thread summary when enough new messages have been archived.
-
-    Only triggers when the number of archived messages (total minus recent window) has grown
-    by at least _RESUMMARY_THRESHOLD since the last summarization run, preventing a full LLM
-    call on every turn in long threads.
-    """
+    """Regenerate the summary whenever the archived history grows."""
     total = _count_messages(db, thread.id)
     archived = total - _RECENT_LIMIT
     if archived <= 0:

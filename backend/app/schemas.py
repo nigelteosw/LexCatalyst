@@ -460,6 +460,7 @@ class SurveyQuestionCreate(BaseModel):
     text: str = Field(min_length=1, max_length=500)
     category: SurveyCategory
     order_index: int = 0
+    reverse_scored: bool = False
 
 
 class SurveyQuestionUpdate(BaseModel):
@@ -467,6 +468,7 @@ class SurveyQuestionUpdate(BaseModel):
     category: SurveyCategory | None = None
     order_index: int | None = None
     is_active: bool | None = None
+    reverse_scored: bool | None = None
 
 
 class SurveyQuestionResponse(BaseModel):
@@ -475,6 +477,7 @@ class SurveyQuestionResponse(BaseModel):
     category: str
     order_index: int
     is_active: bool
+    reverse_scored: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -508,20 +511,10 @@ class SurveyQuestionResult(BaseModel):
     weeks: list[SurveyWeekResult]
 
 
-class SurveyUserResult(BaseModel):
-    user_id: str
-    full_name: str | None = None
-    email: str
-    firm_role: str
-    week_of: datetime
-    average_score: float | None = None
-    response_count: int
-    question_count: int
-
-
 class SurveyResultsResponse(BaseModel):
     current_week_of: datetime
-    users: list[SurveyUserResult]
+    minimum_cohort_size: int
+    current_cohort_size: int | None
     questions: list[SurveyQuestionResult]
 
 

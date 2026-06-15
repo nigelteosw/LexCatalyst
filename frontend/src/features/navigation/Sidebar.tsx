@@ -68,6 +68,7 @@ export function Sidebar({
 }: SidebarProps) {
   const {
     current,
+    selectHome,
     selectThread,
     selectMemories,
     selectDocuments,
@@ -149,14 +150,19 @@ export function Sidebar({
           {/* Sidebar Header */}
           <div className="border-b border-white/[0.08] px-3.5 pb-3.5 pt-[18px]">
             <div className="mb-4 flex items-center justify-between">
-              <h1 className="flex items-center gap-2.5 text-white">
+              <button
+                aria-label="Go to home dashboard"
+                className="flex items-center gap-2.5 text-white transition-opacity hover:opacity-80"
+                onClick={() => { selectHome(); onClose() }}
+                type="button"
+              >
                 <span className="grid h-[30px] w-[30px] place-items-center rounded-lg border border-white/[0.18] font-serif text-[15px] italic">
                   L
                 </span>
                 <span className="font-serif text-base italic tracking-[-0.01em]">
                   LexCatalyst
                 </span>
-              </h1>
+              </button>
               <button
                 onClick={onClose}
                 aria-label="Close sidebar"

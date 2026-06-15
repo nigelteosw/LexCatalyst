@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user, require_matter_member, require_partner_or_admin
+from app.dependencies import _is_matter_member, get_current_user, is_partner_or_admin, is_senior_or_above, require_matter_member, require_partner_or_admin
 from app.models import User
 from app.schemas import (
     MatterCreate,
@@ -27,6 +27,21 @@ from app.services.organization_service import (
 )
 
 router = APIRouter(tags=["organizations"])
+
+
+def _require_membership_manager(db: Session, user: User, matter_id: str) -> None:
+    """Partners/admins can manage any matter's members.
+    Senior associates can manage members on matters they belong to.
+    Associates cannot manage members at all.
+    """
+    if is_partner_or_admin(user):
+        return
+    if is_senior_or_above(user) and _is_matter_member(db, user.id, matter_id):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Partner access or senior membership on this matter is required",
+    )
 
 
 @router.get("/teams", response_model=list[TeamResponse])
@@ -61,6 +76,8 @@ def post_matter(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MatterResponse:
+    if not is_senior_or_above(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Senior associate or partner access required")
     try:
         return MatterResponse.model_validate(create_matter(db, current_user, schema))
     except SQLAlchemyError as exc:
@@ -126,7 +143,7 @@ def post_matter_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MatterMemberResponse:
-    require_partner_or_admin(current_user)
+    _require_membership_manager(db, current_user, matter_id)
     if not get_matter(db, matter_id):
         raise HTTPException(status_code=404, detail="Matter not found")
     return MatterMemberResponse.model_validate(
@@ -143,7 +160,7 @@ def delete_matter_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    require_partner_or_admin(current_user)
+    _require_membership_manager(db, current_user, matter_id)
     if not remove_matter_member(db, matter_id, user_id):
         raise HTTPException(status_code=404, detail="Matter membership not found")
     return {"status": "ok"}

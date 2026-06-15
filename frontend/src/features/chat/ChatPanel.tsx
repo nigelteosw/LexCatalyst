@@ -3,8 +3,46 @@ import type { FormEvent, ReactNode } from 'react'
 import { AlertCircle, BookMarked, Brain, FileText, LoaderCircle, Paperclip, SendHorizontal, Sparkles, Square, Trash2 } from 'lucide-react'
 import { Button } from '../../shared/ui/Button'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
+import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import type { Message, ToolStep } from '../../shared/types/workspace'
 import lexChatLogo from '../../assets/LexCatalyst.png'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const CHAT_HELP: HelpContent = {
+  intro: 'A matter-aware AI assistant that searches your documents and knowledge bank before every answer.',
+  steps: [
+    {
+      emoji: '💬',
+      title: 'Just ask in plain English',
+      body: 'Type any legal question, ask to draft a clause, summarise a document, or compare two positions. No special syntax needed.',
+    },
+    {
+      emoji: '📎',
+      title: 'Attach a document to the conversation',
+      body: 'Use the paperclip icon to attach an uploaded document. The AI will read the full text and cite specific pages in its answer.',
+    },
+    {
+      emoji: '🔍',
+      title: 'Automatic knowledge retrieval',
+      body: 'Before each response, the AI searches your accessible Knowledge Bank entries and document chunks for relevant context — without you having to ask.',
+    },
+    {
+      emoji: '⚖️',
+      title: 'Choose your model',
+      body: 'Switch between DeepSeek Flash (fast, great for drafting and quick questions) and DeepSeek Pro (slower, better for complex legal reasoning) in the header dropdown.',
+    },
+    {
+      emoji: '🗂️',
+      title: 'Thread history',
+      body: 'Every conversation is saved. Browse previous threads in the sidebar. Switch to a matter context to keep case-specific conversations scoped to that matter.',
+    },
+  ],
+  tips: [
+    'The AI can hallucinate. Always verify cited page references against the source document before relying on them.',
+    'For the best results, upload the relevant document first, then ask your question — the AI will cite exact passages.',
+    'Thread summaries are stored and used in later sessions so the AI remembers the context of long-running matters.',
+  ],
+}
 
 export type ChatPanelProps = {
   attachmentStatus?: string | null
@@ -119,11 +157,14 @@ export function ChatPanel({
                   src={lexChatLogo}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <h3 className="text-xl font-semibold text-neutral-900">Welcome to LexChat</h3>
                 <p className="text-sm text-neutral-500 max-w-sm">
                   I can help you analyze legal documents, research case law, or draft professional correspondence.
                 </p>
+                <div className="flex justify-center">
+                  <FeatureHelp title="LexChat" content={CHAT_HELP} />
+                </div>
               </div>
             </div>
           )}

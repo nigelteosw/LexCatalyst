@@ -27,6 +27,43 @@ import {
 import type { CurrentUser, WorkspaceDocument } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
 import { DocumentDrawer } from './DocumentDrawer'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const DOCUMENTS_HELP: HelpContent = {
+  intro: 'Upload PDFs and Word documents so the AI can read, search, and cite them in chat.',
+  steps: [
+    {
+      emoji: '📎',
+      title: 'Upload a document',
+      body: 'Drag a PDF or DOCX file onto this panel, or click the upload area. Files up to 25 MB are supported.',
+    },
+    {
+      emoji: '⚙️',
+      title: 'Processing happens automatically',
+      body: 'LexCatalyst extracts the text, splits it into chunks, and builds a semantic search index. This usually takes under 30 seconds.',
+    },
+    {
+      emoji: '💬',
+      title: 'Chat with your documents',
+      body: 'Switch to the Chat panel and ask any question. The AI will find the relevant passages and cite them with page numbers.',
+    },
+    {
+      emoji: '📚',
+      title: 'Add to Knowledge Bank',
+      body: 'Click "Add to KB" on a ready document to create a structured, searchable Knowledge Bank entry that the AI uses for every future conversation.',
+    },
+    {
+      emoji: '🔍',
+      title: 'Click a document to preview',
+      body: 'Click any document row to open a side panel with an inline PDF preview, document comments, and download options.',
+    },
+  ],
+  tips: [
+    'Documents belong to you personally — colleagues can comment but cannot rename or delete your files.',
+    'Scanned PDFs are supported via OCR fallback, though text quality depends on scan quality.',
+    'If processing fails, delete and re-upload. Common causes are password-protected PDFs or corrupted files.',
+  ],
+}
 
 export function DocumentsPanel({ currentUser }: { currentUser: CurrentUser | null }) {
   const { current, selectDocuments, selectKnowledgeBank } = useWorkspaceNavigation()
@@ -221,6 +258,7 @@ export function DocumentsPanel({ currentUser }: { currentUser: CurrentUser | nul
           </Button>
         }
         description="Upload PDF or DOCX files for semantic chat search."
+        helpContent={DOCUMENTS_HELP}
         icon={FileText}
         title="Documents"
       />

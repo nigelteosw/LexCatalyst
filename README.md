@@ -31,8 +31,8 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ### Wellbeing — Weekly Team Check-ins
 - Survey responses are linked to the submitting user and upserted per user, question, and week.
 - `POST /survey/responses/batch` submits one authenticated user's complete check-in in a single transaction; partner/admin access is still required for `/survey/results` and question management routes.
-- Partners/admins can view every user’s completion state and average score, create questions, and toggle questions on/off.
-- All authenticated users can submit. Existing responses from before migration `n1c2d3e4f5a6` remain aggregate-only.
+- Partners/admins see only normalized question-level aggregates with at least three respondents; no per-user results are returned.
+- All authenticated users can submit. Existing responses without a user ID are excluded from cohort reports.
 
 ### Workboard — Task Delegation
 - Kanban-style board (To Do / In Progress / Review / Done) with priority pills.
@@ -367,6 +367,7 @@ The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`.
 | `p1e2f3a4b5c6` | Adds document comments | No |
 | `q2f3a4b5c6d7` | Adds review handoffs, structured findings, and active handoff links on actions | No |
 | `r3a4b5c6d7e8` | Adds durable review-handoff worker claim fields | No |
+| `u6d7e8f9a0b1` | Adds explicit reverse scoring for positively worded survey questions | No |
 
 `h5c6d7e8f9a0` intentionally removes historical read/share/redaction audit rows.
 Knowledge and document records are unaffected.

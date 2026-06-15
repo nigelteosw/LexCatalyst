@@ -1,6 +1,6 @@
 # Wellbeing — Weekly Team Check-ins
 
-> A weekly survey with a partner dashboard showing every user's completion state and average score.
+> A weekly survey with partner-visible trends released only for sufficiently large cohorts.
 
 ## The lawyer's problem
 
@@ -32,11 +32,11 @@ Any of those outcomes makes the survey useless for the firm and dangerous for th
 
 ## What we built
 
-A weekly survey linked to each submitting user, plus a partner-facing team dashboard and aggregate trends.
+A weekly survey linked to each submitting user for duplicate prevention, plus partner-facing aggregate trends that never return per-person results.
 
 ### Identified weekly responses
 
-The `survey_responses` table stores `user_id` for new submissions. A unique constraint on `(user_id, question_id, week_of)` means resubmitting updates the weekly answer instead of inflating aggregate counts. Rows created before migration `n1c2d3e4f5a6` keep a null `user_id` and remain visible only in aggregate trends.
+The `survey_responses` table stores `user_id` for new submissions. A unique constraint on `(user_id, question_id, week_of)` means resubmitting updates the weekly answer instead of inflating aggregate counts. Reporting never returns these identifiers, and rows without a user ID are excluded because they cannot contribute to a verified cohort size.
 
 ```sql
 CREATE TABLE survey_responses (
@@ -55,15 +55,16 @@ CREATE TABLE survey_responses (
 | Tab | Who sees it |
 |---|---|
 | **My check-in** | All users. A weekly form with a 1–5 slider per active question. A second submission updates that week's answers. |
-| **Results** | Partners + admins. Every firm user, completion state, current-week average, and weekly aggregates per question. |
-| **Manage questions** | Partners + admins. Create, edit, toggle questions on/off, group by category (workload, mental health, team dynamics, learning). |
+| **Results** | Partners + admins. Weekly aggregates per question, released only when at least three people responded. |
+| **Manage questions** | Partners + admins. Create, edit, toggle questions, and mark positive statements for reverse scoring. |
 
 ## Why these specific design choices
 
 | Choice | Why for lawyers |
 |---|---|
 | **One answer per user/question/week** | Prevents repeat submissions from skewing the dashboard while still allowing a user to correct an answer. |
-| **Every user is listed** | Partners can distinguish a missing check-in from a low team response rate and follow up directly. |
+| **Minimum cohort of three** | Prevents a partner from identifying an individual score in a small or incomplete response group. |
+| **Explicit scoring direction** | Positive statements are reverse scored so a higher reported score always means greater concern. |
 | **Weekly, not real-time** | Burnout is a trend, not a moment. Aggregating weekly smooths out the "I had one bad day" signal and surfaces the "this team is in trouble" signal. |
 | **Category grouping** | Lets partners look at workload separately from team dynamics. The same week could show "workload OK, team dynamics terrible" — different interventions. |
 | **Partners can edit questions** | The firm's burnout drivers change. The questions should change with them. Locking the question set defeats the point of surveying. |
@@ -94,11 +95,11 @@ POST /survey/responses (one per question)
 GET /survey/results          (RBAC: partner or admin)
         │
         ▼
-[Current-week user dashboard + per-question weekly aggregation]
-        │   SELECT week_of, AVG(score), COUNT(*)
+[Per-question weekly cohort aggregation]
+        │   SELECT week_of, AVG(CASE ...), COUNT(DISTINCT user_id)
         │   FROM survey_responses
-        │   WHERE question_id = ?
         │   GROUP BY week_of
+        │   HAVING COUNT(DISTINCT user_id) >= 3
         ▼
 [Frontend renders one bar chart per question]
 ```
@@ -109,28 +110,28 @@ GET /survey/results          (RBAC: partner or admin)
 |---|---|
 | Submit response | Any authenticated user |
 | Create / edit questions | Partner or admin |
-| View user dashboard and aggregate results | Partner or admin |
+| View aggregate results | Partner or admin |
 
 The API enforces this via `require_partner_or_admin`.
 
 ## What this is NOT
 
 - **It's not a clinical mental-health intervention.** If a junior is in crisis, a weekly form is not enough. The firm's actual mental-health resources (EAP, etc.) sit outside this product.
-- **It's not anonymous.** Partners and admins can see each user's completion and average score. The UI tells users this before submission.
+- **It's not anonymous at rest.** User IDs remain stored to enforce one response per question per week, but the reporting API returns no per-user records.
 - **It's not a substitute for 1:1s.** The survey surfaces patterns. A human still needs to act on them.
 
 ## Limitations
 
 - No question-level pagination — surveys with 20+ questions would be a chore. We don't currently warn partners about question fatigue.
 - The current form submits every active question using a default score of 3 when the slider was not changed.
-- Existing rows created before migration `n1c2d3e4f5a6` cannot be linked back to a user and appear only in aggregate trends.
+- Existing rows created before migration `n1c2d3e4f5a6` cannot prove cohort size and are excluded from reports.
 
 ## Where it lives in the code
 
 | Concern | Path |
 |---|---|
 | Service | `backend/app/services/survey_service.py` |
-| Migrations | `backend/migrations/versions/d1e2f3a4b5c6_add_rbac_survey_actions.py`, `backend/migrations/versions/n1c2d3e4f5a6_identify_survey_responses.py` |
+| Migrations | `backend/migrations/versions/d1e2f3a4b5c6_add_rbac_survey_actions.py`, `backend/migrations/versions/n1c2d3e4f5a6_identify_survey_responses.py`, `backend/migrations/versions/u6d7e8f9a0b1_add_survey_scoring_direction.py` |
 | Routes | `backend/app/routers/surveys.py` → `/survey/*` |
 | Frontend panel | `frontend/src/features/wellbeing/WellbeingPanel.tsx` |
 | Model | `backend/app/models.py` → `SurveyQuestion`, `SurveyResponse` |

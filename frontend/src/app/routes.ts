@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
+type HomeView = { view: 'home' }
 type ChatView = { view: 'chat'; threadId: string | null }
 type WikiView = { view: 'wiki'; pageId: string | null }
 type DocumentsView = { view: 'documents'; documentId: string | null }
@@ -11,6 +12,7 @@ type ActionsView = { view: 'actions'; actionId: string | null }
 type SettingsView = { view: 'settings' }
 
 export type AppView =
+  | HomeView
   | ChatView
   | WikiView
   | DocumentsView
@@ -37,10 +39,13 @@ function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute:
   const segments = pathname.split('/').filter(Boolean)
   const [section, rawId] = segments
   const id = decodeSegment(rawId)
-  if (segments.length > 2) return { current: { view: 'chat', threadId: null }, isKnownRoute: false }
+  if (segments.length > 2) return { current: { view: 'home' }, isKnownRoute: false }
 
-  if (!section || section === 'chat') {
-    return { current: { view: 'chat', threadId: id }, isKnownRoute: !section || segments.length <= 2 }
+  if (!section || section === 'home') {
+    return { current: { view: 'home' }, isKnownRoute: true }
+  }
+  if (section === 'chat') {
+    return { current: { view: 'chat', threadId: id }, isKnownRoute: segments.length <= 2 }
   }
   if (section === 'documents') {
     return { current: { view: 'documents', documentId: id }, isKnownRoute: true }
@@ -63,7 +68,7 @@ function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute:
   if (section === 'wiki') {
     return { current: { view: 'wiki', pageId: id }, isKnownRoute: true }
   }
-  return { current: { view: 'chat', threadId: null }, isKnownRoute: false }
+  return { current: { view: 'home' }, isKnownRoute: false }
 }
 
 function routeWithId(base: string, id?: string | null) {
@@ -86,6 +91,10 @@ export function useWorkspaceNavigation() {
   return {
     current,
     isKnownRoute,
+    selectHome: useCallback(
+      (options?: NavigationOptions) => go('/home', options),
+      [go],
+    ),
     startNewChat: useCallback(
       (options?: NavigationOptions) => go('/chat', options),
       [go],

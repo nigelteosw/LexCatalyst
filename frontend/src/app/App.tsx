@@ -55,6 +55,9 @@ const BirdiePanel = lazy(() =>
 const SettingsPanel = lazy(() =>
   import('../features/settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })),
 )
+const HomePanel = lazy(() =>
+  import('../features/home/HomePanel').then((module) => ({ default: module.HomePanel })),
+)
 
 type ActiveStream = {
   threadId: string | null
@@ -582,7 +585,13 @@ function App() {
         <PanelErrorBoundary key={current.view}>
           <Suspense fallback={<PanelLoading />}>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              {current.view === 'memories' ? (
+              {current.view === 'home' ? (
+                <HomePanel
+                  currentUser={currentUser}
+                  matters={matters}
+                  onMatterChange={handleMatterChange}
+                />
+              ) : current.view === 'memories' ? (
                 <MemoriesPanel />
               ) : current.view === 'documents' ? (
                 <DocumentsPanel currentUser={currentUser} />
@@ -724,8 +733,9 @@ function App() {
 }
 
 function mobileViewTitle(view: import('./routes').AppView['view']) {
-  if (view === 'chat') return 'LexChat'
-  const labels = {
+  const labels: Partial<Record<typeof view, string>> = {
+    home: 'Home',
+    chat: 'LexChat',
     actions: 'Workboard',
     documents: 'Documents',
     knowledge_bank: 'Knowledge Bank',
@@ -734,7 +744,7 @@ function mobileViewTitle(view: import('./routes').AppView['view']) {
     wellbeing: 'Wellbeing',
     wiki: 'Lex-Wiki',
   }
-  return labels[view]
+  return labels[view] ?? 'LexCatalyst'
 }
 
 function PanelLoading() {

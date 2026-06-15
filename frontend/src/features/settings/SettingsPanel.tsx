@@ -10,6 +10,51 @@ import {
 import type { CurrentUser, FirmRole } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
+import type { HelpContent } from '../../shared/ui/FeatureHelp'
+
+const SETTINGS_HELP: HelpContent = {
+  intro: 'Manage your profile, firm role, and the team roster for your workspace.',
+  steps: [
+    {
+      emoji: '🪪',
+      title: 'Your firm role',
+      body: 'Your role — Associate, Senior Associate, or Partner — controls what you can create, manage, and approve across LexCatalyst. Admins can change your role from here.',
+    },
+    {
+      emoji: '👥',
+      title: 'Firm roster',
+      body: 'The roster lists everyone in your firm. Admins can change any user\'s role. This is how you onboard a new senior or promote an associate.',
+    },
+    {
+      emoji: '🧪',
+      title: 'Demo users',
+      body: 'Use "Add demo users" to create Sarah Chen (Senior Associate) and Jane Pereira (Associate) for testing. "Remove demo users" cleans them up afterwards.',
+    },
+  ],
+  roles: [
+    {
+      label: 'Admin',
+      tier: 'top',
+      abilities: [
+        'Change any user\'s firm role',
+        'Add and remove demo users',
+        'Access all firm-wide data and settings',
+      ],
+    },
+    {
+      label: 'All users',
+      tier: 'base',
+      abilities: [
+        'View the firm roster',
+        'See their own current role',
+      ],
+    },
+  ],
+  tips: [
+    'Only users with the Admin flag can change roles. The Admin flag is managed outside the app — contact your firm\'s LexCatalyst administrator.',
+    'Role changes take effect immediately — the user does not need to log out and back in.',
+  ],
+}
 import { userLabel } from '../actions/config'
 
 type SettingsPanelProps = {
@@ -66,6 +111,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]">
       <PanelHeader
         description="Profile and workspace access"
+        helpContent={SETTINGS_HELP}
         icon={Settings}
         title="Settings"
       />

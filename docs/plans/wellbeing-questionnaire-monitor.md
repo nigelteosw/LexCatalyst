@@ -1,6 +1,6 @@
 # Plan: Wellbeing questionnaire polish + team monitor
 
-> Superseded in part on June 14, 2026: survey responses are now linked to users and the Results tab includes every firm user. Any remaining questionnaire polish or monitor work must build on the identified response model introduced by migration `n1c2d3e4f5a6`; the anonymous and k-anonymity requirements below no longer apply.
+> Superseded in part on June 15, 2026: reporting no longer returns per-user results and suppresses cohorts below three respondents. Any future monitor must preserve that minimum-cohort boundary.
 
 ## Why
 
