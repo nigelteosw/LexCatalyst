@@ -119,11 +119,16 @@ def _extract_pdf_ocr(file_bytes: bytes) -> list[TextBlock]:
 def extract_docx_blocks(file_bytes: bytes) -> list[TextBlock]:
     try:
         document = DocxDocument(BytesIO(file_bytes))
-        paragraphs = [paragraph.text.strip() for paragraph in document.paragraphs]
+        parts = [p.text.strip() for p in document.paragraphs]
+        for table in document.tables:
+            for row in table.rows:
+                row_text = " | ".join(c.text.strip() for c in row.cells if c.text.strip())
+                if row_text:
+                    parts.append(row_text)
     except Exception as exc:
         raise IngestionError(f"DOCX text extraction failed: {exc}") from exc
 
-    text = "\n\n".join(paragraph for paragraph in paragraphs if paragraph)
+    text = "\n\n".join(p for p in parts if p)
     if not text:
         raise IngestionError("No readable text was found in the DOCX")
     return [TextBlock(text=text, page_number=None)]
@@ -177,5 +182,5 @@ def normalize_text(text: str) -> str:
 
 def make_citation_label(filename: str, page_number: int | None, chunk_index: int) -> str:
     if page_number is not None:
-        return f"{filename} p. {page_number} chunk {chunk_index + 1}"
-    return f"{filename} chunk {chunk_index + 1}"
+        return f"{filename} p. {page_number} ({chunk_index + 1})"
+    return f"{filename} ({chunk_index + 1})"

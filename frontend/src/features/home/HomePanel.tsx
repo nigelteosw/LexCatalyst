@@ -16,7 +16,6 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import {
-  getReviewsWaitingCount,
   listActionItems,
   listChatThreads,
   listDocuments,
@@ -87,7 +86,7 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
 
         {/* Inline stat strip */}
         <div className="mt-6 flex flex-wrap gap-x-10 gap-y-4">
-          <ReviewsStat onClick={() => nav.selectActions()} />
+          <ReviewsStat currentUser={currentUser} onClick={() => nav.selectActions()} />
           <OpenTicketsStat currentUser={currentUser} onClick={() => nav.selectActions()} />
           {isPartnerOrAdmin && <WellbeingStat onClick={() => nav.selectWellbeing()} />}
           {isSeniorOrAbove && !isPartnerOrAdmin && (
@@ -205,9 +204,11 @@ function Stat({
   )
 }
 
-function ReviewsStat({ onClick }: { onClick: () => void }) {
-  const q = useQuery({ queryKey: ['reviewsWaiting'], queryFn: getReviewsWaitingCount, staleTime: 30_000 })
-  const count = q.data ?? 0
+function ReviewsStat({ currentUser, onClick }: { currentUser: CurrentUser | null; onClick: () => void }) {
+  const q = useQuery({ queryKey: ['actions'], queryFn: listActionItems, staleTime: 30_000 })
+  const count = (q.data ?? []).filter(
+    (a: ActionItem) => a.assignerId === currentUser?.id && a.status === 'review',
+  ).length
   return <Stat value={q.isPending ? '…' : String(count)} label="Reviews waiting" active={count > 0} onClick={onClick} />
 }
 

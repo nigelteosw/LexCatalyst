@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Document, DocumentChunk
 from app.providers.embedding_provider import embed_texts
+from app.services.document_service import document_access_filter
 
 
 @dataclass(frozen=True)
@@ -18,15 +19,6 @@ class DocumentSearchResult:
     citation_label: str
 
 
-def has_ready_documents(db: Session, user_id: str) -> bool:
-    stmt = (
-        select(func.count(Document.id))
-        .where(Document.user_id == user_id, Document.status == "ready")
-        .limit(1)
-    )
-    return (db.scalar(stmt) or 0) > 0
-
-
 async def search_documents(
     db: Session,
     *,
@@ -35,7 +27,7 @@ async def search_documents(
     matter_id: str | None = None,
     limit: int = 6,
 ) -> list[DocumentSearchResult]:
-    if not query.strip() or not has_ready_documents(db, user_id):
+    if not query.strip():
         return []
 
     query_embedding = (await embed_texts([query]))[0]
@@ -43,7 +35,7 @@ async def search_documents(
     stmt = (
         select(DocumentChunk, Document, distance)
         .join(Document, DocumentChunk.document_id == Document.id)
-        .where(Document.user_id == user_id, Document.status == "ready")
+        .where(document_access_filter(user_id), Document.status == "ready")
     )
     if matter_id:
         stmt = stmt.where(Document.matter_id == matter_id)

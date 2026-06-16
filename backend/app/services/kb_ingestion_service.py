@@ -73,16 +73,19 @@ def create_pending_kb_entry(
         existing.embedding_content_hash = None
         existing.processing_started_at = None
         existing.processing_attempts = 0
+        existing.matter_id = document.matter_id
+        existing.team_id = document.team_id
+        existing.scope = "matter" if document.matter_id else "private"
         db.commit()
         db.refresh(existing)
         sync_metadata_safe(db, sync_kb_metadata, existing)
         return existing
 
     entry = KnowledgeBankEntry(
-        team_id=None,
-        matter_id=None,
+        team_id=document.team_id,
+        matter_id=document.matter_id,
         source_document_id=document.id,
-        scope="private",
+        scope="matter" if document.matter_id else "private",
         entry_type="knowledge_bank",
         title=document.filename,
         body_markdown="",
@@ -277,12 +280,12 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         entry.processing_started_at = None
         entry.version += 1
         db.commit()
+        sync_metadata_safe(db, sync_kb_metadata, entry)
     except Exception as exc:  # noqa: BLE001
         db.rollback()
         _mark_failed(claim, f"Unexpected error: {exc}")
     finally:
         db.close()
-    sync_metadata_safe(db, sync_kb_metadata, entry)
 
 
 def _mark_failed(claim: WorkerClaim, message: str) -> None:
@@ -303,9 +306,9 @@ def _mark_failed(claim: WorkerClaim, message: str) -> None:
         entry.error_message = message[:MAX_ERROR_LENGTH]
         entry.processing_started_at = None
         db.commit()
+        sync_metadata_safe(db, sync_kb_metadata, entry)
     finally:
         db.close()
-    sync_metadata_safe(db, sync_kb_metadata, entry)
 
 
 # --- Prompt building -----------------------------------------------------

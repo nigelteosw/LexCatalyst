@@ -13,7 +13,6 @@ import {
   ExternalLink,
   FileCheck2,
   FileText,
-  GitBranch,
   History,
   LoaderCircle,
   PanelRightClose,
@@ -41,11 +40,9 @@ import {
   fetchDocumentFile,
   getKnowledgeBankEntry,
   getKnowledgeBankEntryStatuses,
-  getKbGraph,
   getRedactionProposal,
   listKnowledgeBankAuditLog,
   listKnowledgeBankEntryPage,
-  listKnowledgeBankEntrySources,
   promoteKnowledgeBankEntry,
   updateKnowledgeBankEntry,
 } from '../../shared/api/api'
@@ -124,7 +121,6 @@ import type {
   RedactionProposal,
 } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
-import { WikiGraphCanvas } from '../wiki/WikiGraphCanvas'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { Button } from '../../shared/ui/Button'
 import { Dialog } from '../../shared/ui/Dialog'
@@ -659,14 +655,6 @@ function KnowledgeBankReader({
     }
   }
 
-  const sourcesQuery = useQuery({
-    queryKey: ['kbEntrySources', entry.id],
-    queryFn: () => listKnowledgeBankEntrySources(entry.id),
-  })
-  const graphQuery = useQuery({
-    queryKey: ['kbGraph'],
-    queryFn: getKbGraph,
-  })
   const saveMutation = useMutation({
     mutationFn: () =>
       updateKnowledgeBankEntry(entry.id, {
@@ -686,11 +674,9 @@ function KnowledgeBankReader({
     setIsEditing(true)
   }
 
-  const knowledgeEntryIds = new Set(entries.map((item) => item.id))
-
   return (
-    <div className="app-scroll-region flex min-h-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
-      <main className="bg-white px-4 py-5 sm:px-5 lg:px-8 lg:py-7 xl:min-h-0 xl:overflow-y-auto">
+    <div className="app-scroll-region flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <main className="bg-white px-4 py-5 sm:px-5 lg:px-8 lg:py-7">
         <article className="mx-auto max-w-4xl">
           <button
             className="mb-5 inline-flex items-center gap-1.5 text-xs font-medium text-[#777770] hover:text-[#0f0f0f]"
@@ -771,7 +757,21 @@ function KnowledgeBankReader({
             ) : (
               <span className="text-xs text-[#8c8c86]">Read-only access</span>
             )}
+            {entry.sourceDocumentId && (
+              <button
+                className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-medium text-[#5a5a56] hover:border-black/20 hover:bg-[#f7f6f3] disabled:opacity-50"
+                disabled={docPreviewLoading}
+                onClick={() => void openSourceDocument()}
+                type="button"
+              >
+                {docPreviewLoading ? <LoaderCircle size={13} className="animate-spin" /> : <ExternalLink size={13} />}
+                {docPreviewLoading ? 'Loading...' : 'View source PDF'}
+              </button>
+            )}
           </div>
+          {docPreviewError && (
+            <p className="mt-2 text-xs text-red-600">{docPreviewError}</p>
+          )}
           {saveMutation.isError && (
             <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
               {getErrorMessage(saveMutation.error)}
@@ -835,74 +835,6 @@ function KnowledgeBankReader({
         </div>
       )}
 
-      <aside className="border-t border-black/10 bg-[#f8f8f6] xl:min-h-0 xl:overflow-y-auto xl:border-l xl:border-t-0">
-        <div className="space-y-6 p-4">
-          {entry.sourceDocumentId && (
-            <section>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#777770]">
-                Source document
-              </div>
-              {docPreviewError && (
-                <p className="mb-2 text-xs text-red-600">{docPreviewError}</p>
-              )}
-              <button
-                className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-medium text-[#5a5a56] hover:border-black/20 hover:bg-[#f7f6f3] disabled:opacity-50"
-                disabled={docPreviewLoading}
-                onClick={() => void openSourceDocument()}
-                type="button"
-              >
-                {docPreviewLoading
-                  ? <LoaderCircle size={13} className="animate-spin" />
-                  : <ExternalLink size={13} />}
-                {docPreviewLoading ? 'Loading...' : 'View source PDF'}
-              </button>
-            </section>
-          )}
-
-          <section>
-            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#777770]">
-              <GitBranch size={13} />
-              Graph
-            </div>
-            <WikiGraphCanvas
-              activePageId={entry.id}
-              graph={graphQuery.data ?? { nodes: [], edges: [] }}
-              onSelectPage={(id) => {
-                if (knowledgeEntryIds.has(id)) onSelectEntry(id)
-              }}
-            />
-          </section>
-
-          <section>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#777770]">
-              Source citations
-            </div>
-            {(sourcesQuery.data ?? []).length > 0 ? (
-              <div className="space-y-2">
-                {(sourcesQuery.data ?? []).map((source) => (
-                  <div key={source.id} className="rounded-xl border border-black/10 bg-white p-3">
-                    <div className="text-xs font-semibold text-[#222]">{source.citationLabel}</div>
-                    {source.relevanceNote && (
-                      <div className="mt-1 text-xs leading-5 text-[#777770]">
-                        {source.relevanceNote}
-                      </div>
-                    )}
-                    {source.snippet && (
-                      <div className="mt-2 max-h-36 overflow-y-auto rounded-lg bg-[#f5f5f2] p-2.5 text-xs leading-5 text-[#666660]">
-                        {source.snippet}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-black/10 bg-white px-3 py-5 text-center text-xs text-[#888881]">
-                No source citations for this entry.
-              </div>
-            )}
-          </section>
-        </div>
-      </aside>
     </div>
   )
 }

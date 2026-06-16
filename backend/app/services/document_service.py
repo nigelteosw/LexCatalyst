@@ -4,11 +4,11 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Document, DocumentChunk
+from app.models import Document, DocumentChunk, MatterMember
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
     IngestionError,
@@ -108,7 +108,18 @@ def _extract_text_blocks_with_timeout(
 
 
 def document_access_filter(user_id: str):
-    return Document.user_id == user_id
+    return or_(
+        Document.user_id == user_id,
+        and_(
+            Document.matter_id.is_not(None),
+            exists(
+                select(MatterMember.id).where(
+                    MatterMember.matter_id == Document.matter_id,
+                    MatterMember.user_id == user_id,
+                )
+            ),
+        ),
+    )
 
 
 def can_access_document(
@@ -117,7 +128,16 @@ def can_access_document(
     user_id: str,
     document: Document,
 ) -> bool:
-    return document.user_id == user_id
+    if document.user_id == user_id:
+        return True
+    if document.matter_id:
+        return db.scalar(
+            select(MatterMember.id).where(
+                MatterMember.matter_id == document.matter_id,
+                MatterMember.user_id == user_id,
+            )
+        ) is not None
+    return False
 
 
 async def create_pending_document(
@@ -326,12 +346,12 @@ async def process_document(claim: WorkerClaim) -> None:
         document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
         db.commit()
+        sync_metadata_safe(db, sync_document_metadata, document)
     except Exception as exc:  # noqa: BLE001 - persist worker failures
         db.rollback()
         _mark_document_failed(claim, f"Document persistence failed: {exc}")
     finally:
         db.close()
-    sync_metadata_safe(db, sync_document_metadata, document)
 
 
 def _mark_document_failed(claim: WorkerClaim, message: str) -> None:
@@ -353,9 +373,9 @@ def _mark_document_failed(claim: WorkerClaim, message: str) -> None:
         document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
         db.commit()
+        sync_metadata_safe(db, sync_document_metadata, document)
     finally:
         db.close()
-    sync_metadata_safe(db, sync_document_metadata, document)
 
 
 def list_user_documents(

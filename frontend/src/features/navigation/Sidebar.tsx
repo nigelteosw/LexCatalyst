@@ -19,7 +19,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteChatThread,
-  getReviewsWaitingCount,
+  listActionItems,
   renameChatThread,
 } from '../../shared/api/api'
 import type { ChatThread, Matter } from '../../shared/types/workspace'
@@ -83,16 +83,16 @@ export function Sidebar({
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
 
-  // Poll the "reviews waiting for you" count so the Workboard badge stays
-  // current as juniors submit work. Refetches every 30s and on window focus.
-  const reviewsWaiting = useQuery({
-    queryKey: ['reviewsWaiting'],
-    queryFn: getReviewsWaitingCount,
+  // Keep the Workboard badge aligned with the board: count tickets that are
+  // still active, not just review handoffs.
+  const actionsQuery = useQuery({
+    queryKey: ['actions'],
+    queryFn: listActionItems,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     staleTime: 15_000,
   })
-  const reviewBadge = reviewsWaiting.data ?? 0
+  const pendingTaskCount = (actionsQuery.data ?? []).filter((item) => item.status !== 'done').length
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -300,12 +300,12 @@ export function Sidebar({
             >
               <CheckSquare size={14} />
               <span className="flex-1 text-left">Workboard</span>
-              {reviewBadge > 0 && (
+              {pendingTaskCount > 0 && (
                 <span
-                  aria-label={`${reviewBadge} reviews waiting for you`}
+                  aria-label={`${pendingTaskCount} pending Workboard tasks`}
                   className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#f0a000] px-1 text-[9.5px] font-semibold text-[#0f0f0f]"
                 >
-                  {reviewBadge}
+                  {pendingTaskCount}
                 </span>
               )}
             </button>

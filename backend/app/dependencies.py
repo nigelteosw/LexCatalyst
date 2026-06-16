@@ -97,6 +97,8 @@ def _is_team_member(db: Session, user_id: str, team_id: str) -> bool:
 
 
 def check_kb_read(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
+    if user.is_admin:
+        return True
     if entry.scope == "firm_wide":
         return True
     if entry.scope == "private":
