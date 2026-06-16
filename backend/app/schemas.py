@@ -8,6 +8,13 @@ DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
 FirmRole = Literal["partner", "senior_associate", "associate", "admin"]
 MatterStatus = Literal["active", "closed", "archived"]
 KnowledgeBankScope = Literal["firm_wide", "team", "matter", "private"]
+ResourceMetadataType = Literal[
+    "document",
+    "knowledge_bank_entry",
+    "wiki_page",
+    "action_item",
+    "review_handoff",
+]
 KnowledgeBankEntryType = Literal["knowledge_bank", "style_guide", "action"]
 PiiStatus = Literal["clean", "flagged", "pending_review", "redacted"]
 KbEntryStatus = Literal["processing", "ready", "failed"]
@@ -85,6 +92,25 @@ class DocumentUpdate(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
 
 
+class ResourceMetadataResponse(BaseModel):
+    id: str
+    resource_type: str
+    resource_id: str
+    title: str | None = None
+    owner_user_id: str | None = None
+    created_by: str | None = None
+    team_id: str | None = None
+    matter_id: str | None = None
+    scope: str | None = None
+    source_document_id: str | None = None
+    status: str | None = None
+    metadata_json: dict = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class DocumentCommentCreate(BaseModel):
     content: str = Field(min_length=1, max_length=3000)
 
@@ -110,12 +136,22 @@ class DocumentCommentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PageContext(BaseModel):
+    view: str | None = None
+    thread_title: str | None = None
+    document_name: str | None = None
+    wiki_page_title: str | None = None
+    kb_entry_title: str | None = None
+    action_title: str | None = None
+
+
 class WikiPageCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body_markdown: str = Field(min_length=1, max_length=80_000)
     page_type: WikiPageType = "source_summary"
     status: WikiPageStatus = "draft"
     excerpt: str | None = Field(default=None, max_length=1000)
+    matter_id: str | None = None
 
 
 class WikiPageUpdate(BaseModel):

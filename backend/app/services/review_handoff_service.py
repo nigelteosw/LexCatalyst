@@ -26,6 +26,13 @@ from app.models import (
 )
 from app.models import new_uuid as _new_uuid
 from app.schemas import ReviewHandoffCreate
+from app.services.resource_metadata_service import (
+    RESOURCE_REVIEW_HANDOFF,
+    delete_resource_metadata,
+    sync_action_metadata,
+    sync_handoff_metadata,
+)
+
 
 class ReviewHandoffError(RuntimeError):
     pass
@@ -203,7 +210,9 @@ def create_handoff(
             _carry_forward_annotations(db, prev_handoff_id=action.active_handoff_id, new_handoff=handoff)
         action.active_handoff_id = handoff.id
         action.status = "review"
+        sync_action_metadata(db, action)
 
+    sync_handoff_metadata(db, handoff)
     db.commit()
     db.refresh(handoff)
     return handoff
@@ -285,11 +294,13 @@ def update_handoff_status(
             if action and str(action.active_handoff_id) == str(handoff.id):
                 action.status = "done"
                 action.active_handoff_id = None
+                sync_action_metadata(db, action)
 
     handoff.status = status
     if reviewer_id is not None:
         handoff.reviewer_id = reviewer_id
 
+    sync_handoff_metadata(db, handoff)
     db.commit()
     db.refresh(handoff)
     return get_handoff(db, handoff.id)
@@ -304,6 +315,8 @@ def return_handoff_for_rework(db: Session, handoff_id: str) -> ReviewHandoff | N
         action = db.get(ActionItem, handoff.action_id)
         if action:
             action.status = "in_progress"
+            sync_action_metadata(db, action)
+    sync_handoff_metadata(db, handoff)
     db.commit()
     return get_handoff(db, handoff.id)
 
@@ -326,6 +339,8 @@ def reject_handoff(
         if action:
             action.status = "in_progress"
             action.active_handoff_id = None
+            sync_action_metadata(db, action)
+    sync_handoff_metadata(db, handoff)
     db.commit()
     return get_handoff(db, handoff.id)
 
@@ -340,6 +355,12 @@ def delete_handoff(db: Session, handoff_id: str) -> bool:
             action.active_handoff_id = None
             if action.status == "review":
                 action.status = "in_progress"
+            sync_action_metadata(db, action)
+    delete_resource_metadata(
+        db,
+        resource_type=RESOURCE_REVIEW_HANDOFF,
+        resource_id=handoff.id,
+    )
     db.delete(handoff)
     db.commit()
     return True

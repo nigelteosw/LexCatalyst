@@ -19,6 +19,7 @@ import {
   uploadDocument,
 } from '../shared/api/api'
 import type {
+  BirdiePageContext,
   ChatModel,
   ChatThread,
   CurrentUser,
@@ -556,6 +557,7 @@ function App() {
           isOpen={isBirdieOpen}
           onToggle={() => setIsBirdieOpen((o) => !o)}
           matterId={selectedMatterId}
+          pageContext={buildBirdiePageContext(current, activeThread?.title ?? null)}
         />
       </Suspense>
 
@@ -730,6 +732,18 @@ function App() {
       </main>
     </div>
   )
+}
+
+// ponytail: passes IDs not names for non-chat views; App only has thread titles cached centrally.
+// Upgrade: pass display names when those panels expose them via props or a shared store.
+function buildBirdiePageContext(current: import('./routes').AppView, threadTitle: string | null): BirdiePageContext {
+  const base: BirdiePageContext = { view: current.view }
+  if (current.view === 'chat') return { ...base, threadTitle }
+  if (current.view === 'documents') return { ...base, documentName: current.documentId ?? undefined }
+  if (current.view === 'wiki') return { ...base, wikiPageTitle: current.pageId ?? undefined }
+  if (current.view === 'knowledge_bank') return { ...base, kbEntryTitle: current.entryId ?? undefined }
+  if (current.view === 'actions') return { ...base, actionTitle: current.actionId ?? undefined }
+  return base
 }
 
 function mobileViewTitle(view: import('./routes').AppView['view']) {

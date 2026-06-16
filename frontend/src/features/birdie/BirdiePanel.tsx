@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowUp, BookMarked, Lightbulb, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { listKnowledgeBankEntries, streamBirdieMessage } from '../../shared/api/api'
-import type { KnowledgeBankEntry } from '../../shared/types/workspace'
+import type { BirdiePageContext, KnowledgeBankEntry } from '../../shared/types/workspace'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import birdieLogo from '../../assets/Birdie.png'
@@ -33,7 +33,7 @@ const BIRDIE_HELP: HelpContent = {
     },
   ],
   tips: [
-    'Birdie uses DeepSeek Flash for fast, conversational responses — it\'s designed for quick back-and-forth, not long-form drafting.',
+    'Birdie uses your firm\'s Knowledge Bank and your personal memories to give grounded, specific answers.',
     'Birdie is confidential to you. Your questions are not logged or shared with supervisors.',
     'Drag Birdie anywhere on screen — it remembers its position within the session.',
   ],
@@ -43,6 +43,7 @@ type BirdiePanelProps = {
   isOpen: boolean
   onToggle: () => void
   matterId: string | null
+  pageContext?: BirdiePageContext
 }
 
 type MentorTab = 'review' | 'examples' | 'ask' | 'progress'
@@ -106,7 +107,7 @@ function getDefaultPosition() {
   }
 }
 
-export function BirdiePanel({ isOpen, onToggle, matterId }: BirdiePanelProps) {
+export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdiePanelProps) {
   const [pos, setPos] = useState(getDefaultPosition)
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null)
 
@@ -184,12 +185,12 @@ export function BirdiePanel({ isOpen, onToggle, matterId }: BirdiePanelProps) {
       </header>
 
       {/* Tabs + content */}
-      <BirdiePanelBody matterId={matterId} />
+      <BirdiePanelBody matterId={matterId} pageContext={pageContext} />
     </div>
   )
 }
 
-function BirdiePanelBody({ matterId }: { matterId: string | null }) {
+function BirdiePanelBody({ matterId, pageContext }: { matterId: string | null; pageContext?: BirdiePageContext }) {
   const [activeTab, setActiveTab] = useState<MentorTab>('ask')
   return (
     <>
@@ -210,7 +211,7 @@ function BirdiePanelBody({ matterId }: { matterId: string | null }) {
         ))}
       </nav>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {activeTab === 'ask' && <AskTab matterId={matterId} />}
+        {activeTab === 'ask' && <AskTab matterId={matterId} pageContext={pageContext} />}
         {activeTab === 'review' && <ReviewTab />}
         {activeTab === 'examples' && <ExamplesTab matterId={matterId} />}
         {activeTab === 'progress' && <ProgressTab />}
@@ -353,7 +354,7 @@ const STARTERS = [
   "What's the right way to ask for guidance without looking junior?",
 ]
 
-function AskTab({ matterId }: { matterId: string | null }) {
+function AskTab({ matterId, pageContext }: { matterId: string | null; pageContext?: BirdiePageContext }) {
   const [messages, setMessages] = useState<BirdieMsg[]>([])
   const [prompt, setPrompt] = useState('')
   const [isResponding, setIsResponding] = useState(false)
@@ -404,6 +405,7 @@ function AskTab({ matterId }: { matterId: string | null }) {
         message: text,
         history,
         matterId,
+        pageContext,
         signal: controller.signal,
         onToken: (content) => {
           setMessages((m) =>

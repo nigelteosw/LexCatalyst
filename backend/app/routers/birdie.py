@@ -11,6 +11,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
 from app.providers.deepseek import DeepSeekError
+from app.schemas import PageContext
 from app.services.birdie_service import stream_birdie_response
 
 router = APIRouter(tags=["birdie"])
@@ -21,10 +22,12 @@ class BirdieMessage(BaseModel):
     content: str
 
 
+
 class BirdieRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     history: list[BirdieMessage] = Field(default_factory=list, max_length=40)
     matter_id: str | None = None
+    page_context: PageContext | None = None
 
 
 @router.post("/birdie/stream")
@@ -45,6 +48,7 @@ async def birdie_stream(
                 user_message=request.message,
                 history=[{"role": m.role, "content": m.content} for m in request.history],
                 matter_id=request.matter_id,
+                page_context=request.page_context,
             ):
                 chunks.append(token)
                 yield event("token", {"content": token})

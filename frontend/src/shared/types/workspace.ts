@@ -400,3 +400,13 @@ export type KnowledgeBankAccessLog = {
   ipAddress?: string | null
   timestamp: string
 }
+
+
+export type BirdiePageContext = {
+  view: string
+  threadTitle?: string | null
+  documentName?: string | null
+  wikiPageTitle?: string | null
+  kbEntryTitle?: string | null
+  actionTitle?: string | null
+}

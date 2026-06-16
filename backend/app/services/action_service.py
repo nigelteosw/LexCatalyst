@@ -15,6 +15,11 @@ from sqlalchemy.orm import Session, joinedload
 from app.dependencies import is_senior_or_above
 from app.models import ActionItem, User
 from app.schemas import ActionItemCreate, ActionItemUpdate
+from app.services.resource_metadata_service import (
+    RESOURCE_ACTION_ITEM,
+    delete_resource_metadata,
+    sync_action_metadata,
+)
 
 # Bounded fetch so the list endpoint can't run away. A typical legal team
 # has well under this many open tickets; if a real firm needs more we'd
@@ -74,6 +79,8 @@ def create_action_item(
         tags=_normalise_tags(schema.tags),
     )
     db.add(item)
+    db.flush()
+    sync_action_metadata(db, item)
     db.commit()
     return get_action_item(db, item.id) or item
 
@@ -116,6 +123,7 @@ def update_action_item(
 
     for field, value in payload.items():
         setattr(item, field, value)
+    sync_action_metadata(db, item)
     db.commit()
     return get_action_item(db, item.id)
 
@@ -132,6 +140,11 @@ def delete_action_item(db: Session, *, user: User, item_id: str) -> bool:
         or item.assigner_id == user.id
     ):
         return False
+    delete_resource_metadata(
+        db,
+        resource_type=RESOURCE_ACTION_ITEM,
+        resource_id=item.id,
+    )
     db.delete(item)
     db.commit()
     return True

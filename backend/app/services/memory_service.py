@@ -41,6 +41,26 @@ def create_memory(db: Session, user_id: str, schema: MemoryCreate, confidence: f
     return memory
 
 
+_MEMORY_CATEGORIES = {
+    "semantic": "Stable facts/preferences",
+    "procedural": "Working style",
+    "episodic": "Past events",
+}
+
+
+def format_memory_context(memories: list[Memory]) -> str:
+    if not memories:
+        return ""
+    blocks = []
+    for cat, label in _MEMORY_CATEGORIES.items():
+        items = [m.content for m in memories if m.category == cat]
+        if items:
+            blocks.append(f"{label}:\n- " + "\n- ".join(items))
+    if not blocks:
+        return ""
+    return "\n\nUser Context (Long-term Memory):\n" + "\n\n".join(blocks)
+
+
 def list_memories(db: Session, user_id: str, category: str | None = None, limit: int | None = None) -> list[Memory]:
     stmt = select(Memory).where(Memory.user_id == user_id)
     if category:

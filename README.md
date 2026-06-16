@@ -21,6 +21,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
   - `read_document` — fetch the **full extracted text** of a document (up to 100KB) for fine-grained passage lookup
 - **Streaming SSE** with token-by-token output and per-tool step visualisation.
 - **Audit trail**: Knowledge Bank edits are logged in `kb_access_log`; reads are not recorded.
+- **Resource metadata index**: documents, KB entries, wiki pages, workboard items, and review handoffs sync into `resource_metadata` for one authenticated access-aware lookup surface.
 
 ### Birdie — Floating AI Mentor
 - A **draggable picture-in-picture widget** (320×480, fixed position, drag anywhere). Open via the "Birdie" pill in the chat header.
@@ -251,6 +252,7 @@ Optimized KB read routes, all requiring Bearer authentication:
 - `GET /kb/entries/status?ids=...` returns polling state only and does not write audit rows.
 - `GET /kb/entries/{id}` returns one full entry without creating an audit event.
 - `GET /kb/graph` returns a scope-filtered graph projection.
+- `GET /resources/metadata` returns cross-resource metadata using the same owner/team/matter/firm-wide visibility rules.
 
 ---
 

@@ -25,6 +25,11 @@ from app.schemas import (
     KnowledgeBankEntryUpdate,
     RedactionApprovalRequest,
 )
+from app.services.resource_metadata_service import (
+    RESOURCE_KB_ENTRY,
+    delete_resource_metadata,
+    sync_kb_metadata,
+)
 
 MAX_EMBEDDING_TEXT_CHARS = 30_000
 
@@ -427,6 +432,7 @@ async def create_kb_entry(
             matter_id=entry.matter_id,
             commit=False,
         )
+        sync_kb_metadata(db, entry)
         db.commit()
     except Exception:
         db.rollback()
@@ -476,6 +482,7 @@ async def add_document_to_kb(
                     matter_id=existing.matter_id,
                     commit=False,
                 )
+                sync_kb_metadata(db, existing)
                 db.commit()
             except Exception:
                 db.rollback()
@@ -510,6 +517,7 @@ async def add_document_to_kb(
             matter_id=entry.matter_id,
             commit=False,
         )
+        sync_kb_metadata(db, entry)
         db.commit()
     except Exception:
         db.rollback()
@@ -590,6 +598,7 @@ async def update_kb_entry(
             matter_id=entry.matter_id,
             commit=False,
         )
+        sync_kb_metadata(db, entry)
         db.commit()
     except Exception:
         db.rollback()
@@ -607,6 +616,11 @@ def delete_kb_entry(db: Session, *, user: User, entry_id: str) -> bool:
         entry_id=entry.id,
         matter_id=entry.matter_id,
         commit=False,
+    )
+    delete_resource_metadata(
+        db,
+        resource_type=RESOURCE_KB_ENTRY,
+        resource_id=entry.id,
     )
     db.delete(entry)
     db.commit()
@@ -727,6 +741,7 @@ async def promote_kb_entry(
             matter_id=source.matter_id,
             commit=False,
         )
+        sync_kb_metadata(db, promoted)
         db.commit()
     except Exception:
         db.rollback()
@@ -768,6 +783,7 @@ async def approve_redaction(
             entry_id=entry.id,
             commit=False,
         )
+        sync_kb_metadata(db, entry)
         db.commit()
     except Exception:
         db.rollback()

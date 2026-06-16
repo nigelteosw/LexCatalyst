@@ -2,7 +2,9 @@ from sqlalchemy.orm import Session
 
 from app.models import User
 from app.providers.deepseek import DeepSeekProvider
+from app.schemas import PageContext
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
+from app.services.memory_service import format_memory_context, list_memories
 
 BIRDIE_SYSTEM_PROMPT = """You are Birdie, a personal mentor embedded in LexCatalyst for junior lawyers.
 
@@ -19,6 +21,33 @@ Rules:
 
 If firm knowledge is provided in the context below, use it. If not, draw on general best practice and flag it as such."""
 
+_VIEW_LABELS = {
+    "home": "the Home page",
+    "chat": "the Chat page",
+    "documents": "the Documents page",
+    "wiki": "the Lex-Wiki",
+    "knowledge_bank": "the Knowledge Bank",
+    "actions": "the Workboard",
+    "memories": "the Memories page",
+    "wellbeing": "the Wellbeing page",
+    "settings": "the Settings page",
+}
+
+
+def _format_page_context(ctx: PageContext | None) -> str:
+    if not ctx or not ctx.view:
+        return ""
+    location = _VIEW_LABELS.get(ctx.view, f"the {ctx.view} page")
+    detail = (
+        (ctx.thread_title and f', in thread "{ctx.thread_title}"')
+        or (ctx.document_name and f', reading "{ctx.document_name}"')
+        or (ctx.wiki_page_title and f', reading the "{ctx.wiki_page_title}" page')
+        or (ctx.kb_entry_title and f', viewing KB entry "{ctx.kb_entry_title}"')
+        or (ctx.action_title and f', reviewing action "{ctx.action_title}"')
+        or ""
+    )
+    return f"\n\nCurrent context (what the user is working on right now):\nThe user is on {location}{detail}."
+
 
 async def build_birdie_messages(
     db: Session,
@@ -27,6 +56,7 @@ async def build_birdie_messages(
     user_message: str,
     history: list[dict[str, str]],
     matter_id: str | None,
+    page_context: PageContext | None = None,
 ) -> list[dict[str, str]]:
     kb_entries = await search_kb_for_chat(
         db,
@@ -38,6 +68,12 @@ async def build_birdie_messages(
     kb_context = format_kb_context(kb_entries)
 
     system_content = BIRDIE_SYSTEM_PROMPT
+
+    memories = list_memories(db, user_id=user.id, limit=50)
+    system_content += format_memory_context(memories)
+
+    system_content += _format_page_context(page_context)
+
     if kb_context:
         system_content += f"\n\n---\nFirm knowledge relevant to this question:\n{kb_context}"
 
@@ -54,6 +90,7 @@ async def stream_birdie_response(
     user_message: str,
     history: list[dict[str, str]],
     matter_id: str | None,
+    page_context: PageContext | None = None,
 ):
     messages = await build_birdie_messages(
         db,
@@ -61,7 +98,8 @@ async def stream_birdie_response(
         user_message=user_message,
         history=history,
         matter_id=matter_id,
+        page_context=page_context,
     )
     provider = DeepSeekProvider()
-    async for chunk in provider.stream_chat(messages, model="deepseek-v4-flash"):
+    async for chunk in provider.stream_chat(messages, model="deepseek-v4-pro"):
         yield chunk

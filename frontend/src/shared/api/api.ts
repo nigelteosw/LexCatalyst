@@ -35,6 +35,7 @@ import type {
   WikiPageSource,
   WikiPageType,
   WorkspaceDocument,
+  BirdiePageContext,
 } from '../types/workspace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
@@ -1406,6 +1407,7 @@ export async function streamBirdieMessage({
   message,
   history,
   matterId,
+  pageContext,
   signal,
   onToken,
   onDone,
@@ -1414,6 +1416,7 @@ export async function streamBirdieMessage({
   message: string
   history: BirdieHistoryMessage[]
   matterId: string | null
+  pageContext?: BirdiePageContext
   signal?: AbortSignal
   onToken: (content: string) => void
   onDone: (fullContent: string) => void
@@ -1426,7 +1429,7 @@ export async function streamBirdieMessage({
   const response = await fetch(`${API_BASE_URL}/birdie/stream`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ message, history, matter_id: matterId }),
+    body: JSON.stringify({ message, history, matter_id: matterId, page_context: pageContext }),
     signal,
   })
 

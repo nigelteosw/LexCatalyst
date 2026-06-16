@@ -43,7 +43,7 @@ Four tabs:
 | Choice | Why for lawyers |
 |---|---|
 | **Separate from the main chat** | The main `/chat/stream` agent is for "do my work" tasks. Birdie is for "help me think". Conflating them produces an assistant that's either too task-focused for mentoring or too chatty for legal work. They run on **separate endpoints with distinct system prompts**. |
-| **Always uses `deepseek-v4-flash`** | A mentor needs to feel conversational, not like submitting a brief and waiting. Flash is fast enough to be casual. |
+| **Uses `deepseek-v4-pro`** | The mentor now synthesises page context, personal memory, and KB knowledge in a single response. Pro's reasoning depth is necessary; Flash is too shallow for contextual synthesis. The 3–5 sentence brevity rule keeps response time acceptable. |
 | **Floating PiP, not a sidebar** | Juniors keep Birdie open while drafting a clause or reading a doc. A docked sidebar would compete with the matter view; a floating window stays out of the way and can be dragged off-screen. |
 | **Brief by default** | The system prompt enforces 3–5 sentences. Lawyers waste enough time reading. The mentor only goes deeper when asked. |
 | **Mentor persona, not assistant** | The prompt explicitly tells Birdie to be a *person who has been through this*, not a research engine. When a junior says "I'm scared to push back", a research-engine response is wrong. |
@@ -56,27 +56,36 @@ Four tabs:
         │
         ▼
 [User types question] ──► POST /birdie/stream
+        { message, history, matter_id, page_context }
         │
         ▼
 [birdie_service.stream_birdie_response]
         │
+        ├── list_memories (user's personal memory, pre-loaded)
+        │
         ├── search_kb_for_chat (RBAC-filtered KB pull)
         │
-        ├── Build messages: BIRDIE_SYSTEM + KB context + history + question
+        ├── format_page_context (natural-language summary of what the user is looking at)
         │
-        └── DeepSeekProvider.stream_chat (Flash)
+        ├── Build messages:
+        │     BIRDIE_SYSTEM + memories + page context + KB context + history + question
+        │
+        └── DeepSeekProvider.stream_chat (Pro)
                 │
                 ▼
         Stream tokens back as SSE → frontend renders into chat
 ```
 
+**`page_context`** is a small struct the frontend builds from the current React route and any selected item (thread title, document name, wiki page, KB entry, action). The backend converts it to a readable paragraph: *"The user is on the Documents page, reading 'Meridian NDA v2.pdf'. Active matter: Meridian Capital."*
+
 **Statelessness**: Birdie has no DB persistence. The client manages the conversation history. This is deliberate — partners shouldn't be able to ask "what has this junior been asking the mentor?", or psychological safety is gone.
 
 ## Limitations
 
-- **No long-term memory** within Birdie itself (by design — see above). If the user wants something remembered, they save it to their personal Memory.
+- **No long-term memory** within Birdie itself (by design — see above). If the user wants something remembered, they save it to their personal Memory. Birdie *reads* personal memories but does not write them.
 - Mentor advice is grounded in firm KB but the LLM still hallucinates legal positions. Birdie is a **mentor**, not authority — every concrete legal claim should be verified against a real source.
 - The "Progress" tab is currently illustrative; we don't yet track which skills the user has actually demonstrated.
+- Page context is client-supplied and not validated beyond type-checking. A malicious client could send a misleading context string — this is acceptable given Birdie is a mentor assistant, not a security boundary.
 
 ## Where it lives in the code
 
@@ -87,3 +96,7 @@ Four tabs:
 | Frontend widget | `frontend/src/components/BirdiePanel.tsx` |
 | API client | `frontend/src/lib/api.ts` → `streamBirdieMessage` |
 | Open/close state | `frontend/src/App.tsx` → `isBirdieOpen` |
+
+## Related RFC
+
+See [`rfc-birdie-context.md`](../rfc-birdie-context.md) for the engineering design of the page context, memory injection, and model upgrade.

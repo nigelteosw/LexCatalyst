@@ -19,6 +19,11 @@ from app.services.ingestion_service import (
     make_citation_label,
     validate_supported_document,
 )
+from app.services.resource_metadata_service import (
+    RESOURCE_DOCUMENT,
+    delete_resource_metadata,
+    sync_document_metadata,
+)
 from app.services.storage_service import (
     StorageError,
     delete_document_file,
@@ -136,6 +141,7 @@ async def create_pending_document(
         team_id=team_id,
     )
     db.add(document)
+    sync_document_metadata(db, document)
     db.commit()
     db.refresh(document)
     document_id = document.id
@@ -153,6 +159,7 @@ async def create_pending_document(
         document.status = "processing"
         document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
+        sync_document_metadata(db, document)
         db.commit()
         db.refresh(document)
         return document
@@ -163,6 +170,7 @@ async def create_pending_document(
             document.status = "failed"
             document.error_message = str(exc)[:MAX_ERROR_LENGTH]
             document.updated_at = datetime.now(UTC)
+            sync_document_metadata(db, document)
             db.commit()
             db.refresh(document)
             return document
@@ -316,6 +324,7 @@ async def process_document(claim: WorkerClaim) -> None:
         document.error_message = None
         document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
+        sync_document_metadata(db, document)
         db.commit()
     except Exception as exc:  # noqa: BLE001 - persist worker failures
         db.rollback()
@@ -342,6 +351,7 @@ def _mark_document_failed(claim: WorkerClaim, message: str) -> None:
         document.error_message = message[:MAX_ERROR_LENGTH]
         document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
+        sync_document_metadata(db, document)
         db.commit()
     finally:
         db.close()
@@ -477,6 +487,7 @@ def rename_user_document(
             chunk.page_number,
             chunk.chunk_index,
         )
+    sync_document_metadata(db, document)
     db.commit()
     db.refresh(document)
     return document
@@ -493,6 +504,11 @@ def delete_user_document(db: Session, user_id: str, document_id: str) -> bool:
         return False
 
     storage_key = document.storage_key
+    delete_resource_metadata(
+        db,
+        resource_type=RESOURCE_DOCUMENT,
+        resource_id=document.id,
+    )
     db.delete(document)
     db.commit()
 

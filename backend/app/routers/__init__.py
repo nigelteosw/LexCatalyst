@@ -17,6 +17,7 @@ from app.routers import (
     memories,
     organizations,
     review_handoffs,
+    resource_metadata,
     surveys,
     system,
     wiki,
@@ -35,4 +36,5 @@ all_routers: list[APIRouter] = [
     surveys.router,
     actions.router,
     review_handoffs.router,
+    resource_metadata.router,
 ]

@@ -9,6 +9,7 @@ from app.providers.embedding_provider import EmbeddingError
 from app.providers.deepseek import DeepSeekProvider, resolve_chat_model
 from app.services.memory_service import (
     extract_memory_candidates,
+    format_memory_context,
     list_memories,
     save_memory_candidates,
 )
@@ -216,16 +217,7 @@ def build_provider_messages(
             "If the provided chunks do not answer the question, say what evidence is missing."
         )
 
-    if memories:
-        memory_blocks = []
-        categories = {"semantic": "Stable facts/preferences", "procedural": "Working style", "episodic": "Past events"}
-        for cat, label in categories.items():
-            cat_memories = [m.content for m in memories if m.category == cat]
-            if cat_memories:
-                memory_blocks.append(f"{label}:\n- " + "\n- ".join(cat_memories))
-
-        if memory_blocks:
-            system_content += "\n\nUser Context (Long-term Memory):\n" + "\n\n".join(memory_blocks)
+    system_content += format_memory_context(memories)
 
     messages = [{"role": "system", "content": system_content}]
     messages.extend(
@@ -410,19 +402,7 @@ async def prepare_agent_context(
             "The summary above covers older parts of this conversation not shown in the message history below."
         )
 
-    if memories:
-        memory_blocks = []
-        categories = {
-            "semantic": "Stable facts/preferences",
-            "procedural": "Working style",
-            "episodic": "Past events",
-        }
-        for cat, label in categories.items():
-            cat_memories = [m.content for m in memories if m.category == cat]
-            if cat_memories:
-                memory_blocks.append(f"{label}:\n- " + "\n- ".join(cat_memories))
-        if memory_blocks:
-            system_content += "\n\nUser Context (Long-term Memory):\n" + "\n\n".join(memory_blocks)
+    system_content += format_memory_context(memories)
 
     if active_matter_id:
         system_content += f"\n\nActive matter ID: {active_matter_id}. Prefer sources scoped to this matter."

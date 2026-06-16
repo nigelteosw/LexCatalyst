@@ -669,6 +669,63 @@ class KnowledgeBankAccessLog(Base):
     user: Mapped[User] = relationship()
 
 
+class ResourceMetadata(Base):
+    __tablename__ = "resource_metadata"
+    __table_args__ = (
+        UniqueConstraint("resource_type", "resource_id", name="uq_resource_metadata_resource"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    resource_type: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    owner_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    team_id: Mapped[str | None] = mapped_column(
+        ForeignKey("teams.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    matter_id: Mapped[str | None] = mapped_column(
+        ForeignKey("matters.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    scope: Mapped[str | None] = mapped_column(String(24), index=True, nullable=True)
+    source_document_id: Mapped[str | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    status: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    owner: Mapped[User | None] = relationship(foreign_keys=[owner_user_id])
+    creator: Mapped[User | None] = relationship(foreign_keys=[created_by])
+    team: Mapped[Team | None] = relationship()
+    matter: Mapped[Matter | None] = relationship()
+    source_document: Mapped[Document | None] = relationship()
+
+
 class PiiRedaction(Base):
     __tablename__ = "pii_redactions"
 
