@@ -561,7 +561,7 @@ function App() {
         />
       </Suspense>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white lg:my-2 lg:mr-2 lg:rounded-tl-2xl lg:border-l lg:border-t lg:border-neutral-200 lg:shadow-sm">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white lg:border-l lg:border-neutral-200 lg:shadow-sm">
         {current.view !== 'chat' && (
           <header className="flex h-12 shrink-0 items-center gap-3 border-b border-neutral-100 px-3 lg:hidden">
             <Button

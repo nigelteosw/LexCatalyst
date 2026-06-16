@@ -7,6 +7,7 @@ import {
   Clock,
   FileText,
   HeartPulse,
+  Home,
   LogOut,
   MoreHorizontal,
   Pencil,
@@ -222,6 +223,19 @@ export function Sidebar({
             aria-label="Workspace"
             className="flex flex-col gap-0.5 border-b border-white/[0.08] px-1.5 py-2"
           >
+            <button
+              onClick={() => {
+                selectHome()
+                closeMobile()
+              }}
+              className={`${sidebarActionClass} ${
+                current.view === 'home' ? sidebarNavActiveClass : sidebarNavClass
+              }`}
+              type="button"
+            >
+              <Home size={14} />
+              Home
+            </button>
             <button
               onClick={() => {
                 selectKnowledgeBank()

@@ -5,18 +5,20 @@ from app.models import Memory
 from app.schemas import MemoryCreate, MemoryUpdate, MemoryExtractionResult, MemoryExtractionCandidate
 from app.providers.deepseek import DeepSeekProvider
 
-EXTRACTION_PROMPT = """You are a memory extraction assistant. Your task is to extract stable facts, user preferences, and important session notes from a conversation turn between a user and a legal assistant.
+EXTRACTION_PROMPT = """You are a memory extraction assistant. Extract patterns about who the user is and how they work from a conversation between a user and a legal assistant.
 
 Extract memories into three categories:
-1. semantic: stable facts about the user, their law firm, matter details, or personal context.
-2. procedural: how the user wants the assistant or workflow to behave (e.g., "be concise", "flag risks briefly").
-3. episodic: important events or actions that happened in this session (e.g., "user uploaded a contract", "user made a specific decision").
+1. semantic: the user's role, expertise, or domain focus (e.g., "user is a litigator specialising in IP", "user is a senior associate at a mid-size firm"). NOT client names, matter details, case facts, or firm names.
+2. procedural: how the user wants the assistant to behave or how they prefer to work (e.g., "user wants risks flagged upfront", "user prefers plain-language summaries", "user always asks for jurisdiction analysis").
+3. episodic: decisions or patterns the user showed this session that reveal working style (e.g., "user consistently prioritises commercial risk over legal technicalities"). NOT one-off events or session-specific actions.
 
 Rules:
-- Capture stable, long-term info, not transient chat filler.
+- Capture patterns and preferences, not facts about specific cases, clients, or matters.
+- Never store names of clients, opposing parties, firms, or case-specific details — these are sensitive and transient.
 - Do not store guesses or unconfirmed claims.
 - Assign a confidence score between 0.0 and 1.0.
 - Only include memories with high confidence (>= 0.8).
+- If nothing pattern-worthy is in the conversation, return an empty memories list.
 - Return ONLY a valid JSON object matching this schema:
 {{"memories": [{{"category": "...", "content": "...", "confidence": 0.95}}]}}
 
