@@ -19,7 +19,11 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteChatThread,
+  listDocuments,
+  listKnowledgeBankEntryPage,
+  listMemories,
   listActionItems,
+  listSurveyQuestions,
   renameChatThread,
 } from '../../shared/api/api'
 import type { ChatThread, Matter } from '../../shared/types/workspace'
@@ -82,6 +86,7 @@ export function Sidebar({
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const queryClient = useQueryClient()
 
   // Keep the Workboard badge aligned with the board: count tickets that are
   // still active, not just review handoffs.
@@ -127,6 +132,43 @@ export function Sidebar({
 
   function closeMobile() {
     if (window.innerWidth < 1024) onClose()
+  }
+
+  function prefetchWorkspace(view: 'documents' | 'knowledge_bank' | 'memories' | 'wellbeing' | 'actions') {
+    if (view === 'documents') {
+      queryClient.prefetchQuery({ queryKey: ['documents'], queryFn: listDocuments })
+      return
+    }
+    if (view === 'knowledge_bank') {
+      queryClient.prefetchInfiniteQuery({
+        queryKey: [
+          'kbEntries',
+          {
+            query: '',
+            scope: 'all',
+            type: 'all',
+            matterId: selectedMatterId,
+          },
+        ],
+        queryFn: ({ pageParam }) =>
+          listKnowledgeBankEntryPage({
+            contextMatterId: selectedMatterId ?? undefined,
+            limit: 30,
+            offset: Number(pageParam),
+          }),
+        initialPageParam: 0,
+      })
+      return
+    }
+    if (view === 'memories') {
+      queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: () => listMemories() })
+      return
+    }
+    if (view === 'wellbeing') {
+      queryClient.prefetchQuery({ queryKey: ['surveyQuestions', 'active'], queryFn: () => listSurveyQuestions(true) })
+      return
+    }
+    queryClient.prefetchQuery({ queryKey: ['actions'], queryFn: listActionItems })
   }
 
   return (
@@ -241,6 +283,8 @@ export function Sidebar({
                 selectKnowledgeBank()
                 closeMobile()
               }}
+              onFocus={() => prefetchWorkspace('knowledge_bank')}
+              onMouseEnter={() => prefetchWorkspace('knowledge_bank')}
               className={`${sidebarActionClass} ${
                 current.view === 'knowledge_bank' ? sidebarNavActiveClass : sidebarNavClass
               }`}
@@ -254,6 +298,8 @@ export function Sidebar({
                 selectMemories()
                 closeMobile()
               }}
+              onFocus={() => prefetchWorkspace('memories')}
+              onMouseEnter={() => prefetchWorkspace('memories')}
               className={`${sidebarActionClass} ${
                 current.view === 'memories' ? sidebarNavActiveClass : sidebarNavClass
               }`}
@@ -267,6 +313,8 @@ export function Sidebar({
                 selectDocuments()
                 closeMobile()
               }}
+              onFocus={() => prefetchWorkspace('documents')}
+              onMouseEnter={() => prefetchWorkspace('documents')}
               className={`${sidebarActionClass} ${
                 current.view === 'documents' ? sidebarNavActiveClass : sidebarNavClass
               }`}
@@ -280,6 +328,8 @@ export function Sidebar({
                 selectWellbeing()
                 closeMobile()
               }}
+              onFocus={() => prefetchWorkspace('wellbeing')}
+              onMouseEnter={() => prefetchWorkspace('wellbeing')}
               className={`${sidebarActionClass} ${
                 current.view === 'wellbeing' ? sidebarNavActiveClass : sidebarNavClass
               }`}
@@ -293,6 +343,8 @@ export function Sidebar({
                 selectActions()
                 closeMobile()
               }}
+              onFocus={() => prefetchWorkspace('actions')}
+              onMouseEnter={() => prefetchWorkspace('actions')}
               className={`${sidebarActionClass} ${
                 current.view === 'actions' ? sidebarNavActiveClass : sidebarNavClass
               }`}

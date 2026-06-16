@@ -8,12 +8,8 @@ import {
   GitBranch,
   MessageSquare,
   Settings,
-  Users,
-  Clock,
   ArrowRight,
   Loader2,
-  Heart,
-  AlertCircle,
 } from 'lucide-react'
 import {
   listActionItems,
@@ -248,7 +244,7 @@ function DocsStat({ onClick }: { onClick: () => void }) {
 // ---------------------------------------------------------------------------
 
 function RecentThreadsSection({ onClick }: { onClick: (threadId: string) => void }) {
-  const q = useQuery({ queryKey: ['chatThreads'], queryFn: listChatThreads, staleTime: 30_000 })
+  const q = useQuery({ queryKey: ['threads'], queryFn: listChatThreads, staleTime: 30_000 })
   const threads = (q.data ?? []).slice(0, 8)
 
   return (

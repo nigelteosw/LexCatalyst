@@ -96,6 +96,26 @@ const toneStyles = {
   },
 }
 
+function playTweet(pitch = 1300) {
+  try {
+    const ctx = new AudioContext()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.type = 'sine'
+    const t = ctx.currentTime
+    osc.frequency.setValueAtTime(pitch, t)
+    osc.frequency.linearRampToValueAtTime(pitch * 1.45, t + 0.07)
+    osc.frequency.linearRampToValueAtTime(pitch * 1.1, t + 0.16)
+    gain.gain.setValueAtTime(0.15, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25)
+    osc.start(t)
+    osc.stop(t + 0.28)
+    osc.onended = () => ctx.close()
+  } catch { /* AudioContext blocked (e.g. no prior user gesture) */ }
+}
+
 const PANEL_WIDTH = 320
 const PANEL_HEIGHT = 480
 const PANEL_MARGIN = 16
@@ -145,11 +165,15 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdieP
     }
   }, [])
 
+  useEffect(() => {
+    if (isOpen) playTweet()
+  }, [isOpen])
+
   if (!isOpen) return null
 
   return (
     <div
-      className="fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[60] flex h-[min(75dvh,34rem)] max-h-[calc(100dvh-1rem)] select-none flex-col overflow-hidden overscroll-none rounded-2xl border border-black/10 bg-white shadow-2xl max-sm:!left-2 max-sm:!right-2 max-sm:!top-auto sm:inset-auto sm:h-[480px] sm:w-[320px]"
+      className="birdie-enter fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[60] flex h-[min(75dvh,34rem)] max-h-[calc(100dvh-1rem)] select-none flex-col overflow-hidden overscroll-none rounded-2xl border border-black/10 bg-white shadow-2xl max-sm:!left-2 max-sm:!right-2 max-sm:!top-auto sm:inset-auto sm:h-[480px] sm:w-[320px]"
       style={{ left: pos.x, top: pos.y }}
     >
       <header
@@ -416,6 +440,7 @@ function AskTab({ matterId, pageContext }: { matterId: string | null; pageContex
           setMessages((m) =>
             m.map((msg) => (msg.id === draftId ? { ...msg, body: fullContent } : msg)),
           )
+          playTweet(1600)
         },
         onError: (detail) => {
           setMessages((m) => m.filter((msg) => msg.id !== draftId))

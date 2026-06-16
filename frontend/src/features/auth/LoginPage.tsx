@@ -7,7 +7,7 @@ export interface LoginPageProps {
   error?: string | null
 }
 
-type Particle = { x: number; y: number; vx: number; vy: number; r: number; hue: number }
+type Particle = { x: number; y: number; vx: number; vy: number; r: number }
 
 export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -22,15 +22,13 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
 
     const dpr = window.devicePixelRatio || 1
     let rafId: number
-    let baseHue = 180
 
     const particles: Particle[] = Array.from({ length: 28 }, () => ({
       x: Math.random() * canvas.offsetWidth,
       y: Math.random() * canvas.offsetHeight,
       vx: (Math.random() - 0.5) * 0.5,
       vy: (Math.random() - 0.5) * 0.5,
-      r: Math.random() * 2.5 + 0.8,
-      hue: Math.random() * 60 + 150,
+      r: Math.random() * 2 + 0.6,
     }))
 
     function resize() {
@@ -56,8 +54,8 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
       for (let gx = 0; gx <= W; gx += step) {
         for (let gy = 0; gy <= H; gy += step) {
           ctx.beginPath()
-          ctx.arc(gx, gy, 1, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(0,0,0,0.07)'
+          ctx.arc(gx, gy, 0.8, 0, Math.PI * 2)
+          ctx.fillStyle = 'rgba(255,255,255,0.07)'
           ctx.fill()
         }
       }
@@ -71,7 +69,7 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
 
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
-        ctx.fillStyle = `hsla(${p.hue}, 55%, 65%, 0.55)`
+        ctx.fillStyle = 'rgba(255,255,255,0.35)'
         ctx.fill()
       })
 
@@ -82,18 +80,17 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
           const dy = particles[i].y - particles[j].y
           const d = Math.sqrt(dx * dx + dy * dy)
           if (d < 130) {
-            const alpha = 0.18 * (1 - d / 130)
+            const alpha = 0.12 * (1 - d / 130)
             ctx.beginPath()
             ctx.moveTo(particles[i].x, particles[i].y)
             ctx.lineTo(particles[j].x, particles[j].y)
-            ctx.strokeStyle = `hsla(${baseHue}, 45%, 60%, ${alpha})`
-            ctx.lineWidth = 0.8
+            ctx.strokeStyle = `rgba(255,255,255,${alpha})`
+            ctx.lineWidth = 0.7
             ctx.stroke()
           }
         }
       }
 
-      baseHue = (baseHue + 0.08) % 360
       rafId = requestAnimationFrame(tick)
     }
     tick()
@@ -115,32 +112,31 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
   }, [])
 
   return (
-    <div className="login-pearl-bg app-scroll-region relative flex h-full min-h-0 w-full overflow-y-auto">
+    <div className="app-scroll-region relative flex h-full min-h-0 w-full overflow-y-auto bg-[#0f0f0f]">
       {/* Canvas generative layer */}
       <canvas
         ref={canvasRef}
         aria-hidden
-        className="pointer-events-none absolute inset-0 h-full w-full opacity-70"
-        style={{ mixBlendMode: 'multiply' }}
+        className="pointer-events-none absolute inset-0 h-full w-full"
       />
 
       {/* Top nav */}
-      <nav className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between border-b border-black/10 bg-white/40 px-5 py-2.5 backdrop-blur-md">
+      <nav className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between border-b border-white/10 bg-[#0f0f0f]/80 px-5 py-2.5 backdrop-blur-md">
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 border border-neutral-900 bg-neutral-900" />
-          <span className="font-mono text-xs font-semibold tracking-widest text-neutral-900">
+          <div className="h-4 w-4 bg-white" />
+          <span className="font-mono text-xs font-semibold tracking-widest text-white">
             LEXCATALYST
           </span>
-          <span className="ml-1 border border-neutral-300 px-1 py-px font-mono text-[9px] text-neutral-400">
+          <span className="ml-1 border border-white/20 px-1 py-px font-mono text-[9px] text-white/30">
             v1.0
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden font-mono text-[10px] text-neutral-400 sm:inline">
+          <span className="hidden font-mono text-[10px] text-white/30 sm:inline">
             ● SECURE
           </span>
-          <div className="hidden h-3 w-px bg-neutral-200 sm:block" />
-          <span className="font-mono text-[10px] text-neutral-400">AUTH MODULE</span>
+          <div className="hidden h-3 w-px bg-white/10 sm:block" />
+          <span className="font-mono text-[10px] text-white/30">AUTH MODULE</span>
         </div>
       </nav>
 
@@ -150,44 +146,44 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
         <div className="flex flex-1 flex-col justify-center px-8 py-16 lg:px-16 lg:py-24">
           <div className="mx-auto w-full max-w-xl">
             {/* Status badge */}
-            <div className="mb-8 inline-flex items-center gap-2 border border-dashed border-neutral-300 bg-white/60 px-3 py-1.5 backdrop-blur-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#84cc16]" />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+            <div className="mb-8 inline-flex items-center gap-2 border border-dashed border-white/20 bg-white/5 px-3 py-1.5 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#2d9e6b]" />
+              <span className="font-mono text-[10px] uppercase tracking-widest text-white/50">
                 Legal Intelligence Platform · SG
               </span>
             </div>
 
             {/* Hero type */}
-            <h1 className="text-5xl font-extralight leading-none tracking-tight text-neutral-900 sm:text-6xl lg:text-7xl">
+            <h1 className="text-5xl font-extralight leading-none tracking-tight text-white sm:text-6xl lg:text-7xl">
               Lex
               <br />
               <span className="font-semibold">Catalyst</span>
             </h1>
-            <p className="mt-5 max-w-sm text-base font-light leading-relaxed text-neutral-500">
+            <p className="mt-5 max-w-sm text-base font-light leading-relaxed text-white/40">
               The AI-native workflow layer for modern law firms. Built for speed, trust, and the human behind every matter.
             </p>
 
             {/* Feature grid */}
-            <div className="mt-10 grid grid-cols-2 gap-px border border-neutral-200 bg-neutral-200">
+            <div className="mt-10 grid grid-cols-2 gap-px border border-white/10 bg-white/10">
               {FEATURES.map((feat) => (
                 <div
                   key={feat.label}
-                  className="group flex flex-col gap-1 bg-white p-4 transition-colors duration-150 hover:bg-[#f7ffe6]"
+                  className="group flex flex-col gap-1 bg-[#0f0f0f] p-4 transition-colors duration-150 hover:bg-white/5"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-[10px] text-[#65a30d]">{feat.glyph}</span>
-                    <span className="font-mono text-[10px] font-bold tracking-widest text-neutral-900">
+                    <span className="font-mono text-[10px] text-[#2d9e6b]">{feat.glyph}</span>
+                    <span className="font-mono text-[10px] font-bold tracking-widest text-white">
                       {feat.label}
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-500">{feat.desc}</p>
+                  <p className="text-xs text-white/40">{feat.desc}</p>
                 </div>
               ))}
             </div>
 
             {/* Status strip */}
-            <div className="mt-8 flex items-center gap-3 border-l-2 border-[#a3e635] pl-3">
-              <span className="font-mono text-[10px] text-neutral-400">
+            <div className="mt-8 flex items-center gap-3 border-l-2 border-[#2d9e6b] pl-3">
+              <span className="font-mono text-[10px] text-white/30">
                 SYS: OPERATIONAL &nbsp;·&nbsp; ENC: TLS 1.3 &nbsp;·&nbsp; AUTH: OAUTH 2.0
               </span>
             </div>
@@ -195,46 +191,46 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
         </div>
 
         {/* Vertical divider (desktop) */}
-        <div className="hidden w-px bg-neutral-200 lg:block" />
+        <div className="hidden w-px bg-white/10 lg:block" />
 
         {/* Right login panel */}
         <div className="flex shrink-0 items-center justify-center px-8 pb-16 lg:w-[420px] lg:pb-0 lg:pt-16">
           <div className="w-full max-w-sm">
             {/* Window chrome titlebar */}
-            <div className="flex items-center gap-1.5 border border-b-0 border-neutral-300 bg-neutral-100 px-3 py-2">
-              <div className="h-2 w-2 rounded-full bg-neutral-300" />
-              <div className="h-2 w-2 rounded-full bg-neutral-300" />
-              <div className="h-2 w-2 rounded-full bg-[#a3e635]" />
-              <span className="ml-2 font-mono text-[10px] text-neutral-400">
+            <div className="flex items-center gap-1.5 border border-b-0 border-white/10 bg-white/5 px-3 py-2">
+              <div className="h-2 w-2 rounded-full bg-white/20" />
+              <div className="h-2 w-2 rounded-full bg-white/20" />
+              <div className="h-2 w-2 rounded-full bg-[#2d9e6b]" />
+              <span className="ml-2 font-mono text-[10px] text-white/30">
                 auth.connect — workspace
               </span>
             </div>
 
             {/* Card body */}
-            <div className="border border-neutral-300 bg-white px-8 py-8">
+            <div className="border border-white/10 bg-[#161616] px-8 py-8">
               <div className="mb-6">
-                <span className="font-mono text-[10px] text-[#65a30d]">// AUTHENTICATE</span>
-                <h2 className="mt-1.5 text-2xl font-light tracking-tight text-neutral-900">
+                <span className="font-mono text-[10px] text-[#2d9e6b]">// AUTHENTICATE</span>
+                <h2 className="mt-1.5 text-2xl font-light tracking-tight text-white">
                   Sign in to workspace
                 </h2>
-                <p className="mt-1 text-xs text-neutral-500">
+                <p className="mt-1 text-xs text-white/40">
                   Use your firm Google account to access LexCatalyst.
                 </p>
               </div>
 
               {error && (
-                <div className="mb-5 border border-red-200 bg-red-50 p-3 font-mono text-[11px] text-red-600">
-                  <span className="text-red-400">ERR {'>'}</span> {error}
+                <div className="mb-5 border border-red-500/20 bg-red-500/10 p-3 font-mono text-[11px] text-red-400">
+                  <span className="text-red-500/70">ERR {'>'}</span> {error}
                 </div>
               )}
 
               <div className="mb-5 flex items-center gap-3">
-                <div className="h-px flex-1 border-t border-dashed border-neutral-200" />
-                <span className="font-mono text-[10px] text-neutral-400">IDENTITY PROVIDER</span>
-                <div className="h-px flex-1 border-t border-dashed border-neutral-200" />
+                <div className="h-px flex-1 border-t border-dashed border-white/10" />
+                <span className="font-mono text-[10px] text-white/25">IDENTITY PROVIDER</span>
+                <div className="h-px flex-1 border-t border-dashed border-white/10" />
               </div>
 
-              {/* Google button — width measured from container so it never overflows */}
+              {/* Google button */}
               <div ref={googleContainerRef} className="w-full overflow-hidden">
                 <GoogleLogin
                   onSuccess={(cred) => {
@@ -249,14 +245,14 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
               </div>
 
               {/* Terms */}
-              <div className="mt-6 border-t border-dashed border-neutral-200 pt-4">
-                <p className="text-center font-mono text-[10px] leading-relaxed text-neutral-400">
+              <div className="mt-6 border-t border-dashed border-white/10 pt-4">
+                <p className="text-center font-mono text-[10px] leading-relaxed text-white/25">
                   By signing in, you agree to our{' '}
-                  <span className="cursor-pointer text-neutral-600 underline underline-offset-2">
+                  <span className="cursor-pointer text-white/50 underline underline-offset-2">
                     Terms
                   </span>{' '}
                   &amp;{' '}
-                  <span className="cursor-pointer text-neutral-600 underline underline-offset-2">
+                  <span className="cursor-pointer text-white/50 underline underline-offset-2">
                     Privacy Policy
                   </span>
                 </p>
@@ -264,9 +260,9 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
             </div>
 
             {/* Statusbar footer */}
-            <div className="flex items-center justify-between border border-t-0 border-neutral-300 bg-neutral-50 px-3 py-2">
-              <span className="font-mono text-[10px] text-neutral-400">JWT · PKCE · OAUTH 2.0</span>
-              <span className="font-mono text-[10px] text-[#84cc16]">● ONLINE</span>
+            <div className="flex items-center justify-between border border-t-0 border-white/10 bg-[#0d0d0d] px-3 py-2">
+              <span className="font-mono text-[10px] text-white/20">JWT · PKCE · OAUTH 2.0</span>
+              <span className="font-mono text-[10px] text-[#2d9e6b]">● ONLINE</span>
             </div>
           </div>
         </div>

@@ -127,6 +127,7 @@ function App() {
   const {
     current,
     isKnownRoute,
+    selectHome,
     selectThread,
     startNewChat,
   } = useWorkspaceNavigation()
@@ -177,11 +178,10 @@ function App() {
   )
   const streamAbortRef = useRef<AbortController | null>(null)
   const streamAbortReasonRef = useRef<'stop' | 'navigation' | null>(null)
-  const hasAutoSelectedRef = useRef(false)
 
   useEffect(() => {
-    if (!isKnownRoute) startNewChat({ replace: true })
-  }, [isKnownRoute, startNewChat])
+    if (!isKnownRoute) selectHome({ replace: true })
+  }, [isKnownRoute, selectHome])
 
   useEffect(() => subscribeToUnauthorized(() => {
     streamAbortReasonRef.current = 'navigation'
@@ -200,14 +200,6 @@ function App() {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
   }, [])
-
-  // Auto-select first thread on initial load
-  useEffect(() => {
-    if (!hasAutoSelectedRef.current && threads.length > 0) {
-      hasAutoSelectedRef.current = true
-      selectThread(threads[0].id, { replace: true })
-    }
-  }, [threads, selectThread])
 
   // Abort any active stream when the view changes (prevents snap-back and stale streams)
   useEffect(() => {
@@ -264,7 +256,6 @@ function App() {
     startNewChat()
     setIsSidebarOpen(false)
     setIsResponding(false)
-    hasAutoSelectedRef.current = false
   }
 
   function handleNewChat() {
@@ -281,10 +272,6 @@ function App() {
     event.preventDefault()
     const trimmedPrompt = prompt.trim()
     if (!trimmedPrompt || isLoading) return
-
-    // Prevent the auto-select effect from firing when onThread adds the new thread to the cache
-    // mid-stream, which would abort the active stream.
-    hasAutoSelectedRef.current = true
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -586,7 +573,10 @@ function App() {
 
         <PanelErrorBoundary key={current.view}>
           <Suspense fallback={<PanelLoading />}>
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div
+              key={current.view}
+              className="workspace-panel-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+            >
               {current.view === 'home' ? (
                 <HomePanel
                   currentUser={currentUser}
@@ -763,8 +753,16 @@ function mobileViewTitle(view: import('./routes').AppView['view']) {
 
 function PanelLoading() {
   return (
-    <div className="grid min-h-0 flex-1 place-items-center bg-white text-sm text-neutral-500">
-      Loading workspace...
+    <div className="grid min-h-0 flex-1 place-items-center bg-white px-6 text-sm text-neutral-500">
+      <div className="w-full max-w-3xl space-y-4">
+        <div className="h-5 w-40 animate-pulse rounded-full bg-neutral-100" />
+        <div className="space-y-3 rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm">
+          <div className="h-4 w-2/3 animate-pulse rounded-full bg-neutral-100" />
+          <div className="h-4 w-full animate-pulse rounded-full bg-neutral-100" />
+          <div className="h-4 w-5/6 animate-pulse rounded-full bg-neutral-100" />
+        </div>
+        <p className="text-xs text-neutral-400">Loading workspace...</p>
+      </div>
     </div>
   )
 }

@@ -421,7 +421,6 @@ export function KnowledgeBankPanel({
         {activeTab === 'library' && selectedEntryId && selectedEntry ? (
           <KnowledgeBankReader
             key={selectedEntry.id}
-            entries={entries}
             entry={selectedEntry}
             canEdit={isWriter || selectedEntry.createdBy === currentUser?.id}
             canChangeScope={selectedEntry.createdBy === currentUser?.id}
@@ -433,7 +432,6 @@ export function KnowledgeBankPanel({
                 deleteMutation.mutate(entry.id)
               }
             }}
-            onSelectEntry={selectKnowledgeBank}
             onUpdated={refreshKnowledgeBank}
           />
         ) : activeTab === 'library' ? (
@@ -598,7 +596,6 @@ export function KnowledgeBankPanel({
 }
 
 function KnowledgeBankReader({
-  entries,
   entry,
   canEdit,
   canChangeScope,
@@ -606,10 +603,8 @@ function KnowledgeBankReader({
   matters,
   onBack,
   onDelete,
-  onSelectEntry,
   onUpdated,
 }: {
-  entries: KnowledgeBankEntry[]
   entry: KnowledgeBankEntry
   canEdit: boolean
   canChangeScope: boolean
@@ -617,7 +612,6 @@ function KnowledgeBankReader({
   matters: Matter[]
   onBack: () => void
   onDelete: (entry: KnowledgeBankEntry) => void
-  onSelectEntry: (entryId: string) => void
   onUpdated: () => void
 }) {
   const queryClient = useQueryClient()
