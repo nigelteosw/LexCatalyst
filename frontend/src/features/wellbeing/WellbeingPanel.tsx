@@ -246,23 +246,25 @@ function SurveyTab() {
           <div className="space-y-5">
             {qs.map((q) => (
               <label key={q.id} className="block">
-                <div className="flex items-center justify-between gap-4 text-sm text-[#171717]">
-                  <span>{q.text}</span>
-                  <span className="shrink-0 font-serif text-lg italic text-[#5a5a56]">
-                    {scores[q.id] ?? 3}/5
-                  </span>
-                </div>
-                <input
-                  className="mt-2 h-1.5 w-full cursor-pointer accent-[#1a6b4a]"
-                  max="5"
-                  min="1"
-                  onChange={(e) => setScores((s) => ({ ...s, [q.id]: Number(e.target.value) }))}
-                  type="range"
-                  value={scores[q.id] ?? 3}
-                />
-                <div className="mt-1 flex justify-between text-[10px] text-[#aaa9a3]">
-                  <span>Strongly disagree</span>
-                  <span>Strongly agree</span>
+                <span className="text-sm text-[#171717]">{q.text}</span>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-[#aaa9a3]">Strongly disagree</span>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setScores((s) => ({ ...s, [q.id]: n }))}
+                        className={`h-5 w-5 rounded-full border-2 transition-colors ${
+                          (scores[q.id] ?? 3) === n
+                            ? 'border-[#1a6b4a] bg-[#1a6b4a]'
+                            : 'border-[#ccc] hover:border-[#1a6b4a]'
+                        }`}
+                        aria-label={`Score ${n}`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-[#aaa9a3]">Strongly agree</span>
                 </div>
               </label>
             ))}

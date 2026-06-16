@@ -141,6 +141,7 @@ async def create_pending_document(
         team_id=team_id,
     )
     db.add(document)
+    db.flush()  # populate document.id before sync reads it as resource_id
     sync_document_metadata(db, document)
     db.commit()
     db.refresh(document)

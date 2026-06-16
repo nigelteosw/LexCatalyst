@@ -5,6 +5,7 @@ import {
   deleteActionItem,
   listActionItems,
   listFirmUsers,
+  listResourceMetadata,
   updateActionItem,
 } from '../../shared/api/api'
 import type {
@@ -12,6 +13,7 @@ import type {
   ActionStatus,
   CurrentUser,
   Matter,
+  ResourceMetadata,
 } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { isManager, priorityColors, statusColumns, userLabel } from './config'
@@ -109,6 +111,14 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
     // 30s — the board rarely changes on a sub-second cadence and we'd
     // rather not bombard the API on every panel mount.
     staleTime: 30_000,
+  })
+
+  // Cross-resource matter snapshot — only fetched when a matter filter is active.
+  const matterMetaQuery = useQuery({
+    queryKey: ['resourceMetadata', 'matter', matterFilter],
+    queryFn: () => listResourceMetadata({ matterId: matterFilter!, limit: 500 }),
+    enabled: !!matterFilter,
+    staleTime: 60_000,
   })
 
   // Firm roster changes infrequently; cache aggressively.
@@ -315,6 +325,10 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
         </div>
       )}
 
+      {matterFilter && matterMetaQuery.data && matterMetaQuery.data.length > 0 && (
+        <MatterSnapshot rows={matterMetaQuery.data} />
+      )}
+
       {mutationError && (
         <div className="border-b border-red-100 bg-red-50 px-5 py-2 text-xs text-red-700">
           {mutationError}
@@ -511,5 +525,34 @@ function ActionCard({
         <Trash2 size={12} />
       </button>
     </article>
+  )
+}
+
+const RESOURCE_LABELS: Record<string, string> = {
+  document: 'Docs',
+  knowledge_bank_entry: 'KB',
+  wiki_page: 'Wiki',
+  review_handoff: 'Handoffs',
+  action_item: 'Tickets',
+}
+
+function MatterSnapshot({ rows }: { rows: ResourceMetadata[] }) {
+  const counts = rows.reduce<Record<string, number>>((acc, r) => {
+    acc[r.resourceType] = (acc[r.resourceType] ?? 0) + 1
+    return acc
+  }, {})
+
+  return (
+    <div className="flex items-center gap-3 border-b border-black/10 bg-[#fafaf8] px-5 py-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+        Matter
+      </span>
+      {Object.entries(counts).map(([type, count]) => (
+        <span key={type} className="text-[10.5px] text-[#5a5a56]">
+          <span className="font-medium">{count}</span>{' '}
+          <span className="text-[#9a9a94]">{RESOURCE_LABELS[type] ?? type}</span>
+        </span>
+      ))}
+    </div>
   )
 }

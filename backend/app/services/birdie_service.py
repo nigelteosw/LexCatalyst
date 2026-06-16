@@ -1,6 +1,7 @@
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import User
+from app.models import ActionItem, User
 from app.providers.deepseek import DeepSeekProvider
 from app.schemas import PageContext
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
@@ -32,6 +33,25 @@ _VIEW_LABELS = {
     "wellbeing": "the Wellbeing page",
     "settings": "the Settings page",
 }
+
+
+def _format_workboard_context(db: Session, user: User) -> str:
+    items = db.scalars(
+        select(ActionItem)
+        .where(
+            or_(ActionItem.assignee_id == user.id, ActionItem.assigner_id == user.id),
+            ActionItem.status != "done",
+        )
+        .order_by(ActionItem.updated_at.desc())
+        .limit(10)
+    ).all()
+    if not items:
+        return ""
+    lines = []
+    for item in items:
+        suffix = " (submitted for review)" if item.active_handoff_id and item.status == "review" else ""
+        lines.append(f"- {item.title} · {item.status} · {item.priority}{suffix}")
+    return "\n\nWorkboard (user's active tickets):\n" + "\n".join(lines)
 
 
 def _format_page_context(ctx: PageContext | None) -> str:
@@ -71,7 +91,7 @@ async def build_birdie_messages(
 
     memories = list_memories(db, user_id=user.id, limit=50)
     system_content += format_memory_context(memories)
-
+    system_content += _format_workboard_context(db, user)
     system_content += _format_page_context(page_context)
 
     if kb_context:

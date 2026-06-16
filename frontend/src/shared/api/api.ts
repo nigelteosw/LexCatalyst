@@ -36,6 +36,7 @@ import type {
   WikiPageType,
   WorkspaceDocument,
   BirdiePageContext,
+  ResourceMetadata,
 } from '../types/workspace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
@@ -1396,6 +1397,58 @@ export async function listFirmUsers(): Promise<FirmUser[]> {
     email: u.email,
     firmRole: u.firm_role,
     isAdmin: u.is_admin,
+  }))
+}
+
+type BackendResourceMetadata = {
+  id: string
+  resource_type: string
+  resource_id: string
+  title: string | null
+  owner_user_id: string | null
+  created_by: string | null
+  team_id: string | null
+  matter_id: string | null
+  scope: string | null
+  source_document_id: string | null
+  status: string | null
+  metadata_json: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export async function listResourceMetadata(params?: {
+  resourceType?: string
+  matterId?: string
+  teamId?: string
+  scope?: string
+  limit?: number
+  offset?: number
+}): Promise<ResourceMetadata[]> {
+  const qs = new URLSearchParams()
+  if (params?.resourceType) qs.set('resource_type', params.resourceType)
+  if (params?.matterId) qs.set('matter_id', params.matterId)
+  if (params?.teamId) qs.set('team_id', params.teamId)
+  if (params?.scope) qs.set('scope', params.scope)
+  if (params?.limit != null) qs.set('limit', String(params.limit))
+  if (params?.offset != null) qs.set('offset', String(params.offset))
+  const suffix = qs.size ? `?${qs}` : ''
+  const rows = await request<BackendResourceMetadata[]>(`/resources/metadata${suffix}`)
+  return rows.map((r) => ({
+    id: r.id,
+    resourceType: r.resource_type,
+    resourceId: r.resource_id,
+    title: r.title,
+    ownerUserId: r.owner_user_id,
+    createdBy: r.created_by,
+    teamId: r.team_id,
+    matterId: r.matter_id,
+    scope: r.scope,
+    sourceDocumentId: r.source_document_id,
+    status: r.status,
+    metadataJson: r.metadata_json,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   }))
 }
 

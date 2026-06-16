@@ -410,3 +410,20 @@ export type BirdiePageContext = {
   kbEntryTitle?: string | null
   actionTitle?: string | null
 }
+
+export type ResourceMetadata = {
+  id: string
+  resourceType: string
+  resourceId: string
+  title: string | null
+  ownerUserId: string | null
+  createdBy: string | null
+  teamId: string | null
+  matterId: string | null
+  scope: string | null
+  sourceDocumentId: string | null
+  status: string | null
+  metadataJson: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
