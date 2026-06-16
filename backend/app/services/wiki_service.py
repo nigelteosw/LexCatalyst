@@ -17,7 +17,7 @@ from app.models import (
 )
 from app.providers.deepseek import DeepSeekProvider
 from app.schemas import WikiIngestRequest, WikiPageCreate, WikiPageUpdate
-from app.services.resource_metadata_service import sync_wiki_metadata
+from app.services.resource_metadata_service import sync_metadata_safe, sync_wiki_metadata
 
 DEFAULT_PAGE_TYPES = {"source_summary", "issue", "timeline", "playbook", "memory_note"}
 ALL_PAGE_TYPES = DEFAULT_PAGE_TYPES | {"entity", "clause", "authority", "question_answer"}
@@ -132,8 +132,8 @@ def create_wiki_page(db: Session, *, user_id: str, schema: WikiPageCreate) -> Wi
         edit_source="user",
         change_summary="Created page",
     )
-    sync_wiki_metadata(db, page)
     db.commit()
+    sync_metadata_safe(db, sync_wiki_metadata, page)
     db.refresh(page)
     return page
 
@@ -188,8 +188,8 @@ def update_wiki_page(
         edit_source="user",
         change_summary=schema.change_summary or "Updated page",
     )
-    sync_wiki_metadata(db, page)
     db.commit()
+    sync_metadata_safe(db, sync_wiki_metadata, page)
     db.refresh(page)
     return page
 
@@ -210,8 +210,8 @@ def publish_wiki_page(db: Session, *, user_id: str, page_id: str) -> WikiPage | 
         edit_source="user",
         change_summary="Published to team",
     )
-    sync_wiki_metadata(db, page)
     db.commit()
+    sync_metadata_safe(db, sync_wiki_metadata, page)
     db.refresh(page)
     return page
 
@@ -238,8 +238,8 @@ def archive_wiki_page(db: Session, *, user_id: str, page_id: str) -> bool:
         edit_source="user",
         change_summary="Archived page",
     )
-    sync_wiki_metadata(db, page)
     db.commit()
+    sync_metadata_safe(db, sync_wiki_metadata, page)
     return True
 
 
@@ -424,8 +424,8 @@ async def ingest_document_to_wiki(
         change_summary=f"Generated from {document.filename}",
     )
     add_sources(db, page=page, document=document, chunks=chunks, payload=page_payload)
-    sync_wiki_metadata(db, page)
     db.commit()
+    sync_metadata_safe(db, sync_wiki_metadata, page)
     db.refresh(page)
     return page
 

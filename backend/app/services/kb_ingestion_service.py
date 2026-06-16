@@ -28,7 +28,7 @@ from app.services.knowledge_bank_service import (
     build_entry_embedding_text,
     log_kb_access,
 )
-from app.services.resource_metadata_service import sync_kb_metadata
+from app.services.resource_metadata_service import sync_kb_metadata, sync_metadata_safe
 from app.worker_types import WorkerClaim
 
 FORMAT_MODEL = "deepseek-v4-flash"
@@ -73,9 +73,9 @@ def create_pending_kb_entry(
         existing.embedding_content_hash = None
         existing.processing_started_at = None
         existing.processing_attempts = 0
-        sync_kb_metadata(db, existing)
         db.commit()
         db.refresh(existing)
+        sync_metadata_safe(db, sync_kb_metadata, existing)
         return existing
 
     entry = KnowledgeBankEntry(
@@ -101,9 +101,9 @@ def create_pending_kb_entry(
         matter_id=entry.matter_id,
         commit=False,
     )
-    sync_kb_metadata(db, entry)
     db.commit()
     db.refresh(entry)
+    sync_metadata_safe(db, sync_kb_metadata, entry)
     return entry
 
 
@@ -276,13 +276,13 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         entry.error_message = None
         entry.processing_started_at = None
         entry.version += 1
-        sync_kb_metadata(db, entry)
         db.commit()
     except Exception as exc:  # noqa: BLE001
         db.rollback()
         _mark_failed(claim, f"Unexpected error: {exc}")
     finally:
         db.close()
+    sync_metadata_safe(db, sync_kb_metadata, entry)
 
 
 def _mark_failed(claim: WorkerClaim, message: str) -> None:
@@ -302,10 +302,10 @@ def _mark_failed(claim: WorkerClaim, message: str) -> None:
         entry.status = "failed"
         entry.error_message = message[:MAX_ERROR_LENGTH]
         entry.processing_started_at = None
-        sync_kb_metadata(db, entry)
         db.commit()
     finally:
         db.close()
+    sync_metadata_safe(db, sync_kb_metadata, entry)
 
 
 # --- Prompt building -----------------------------------------------------

@@ -19,6 +19,7 @@ from app.services.resource_metadata_service import (
     RESOURCE_ACTION_ITEM,
     delete_resource_metadata,
     sync_action_metadata,
+    sync_metadata_safe,
 )
 
 # Bounded fetch so the list endpoint can't run away. A typical legal team
@@ -79,9 +80,8 @@ def create_action_item(
         tags=_normalise_tags(schema.tags),
     )
     db.add(item)
-    db.flush()
-    sync_action_metadata(db, item)
     db.commit()
+    sync_metadata_safe(db, sync_action_metadata, item)
     return get_action_item(db, item.id) or item
 
 
@@ -123,8 +123,8 @@ def update_action_item(
 
     for field, value in payload.items():
         setattr(item, field, value)
-    sync_action_metadata(db, item)
     db.commit()
+    sync_metadata_safe(db, sync_action_metadata, item)
     return get_action_item(db, item.id)
 
 

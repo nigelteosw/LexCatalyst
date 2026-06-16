@@ -1,5 +1,19 @@
+import logging
 from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
+
+_log = logging.getLogger(__name__)
+
+
+def sync_metadata_safe(db: Session, sync_fn, *args, **kwargs) -> None:
+    """Run a metadata sync in its own mini-transaction after the primary commit.
+    Failures are logged and swallowed — the index is best-effort, never load-bearing."""
+    try:
+        sync_fn(db, *args, **kwargs)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        _log.warning("Metadata sync skipped (%s): %s", getattr(sync_fn, "__name__", sync_fn), exc)
 
 from app.models import (
     ActionItem,

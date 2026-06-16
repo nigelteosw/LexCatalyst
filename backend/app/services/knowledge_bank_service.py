@@ -29,6 +29,7 @@ from app.services.resource_metadata_service import (
     RESOURCE_KB_ENTRY,
     delete_resource_metadata,
     sync_kb_metadata,
+    sync_metadata_safe,
 )
 
 MAX_EMBEDDING_TEXT_CHARS = 30_000
@@ -432,11 +433,11 @@ async def create_kb_entry(
             matter_id=entry.matter_id,
             commit=False,
         )
-        sync_kb_metadata(db, entry)
         db.commit()
     except Exception:
         db.rollback()
         raise
+    sync_metadata_safe(db, sync_kb_metadata, entry)
     return get_kb_entry(db, entry.id) or entry
 
 
@@ -482,11 +483,11 @@ async def add_document_to_kb(
                     matter_id=existing.matter_id,
                     commit=False,
                 )
-                sync_kb_metadata(db, existing)
                 db.commit()
             except Exception:
                 db.rollback()
                 raise
+            sync_metadata_safe(db, sync_kb_metadata, existing)
         return get_kb_entry(db, existing.id) or existing
 
     entry = KnowledgeBankEntry(
@@ -517,11 +518,11 @@ async def add_document_to_kb(
             matter_id=entry.matter_id,
             commit=False,
         )
-        sync_kb_metadata(db, entry)
         db.commit()
     except Exception:
         db.rollback()
         raise
+    sync_metadata_safe(db, sync_kb_metadata, entry)
     return get_kb_entry(db, entry.id) or entry
 
 
@@ -598,11 +599,11 @@ async def update_kb_entry(
             matter_id=entry.matter_id,
             commit=False,
         )
-        sync_kb_metadata(db, entry)
         db.commit()
     except Exception:
         db.rollback()
         raise
+    sync_metadata_safe(db, sync_kb_metadata, entry)
     return get_kb_entry(db, entry.id)
 
 
@@ -741,11 +742,11 @@ async def promote_kb_entry(
             matter_id=source.matter_id,
             commit=False,
         )
-        sync_kb_metadata(db, promoted)
         db.commit()
     except Exception:
         db.rollback()
         raise
+    sync_metadata_safe(db, sync_kb_metadata, promoted)
     db.refresh(redaction)
     return get_kb_entry(db, promoted.id) or promoted, redaction
 
@@ -783,11 +784,11 @@ async def approve_redaction(
             entry_id=entry.id,
             commit=False,
         )
-        sync_kb_metadata(db, entry)
         db.commit()
     except Exception:
         db.rollback()
         raise
+    sync_metadata_safe(db, sync_kb_metadata, entry)
     return get_kb_entry(db, entry.id)
 
 

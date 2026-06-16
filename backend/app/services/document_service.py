@@ -23,6 +23,7 @@ from app.services.resource_metadata_service import (
     RESOURCE_DOCUMENT,
     delete_resource_metadata,
     sync_document_metadata,
+    sync_metadata_safe,
 )
 from app.services.storage_service import (
     StorageError,
@@ -141,10 +142,9 @@ async def create_pending_document(
         team_id=team_id,
     )
     db.add(document)
-    db.flush()  # populate document.id before sync reads it as resource_id
-    sync_document_metadata(db, document)
     db.commit()
     db.refresh(document)
+    sync_metadata_safe(db, sync_document_metadata, document)
     document_id = document.id
 
     try:
@@ -160,9 +160,9 @@ async def create_pending_document(
         document.status = "processing"
         document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
-        sync_document_metadata(db, document)
         db.commit()
         db.refresh(document)
+        sync_metadata_safe(db, sync_document_metadata, document)
         return document
     except (StorageError, ValueError) as exc:
         db.rollback()
@@ -171,9 +171,9 @@ async def create_pending_document(
             document.status = "failed"
             document.error_message = str(exc)[:MAX_ERROR_LENGTH]
             document.updated_at = datetime.now(UTC)
-            sync_document_metadata(db, document)
             db.commit()
             db.refresh(document)
+            sync_metadata_safe(db, sync_document_metadata, document)
             return document
         raise
 
@@ -325,13 +325,13 @@ async def process_document(claim: WorkerClaim) -> None:
         document.error_message = None
         document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
-        sync_document_metadata(db, document)
         db.commit()
     except Exception as exc:  # noqa: BLE001 - persist worker failures
         db.rollback()
         _mark_document_failed(claim, f"Document persistence failed: {exc}")
     finally:
         db.close()
+    sync_metadata_safe(db, sync_document_metadata, document)
 
 
 def _mark_document_failed(claim: WorkerClaim, message: str) -> None:
@@ -352,10 +352,10 @@ def _mark_document_failed(claim: WorkerClaim, message: str) -> None:
         document.error_message = message[:MAX_ERROR_LENGTH]
         document.processing_started_at = None
         document.updated_at = datetime.now(UTC)
-        sync_document_metadata(db, document)
         db.commit()
     finally:
         db.close()
+    sync_metadata_safe(db, sync_document_metadata, document)
 
 
 def list_user_documents(
@@ -488,9 +488,9 @@ def rename_user_document(
             chunk.page_number,
             chunk.chunk_index,
         )
-    sync_document_metadata(db, document)
     db.commit()
     db.refresh(document)
+    sync_metadata_safe(db, sync_document_metadata, document)
     return document
 
 

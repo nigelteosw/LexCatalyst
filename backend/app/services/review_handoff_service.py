@@ -31,6 +31,7 @@ from app.services.resource_metadata_service import (
     delete_resource_metadata,
     sync_action_metadata,
     sync_handoff_metadata,
+    sync_metadata_safe,
 )
 
 
@@ -210,10 +211,11 @@ def create_handoff(
             _carry_forward_annotations(db, prev_handoff_id=action.active_handoff_id, new_handoff=handoff)
         action.active_handoff_id = handoff.id
         action.status = "review"
-        sync_action_metadata(db, action)
 
-    sync_handoff_metadata(db, handoff)
     db.commit()
+    if action is not None:
+        sync_metadata_safe(db, sync_action_metadata, action)
+    sync_metadata_safe(db, sync_handoff_metadata, handoff)
     db.refresh(handoff)
     return handoff
 
@@ -294,14 +296,17 @@ def update_handoff_status(
             if action and str(action.active_handoff_id) == str(handoff.id):
                 action.status = "done"
                 action.active_handoff_id = None
-                sync_action_metadata(db, action)
 
     handoff.status = status
     if reviewer_id is not None:
         handoff.reviewer_id = reviewer_id
 
-    sync_handoff_metadata(db, handoff)
     db.commit()
+    if status == "completed" and handoff.action_id:
+        completed_action = db.get(ActionItem, handoff.action_id)
+        if completed_action:
+            sync_metadata_safe(db, sync_action_metadata, completed_action)
+    sync_metadata_safe(db, sync_handoff_metadata, handoff)
     db.refresh(handoff)
     return get_handoff(db, handoff.id)
 
@@ -311,13 +316,16 @@ def return_handoff_for_rework(db: Session, handoff_id: str) -> ReviewHandoff | N
     if not handoff:
         return None
     handoff.status = "returned"
+    action_to_sync = None
     if handoff.action_id:
         action = db.get(ActionItem, handoff.action_id)
         if action:
             action.status = "in_progress"
-            sync_action_metadata(db, action)
-    sync_handoff_metadata(db, handoff)
+            action_to_sync = action
     db.commit()
+    if action_to_sync:
+        sync_metadata_safe(db, sync_action_metadata, action_to_sync)
+    sync_metadata_safe(db, sync_handoff_metadata, handoff)
     return get_handoff(db, handoff.id)
 
 
@@ -334,14 +342,17 @@ def reject_handoff(
         return None
     handoff.status = "returned"
     handoff.return_reason = reason
+    action_to_sync = None
     if handoff.action_id:
         action = db.get(ActionItem, handoff.action_id)
         if action:
             action.status = "in_progress"
             action.active_handoff_id = None
-            sync_action_metadata(db, action)
-    sync_handoff_metadata(db, handoff)
+            action_to_sync = action
     db.commit()
+    if action_to_sync:
+        sync_metadata_safe(db, sync_action_metadata, action_to_sync)
+    sync_metadata_safe(db, sync_handoff_metadata, handoff)
     return get_handoff(db, handoff.id)
 
 
@@ -349,13 +360,14 @@ def delete_handoff(db: Session, handoff_id: str) -> bool:
     handoff = db.get(ReviewHandoff, handoff_id)
     if not handoff:
         return False
+    action_to_sync = None
     if handoff.action_id:
         action = db.get(ActionItem, handoff.action_id)
         if action and str(action.active_handoff_id) == str(handoff.id):
             action.active_handoff_id = None
             if action.status == "review":
                 action.status = "in_progress"
-            sync_action_metadata(db, action)
+            action_to_sync = action
     delete_resource_metadata(
         db,
         resource_type=RESOURCE_REVIEW_HANDOFF,
@@ -363,6 +375,8 @@ def delete_handoff(db: Session, handoff_id: str) -> bool:
     )
     db.delete(handoff)
     db.commit()
+    if action_to_sync:
+        sync_metadata_safe(db, sync_action_metadata, action_to_sync)
     return True
 
 
