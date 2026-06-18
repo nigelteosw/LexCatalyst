@@ -423,6 +423,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           onActionStateChange={(patch) => {
             applyOptimistic(selectedItem.id, patch)
           }}
+          selectHandoffReview={(id) => selectHandoffReview(id)}
           isDeleting={deleteMutation.isPending}
           isUpdating={updateMutation.isPending}
         />

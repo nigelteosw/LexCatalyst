@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Check, ClipboardList, Pencil, Tag, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, Pencil, Tag, Trash2, X } from 'lucide-react'
 import type {
   ActionItem,
   ActionPriority,
@@ -9,7 +9,6 @@ import type {
   Matter,
 } from '../../../shared/types/workspace'
 import { isManager, priorityColors, statusColumns, userLabel } from '../config'
-import { ReviewPane } from './ReviewPane'
 import { Dialog } from '../../../shared/ui/Dialog'
 
 type ActionPatch = {
@@ -33,6 +32,7 @@ type ActionDetailDialogProps = {
   onUpdate: (patch: ActionPatch) => void
   onDelete: () => void
   onActionStateChange: (patch: Partial<ActionItem>) => void
+  selectHandoffReview: (actionId: string) => void
   isDeleting: boolean
   isUpdating: boolean
 }
@@ -46,7 +46,8 @@ export function ActionDetailDialog({
   onBack,
   onUpdate,
   onDelete,
-  onActionStateChange,
+  onActionStateChange: _onActionStateChange,
+  selectHandoffReview,
   isDeleting,
   isUpdating,
 }: ActionDetailDialogProps) {
@@ -64,9 +65,6 @@ export function ActionDetailDialog({
   const isAssignee = item.assigneeId === currentUser?.id
   const canMove = manager || isAssignee
   const [tagDraft, setTagDraft] = useState('')
-  const [tab, setTab] = useState<'details' | 'handoff'>(
-    item.activeHandoffId ? 'handoff' : 'details',
-  )
 
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(item.title)
@@ -178,21 +176,6 @@ export function ActionDetailDialog({
     >
       <Trash2 size={15} />
     </button>
-  )
-
-  const tabBar = (
-    <div className="flex shrink-0 items-center gap-1 border-b border-black/10 bg-white px-3 py-1.5">
-      <TabButton active={tab === 'details'} onClick={() => setTab('details')}>
-        Details
-      </TabButton>
-      <TabButton active={tab === 'handoff'} onClick={() => setTab('handoff')}>
-        <ClipboardList size={11} />
-        Review handoff
-        {item.activeHandoffId && (
-          <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[#f0a000]" />
-        )}
-      </TabButton>
-    </div>
   )
 
   const detailsBody = (
@@ -417,6 +400,31 @@ export function ActionDetailDialog({
           </p>
         )}
       </div>
+
+      {item.activeHandoffId && (
+        <div className="rounded-[10px] border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                {item.status === 'in_progress' ? 'Draft returned for rework' : 'Handoff ready for review'}
+              </p>
+              <p className="mt-0.5 text-[11px] text-amber-700">
+                Open the full review page to annotate and respond.
+              </p>
+            </div>
+            <button
+              className="shrink-0 rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700"
+              onClick={() => {
+                onClose()
+                selectHandoffReview(item.id)
+              }}
+              type="button"
+            >
+              Open review
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 
@@ -438,20 +446,9 @@ export function ActionDetailDialog({
           </div>
           {deleteBtn}
         </header>
-        {tabBar}
-        {tab === 'handoff' ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <ReviewPane
-              action={item}
-              currentUser={currentUser}
-              onActionStateChange={onActionStateChange}
-            />
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto">
-            {detailsBody}
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto">
+          {detailsBody}
+        </div>
       </div>
     )
   }
@@ -460,45 +457,12 @@ export function ActionDetailDialog({
   return (
     <Dialog
       bodyClassName="p-0"
-      className={tab === 'handoff' ? 'max-w-6xl' : 'max-w-2xl'}
+      className="max-w-2xl"
       headerActions={deleteBtn}
       onClose={onClose}
       title={titleContent}
     >
-      {tabBar}
-      {tab === 'handoff' ? (
-        <ReviewPane
-          action={item}
-          currentUser={currentUser}
-          onActionStateChange={onActionStateChange}
-        />
-      ) : (
-        detailsBody
-      )}
+      {detailsBody}
     </Dialog>
-  )
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-        active
-          ? 'bg-[#0f0f0f] text-white'
-          : 'text-[#5a5a56] hover:bg-[#f4f3ef]'
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
   )
 }
