@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CheckSquare, Plus, Tag, Trash2 } from 'lucide-react'
+import { ArrowLeft, CheckSquare, Plus, Tag, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteActionItem,
@@ -23,6 +23,7 @@ import { Button } from '../../shared/ui/Button'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
 import { useWorkspaceNavigation } from '../../app/routes'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
+import { ReviewPane } from './components/ReviewPane'
 
 const WORKBOARD_HELP: HelpContent = {
   intro: 'A shared Kanban board for delegating, tracking, and reviewing legal work across your team.',
@@ -94,7 +95,7 @@ const ACTIONS_QUERY_KEY = ['actions'] as const
 export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
   const queryClient = useQueryClient()
   const manager = isManager(currentUser)
-  const { current, selectActions } = useWorkspaceNavigation()
+  const { current, selectActions, selectHandoffReview } = useWorkspaceNavigation()
   const selectedActionId = current.view === 'actions' ? current.actionId : null
 
   const [matterFilter, setMatterFilter] = useState<string | null>(null)
@@ -245,6 +246,20 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
 
   const isInitialLoading = actionsQuery.isPending
 
+  if (current.view === 'handoff_review') {
+    const reviewItem = allItems.find((item) => item.id === current.actionId) ?? null
+    return (
+      <HandoffReviewPage
+        item={reviewItem}
+        currentUser={currentUser}
+        onBack={() => selectActions()}
+        onActionStateChange={(patch) => {
+          if (reviewItem) applyOptimistic(reviewItem.id, patch)
+        }}
+      />
+    )
+  }
+
   return (
     <section className="flex h-full min-h-0 flex-col bg-[#fafaf8]">
       <PanelHeader
@@ -335,7 +350,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden sm:p-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden">
         {isInitialLoading ? (
           <BoardSkeleton />
         ) : actionsQuery.isError ? (
@@ -344,14 +359,14 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           </div>
         ) : (
           statusColumns.map((col) => (
-            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-64 sm:min-h-0">
-              <div className="mb-3 flex items-center gap-2 border-t-2 border-[#0f0f0f] pt-3">
-                <h3 className="text-xs font-semibold text-[#0f0f0f]">{col.label}</h3>
-                <span className="text-[10px] text-[#9a9a94]">
+            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72 sm:min-h-0">
+              <div className="mb-3 flex items-center gap-2">
+                <h3 className="text-xs font-semibold text-[#5a5a56]">{col.label}</h3>
+                <span className="rounded-full bg-[#f4f3ef] px-1.5 py-0.5 text-[10px] text-[#9a9a94]">
                   {grouped[col.id].length}
                 </span>
               </div>
-              <div className="flex flex-1 flex-col sm:min-h-0 sm:overflow-y-auto">
+              <div className="flex flex-1 flex-col gap-2 sm:min-h-0 sm:overflow-y-auto sm:pr-1">
                 {grouped[col.id].map((item) => (
                   <ActionCard
                     key={item.id}
@@ -365,7 +380,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
                   />
                 ))}
                 {grouped[col.id].length === 0 && (
-                  <div className="py-6 text-center text-xs text-[#aaa9a3]">
+                  <div className="rounded-[10px] border border-dashed border-black/10 px-3 py-5 text-center text-[11px] text-[#aaa9a3]">
                     No {col.label.toLowerCase()} tickets
                   </div>
                 )}
@@ -420,19 +435,23 @@ function BoardSkeleton() {
   return (
     <>
       {statusColumns.map((col) => (
-        <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-64">
-          <div className="mb-3 flex items-center gap-2 border-t-2 border-[#eeecea] pt-3">
+        <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72">
+          <div className="mb-3 flex items-center gap-2">
             <div className="h-3 w-16 rounded bg-[#eeecea]" />
-            <div className="h-3 w-4 rounded bg-[#f4f3ef]" />
+            <div className="h-4 w-6 rounded-full bg-[#eeecea]" />
           </div>
-          <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col gap-2">
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="animate-pulse border-b border-black/6 border-l-2 border-l-[#eeecea] py-3.5 pl-4"
+                className="animate-pulse rounded-[10px] border border-l-[3px] border-black/8 border-l-[#eeecea] bg-white p-4"
               >
                 <div className="h-3 w-3/4 rounded bg-[#eeecea]" />
                 <div className="mt-2 h-2.5 w-1/2 rounded bg-[#f4f3ef]" />
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="h-5 w-5 rounded-full bg-[#f4f3ef]" />
+                  <div className="h-2.5 w-20 rounded bg-[#f4f3ef]" />
+                </div>
               </div>
             ))}
           </div>
@@ -456,41 +475,80 @@ function ActionCard({
       ? 'border-l-[#e05252]'
       : item.priority === 'medium'
         ? 'border-l-[#d97706]'
-        : 'border-l-black/10'
+        : 'border-l-black/15'
 
-  const assigneeLabel = item.assignee
+  const assigneeInitials = item.assignee
+    ? (item.assignee.fullName ?? item.assignee.email)
+        .split(' ')
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase() ?? '')
+        .join('')
+    : '?'
+
+  const assigneeName = item.assignee
     ? (item.assignee.fullName ?? item.assignee.email)
     : 'Unassigned'
 
-  const dueDateLabel = item.dueDate
-    ? `Due ${new Date(item.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-    : null
-
-  const meta = [assigneeLabel, dueDateLabel].filter(Boolean).join(' · ')
-
   return (
-    <article className={`group relative border-b border-black/6 border-l-2 ${priorityBorderColor}`}>
+    <article
+      className={`group relative rounded-[10px] border border-l-[3px] bg-white transition-all hover:border-black/20 hover:shadow-sm ${priorityBorderColor} border-black/8`}
+    >
       <button
-        className="w-full py-3.5 pl-4 pr-10 text-left transition-colors hover:bg-[#f7f6f3]"
+        className="w-full p-4 pr-10 text-left"
         onClick={onClick}
         type="button"
       >
-        <p className="line-clamp-2 text-sm font-medium text-[#0f0f0f]">{item.title}</p>
+        <p className="line-clamp-2 text-sm font-medium leading-5 text-[#0f0f0f]">
+          {item.title}
+        </p>
+
         {item.activeHandoffId && (
-          <p className="mt-0.5 text-[10px] text-[#d97706]">
-            {item.status === 'in_progress' ? 'Returned for rework' : 'Handoff ready'}
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+            {item.status === 'in_progress' ? 'Returned for rework' : 'Review ready'}
+          </div>
+        )}
+
+        {item.description && (
+          <p className="mt-1.5 line-clamp-2 text-[11px] leading-4 text-[#8c8c86]">
+            {item.description}
           </p>
         )}
-        {meta && (
-          <p className="mt-1 text-[11px] text-[#6f6f69]">{meta}</p>
-        )}
+
         {item.tags.length > 0 && (
-          <p className="mt-0.5 text-[10px] text-[#9a9a94]">{item.tags.join(', ')}</p>
+          <div className="mt-2.5 flex flex-wrap gap-1">
+            {item.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-md bg-[#eeecff] px-1.5 py-0.5 text-[10px] font-medium text-[#4a3db0]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         )}
+
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#e8f0fe] text-[9px] font-semibold text-[#1a4a8a]">
+            {assigneeInitials}
+          </div>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-[#6f6f69]">
+            {assigneeName}
+          </span>
+          {item.dueDate && (
+            <span className="shrink-0 text-[10px] text-[#9a9a94]">
+              {new Date(item.dueDate).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              })}
+            </span>
+          )}
+        </div>
       </button>
+
       <button
         aria-label={`Delete ${item.title}`}
-        className="absolute right-2 top-1/2 -translate-y-1/2 grid h-6 w-6 place-items-center rounded text-[#aaa9a3] opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"
+        className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded text-[#aaa9a3] opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"
         onClick={onDelete}
         title="Delete ticket"
         type="button"
@@ -498,6 +556,67 @@ function ActionCard({
         <Trash2 size={12} />
       </button>
     </article>
+  )
+}
+
+function HandoffReviewPage({
+  item,
+  currentUser,
+  onBack,
+  onActionStateChange,
+}: {
+  item: ActionItem | null
+  currentUser: CurrentUser | null
+  onBack: () => void
+  onActionStateChange: (patch: Partial<ActionItem>) => void
+}) {
+  if (!item) {
+    return (
+      <div className="flex h-full flex-col bg-[#fafaf8]">
+        <header className="flex shrink-0 items-center gap-3 border-b border-black/10 bg-white px-4 py-3 sm:px-6">
+          <button
+            aria-label="Back to Workboard"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#5a5a56] hover:bg-[#f4f3ef]"
+            onClick={onBack}
+            type="button"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <span className="text-sm font-semibold text-[#0f0f0f]">Review handoff</span>
+        </header>
+        <div className="flex flex-1 items-center justify-center text-sm text-[#9a9a94]">
+          Ticket not found.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full flex-col bg-[#fafaf8]">
+      <header className="flex shrink-0 items-center gap-3 border-b border-black/10 bg-white px-4 py-3 sm:px-6">
+        <button
+          aria-label="Back to Workboard"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#5a5a56] hover:bg-[#f4f3ef]"
+          onClick={onBack}
+          type="button"
+        >
+          <ArrowLeft size={16} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+            Review handoff
+          </p>
+          <p className="truncate text-sm font-semibold text-[#0f0f0f]">{item.title}</p>
+        </div>
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <ReviewPane
+          action={item}
+          currentUser={currentUser}
+          onActionStateChange={onActionStateChange}
+        />
+      </div>
+    </div>
   )
 }
 
