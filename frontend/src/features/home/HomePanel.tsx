@@ -15,6 +15,7 @@ import {
   listActionItems,
   listChatThreads,
   listDocuments,
+  listKnowledgeBankEntries,
   getSurveyResults,
 } from '../../shared/api/api'
 import type { CurrentUser, ActionItem } from '../../shared/types/workspace'
@@ -32,7 +33,7 @@ type Props = {
 // ---------------------------------------------------------------------------
 
 const FEATURES = [
-  { icon: MessageSquare, label: 'Chat',         description: 'Ask the AI anything',           nav: 'chat'     },
+  { icon: MessageSquare, label: 'Chat',         description: 'AI searches KB & docs for you', nav: 'chat'     },
   { icon: FileText,      label: 'Documents',    description: 'Upload & search PDFs',           nav: 'documents'},
   { icon: BookMarked,    label: 'Knowledge',    description: 'Precedents & playbooks',         nav: 'knowledge'},
   { icon: CheckSquare,   label: 'Workboard',    description: 'Track & delegate work',          nav: 'actions'  },
@@ -161,9 +162,14 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
             )}
           </div>
 
-          {/* Right — recent conversations */}
-          <aside>
+          {/* Right — recent conversations + AI context */}
+          <aside className="space-y-10">
             <RecentThreadsSection onClick={(id) => nav.selectThread(id)} />
+            <AIContextSection
+              currentUser={currentUser}
+              onKbClick={() => nav.selectKnowledgeBank()}
+              onWorkboardClick={() => nav.selectActions()}
+            />
           </aside>
         </div>
       </div>
@@ -276,6 +282,61 @@ function RecentThreadsSection({ onClick }: { onClick: (threadId: string) => void
           ))}
         </div>
       )}
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// AI context awareness section
+// ---------------------------------------------------------------------------
+
+function AIContextSection({
+  currentUser,
+  onKbClick,
+  onWorkboardClick,
+}: {
+  currentUser: CurrentUser | null
+  onKbClick: () => void
+  onWorkboardClick: () => void
+}) {
+  const kbQ = useQuery({ queryKey: ['kbEntries', {}], queryFn: () => listKnowledgeBankEntries(), staleTime: 60_000 })
+  const actionsQ = useQuery({ queryKey: ['actions'], queryFn: listActionItems, staleTime: 30_000 })
+
+  const kbCount = kbQ.data?.length ?? 0
+  const openCount = (actionsQ.data ?? []).filter(
+    (a: ActionItem) =>
+      (a.assigneeId === currentUser?.id || a.assignerId === currentUser?.id) &&
+      a.status !== 'done',
+  ).length
+
+  return (
+    <section>
+      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+        AI context
+      </h2>
+      <p className="mb-3 text-xs leading-relaxed text-neutral-400">
+        LexChat and Birdie automatically search these before every response — no need to paste anything in.
+      </p>
+      <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+        <button
+          className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-neutral-50"
+          onClick={onKbClick}
+          type="button"
+        >
+          <BookMarked size={14} className="shrink-0 text-neutral-300 transition group-hover:text-neutral-600" />
+          <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900">Knowledge Bank</span>
+          <span className="text-xs text-neutral-400">{kbQ.isPending ? '…' : `${kbCount} ${kbCount === 1 ? 'entry' : 'entries'}`}</span>
+        </button>
+        <button
+          className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-neutral-50"
+          onClick={onWorkboardClick}
+          type="button"
+        >
+          <CheckSquare size={14} className="shrink-0 text-neutral-300 transition group-hover:text-neutral-600" />
+          <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900">Workboard</span>
+          <span className="text-xs text-neutral-400">{actionsQ.isPending ? '…' : `${openCount} open`}</span>
+        </button>
+      </div>
     </section>
   )
 }

@@ -121,5 +121,5 @@ async def stream_birdie_response(
         page_context=page_context,
     )
     provider = DeepSeekProvider()
-    async for chunk in provider.stream_chat(messages, model="deepseek-v4-pro"):
+    async for chunk in provider.stream_chat(messages, model="deepseek-v4-flash"):
         yield chunk
