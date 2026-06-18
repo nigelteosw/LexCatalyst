@@ -446,7 +446,7 @@ export function KnowledgeBankPanel({
               />
             </aside>
 
-            <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-5">
+            <main className="min-w-0 flex-1 overflow-y-auto p-5 lg:p-6">
               <div className="mb-4 flex gap-2">
                 <div className="relative min-w-0 flex-1">
                   <Search
@@ -475,7 +475,7 @@ export function KnowledgeBankPanel({
                 <EmptyState title="Loading Knowledge Bank..." />
               ) : filteredEntries.length > 0 ? (
                 <div>
-                  <div className="grid gap-3 xl:grid-cols-2">
+                  <div className="divide-y divide-black/6">
                     {filteredEntries.map((entry) => (
                       <EntryCard
                         key={entry.id}
@@ -954,43 +954,36 @@ function EntryCard({
   isSelected: boolean
   onClick: () => void
 }) {
+  const scopeMeta = `${scopeLabels[entry.scope]} · ${entry.entryType.replaceAll('_', ' ')}`
+
   return (
     <button
-      className={`rounded-[14px] border p-4 text-left transition-all ${
-        isSelected
-          ? 'border-black/25 bg-white shadow-sm'
-          : 'border-black/10 bg-white hover:border-black/20 hover:shadow-sm'
+      className={`flex w-full items-start gap-3 py-4 text-left transition-colors hover:bg-[#f7f6f3] ${
+        isSelected ? 'bg-[#f7f6f3]' : ''
       }`}
       onClick={onClick}
       type="button"
     >
-      <div className="flex items-start gap-3">
-        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-[9px] ${typeTone(entry.entryType)}`}>
-          <FileText size={16} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 text-sm font-semibold text-[#0f0f0f]">{entry.title}</h3>
-            <ChevronRight size={14} className="mt-0.5 shrink-0 text-[#aaa9a3]" />
-          </div>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#777770]">
-            {entry.status === 'processing'
-              ? 'Summarising document with DeepSeek Pro...'
-              : entry.status === 'failed'
-                ? entry.errorMessage ?? 'Summary generation failed.'
-                : entry.bodyMarkdown}
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <Pill label={entry.entryType.replaceAll('_', ' ')} tone="neutral" />
-            <Pill label={scopeLabels[entry.scope]} tone={scopeTone(entry.scope)} />
-            {entry.status === 'processing' && <Pill label="processing" tone="amber" />}
-            {entry.status === 'failed' && <Pill label="failed" tone="red" />}
-            {entry.piiStatus !== 'clean' && (
-              <Pill label={entry.piiStatus.replaceAll('_', ' ')} tone={piiTone(entry.piiStatus)} />
-            )}
-          </div>
-        </div>
+      <div className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px] ${typeTone(entry.entryType)}`}>
+        <FileText size={15} />
       </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="line-clamp-1 text-sm font-semibold text-[#0f0f0f]">{entry.title}</h3>
+        <p className="mt-0.5 line-clamp-1 text-xs text-[#777770]">
+          {entry.status === 'processing'
+            ? 'Processing document…'
+            : entry.status === 'failed'
+              ? entry.errorMessage ?? 'Processing failed.'
+              : entry.bodyMarkdown}
+        </p>
+        <p className="mt-1 text-[10px] text-[#9a9a94]">
+          {scopeMeta}
+          {entry.status === 'processing' && ' · processing'}
+          {entry.status === 'failed' && ' · failed'}
+          {entry.piiStatus !== 'clean' && ` · ${entry.piiStatus.replaceAll('_', ' ')}`}
+        </p>
+      </div>
+      <ChevronRight size={14} className="mt-1 shrink-0 text-[#aaa9a3]" />
     </button>
   )
 }
