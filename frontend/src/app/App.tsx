@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Gauge, Menu, Sparkles } from 'lucide-react'
+import { Brain, Gauge, Menu, Sparkles } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
@@ -128,6 +128,7 @@ function App() {
     current,
     isKnownRoute,
     selectHome,
+    selectMemories,
     selectThread,
     startNewChat,
   } = useWorkspaceNavigation()
@@ -673,12 +674,13 @@ function App() {
                     })}
                   </div>
                   <Button
-                    className="hidden sm:inline-flex"
-                    onClick={handleLogout}
-                    size="sm"
-                    variant="secondary"
+                    aria-label="Memories"
+                    onClick={selectMemories}
+                    size="icon"
+                    title="Memories"
+                    variant="ghost"
                   >
-                    Log out
+                    <Brain size={18} />
                   </Button>
                 </div>
                 <select
