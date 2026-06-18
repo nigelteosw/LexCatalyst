@@ -24,7 +24,7 @@ export function PanelHeader({
 }: PanelHeaderProps) {
   return (
     <header
-      className={`flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 py-2 lg:px-6 ${className}`}
+      className={`flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 py-3 lg:px-6 ${className}`}
     >
       <div className="flex min-w-0 items-center gap-3">
         {Icon && (
@@ -34,7 +34,7 @@ export function PanelHeader({
         )}
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="truncate text-sm font-semibold text-neutral-900">{title}</h2>
+            <h2 className="truncate font-serif text-base font-semibold text-neutral-900">{title}</h2>
             {helpContent && <FeatureHelp title={title} content={helpContent} />}
           </div>
           {description && (
