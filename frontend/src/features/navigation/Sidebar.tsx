@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   BookMarked,
-  Brain,
   BriefcaseBusiness,
   CheckSquare,
   Clock,
@@ -21,7 +20,6 @@ import {
   deleteChatThread,
   listDocuments,
   listKnowledgeBankEntryPage,
-  listMemories,
   listActionItems,
   listSurveyQuestions,
   renameChatThread,
@@ -75,7 +73,6 @@ export function Sidebar({
     current,
     selectHome,
     selectThread,
-    selectMemories,
     selectDocuments,
     selectKnowledgeBank,
     selectWellbeing,
@@ -134,7 +131,7 @@ export function Sidebar({
     if (window.innerWidth < 1024) onClose()
   }
 
-  function prefetchWorkspace(view: 'documents' | 'knowledge_bank' | 'memories' | 'wellbeing' | 'actions') {
+  function prefetchWorkspace(view: 'documents' | 'knowledge_bank' | 'wellbeing' | 'actions') {
     if (view === 'documents') {
       queryClient.prefetchQuery({ queryKey: ['documents'], queryFn: listDocuments })
       return
@@ -158,10 +155,6 @@ export function Sidebar({
           }),
         initialPageParam: 0,
       })
-      return
-    }
-    if (view === 'memories') {
-      queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: () => listMemories() })
       return
     }
     if (view === 'wellbeing') {
@@ -292,21 +285,6 @@ export function Sidebar({
             >
               <BookMarked size={14} />
               Knowledge Bank
-            </button>
-            <button
-              onClick={() => {
-                selectMemories()
-                closeMobile()
-              }}
-              onFocus={() => prefetchWorkspace('memories')}
-              onMouseEnter={() => prefetchWorkspace('memories')}
-              className={`${sidebarActionClass} ${
-                current.view === 'memories' ? sidebarNavActiveClass : sidebarNavClass
-              }`}
-              type="button"
-            >
-              <Brain size={14} />
-              Memories
             </button>
             <button
               onClick={() => {
