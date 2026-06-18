@@ -148,8 +148,8 @@ export function ChatPanel({
               ))}
             </div>
           ) : (
-            <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-4 text-center">
-              <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-sky-50 shadow-sm ring-1 ring-sky-100">
+            <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-6 text-center">
+              <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-3xl bg-sky-50 shadow-md ring-1 ring-sky-100">
                 <img
                   alt=""
                   aria-hidden="true"
@@ -158,11 +158,11 @@ export function ChatPanel({
                 />
               </div>
               <div className="space-y-3">
-                <h3 className="text-xl font-semibold text-neutral-900">Welcome to LexChat</h3>
-                <p className="text-sm text-neutral-500 max-w-sm">
-                  I can help you analyze legal documents, research case law, or draft professional correspondence.
+                <h3 className="text-2xl font-semibold tracking-tight text-neutral-900">Welcome to LexChat</h3>
+                <p className="mx-auto max-w-xs text-sm leading-relaxed text-neutral-500">
+                  Ask about your documents, research case law, or draft correspondence.
                 </p>
-                <div className="flex justify-center">
+                <div className="flex justify-center pt-1">
                   <FeatureHelp title="LexChat" content={CHAT_HELP} />
                 </div>
               </div>
@@ -372,7 +372,7 @@ function ToolStepRow({ step }: { step: ToolStep }) {
   const input = formatToolInput(step)
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px] text-neutral-500">
+    <div className="rounded-lg border border-neutral-100 bg-neutral-50 px-2.5 py-1.5 text-[11px] text-neutral-500">
       <div className="flex items-center gap-1.5">
         <span>{icons[step.tool] ?? <Sparkles size={12} />}</span>
         <span className="font-medium text-neutral-600">{labels[step.tool] ?? step.tool}</span>
