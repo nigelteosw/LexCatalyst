@@ -349,7 +349,7 @@ export function Sidebar({
             {matters.length > 0 && (
               <>
                 <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.09em] text-white/30">
-                  <BriefcaseBusiness size={11} />
+                  <BriefcaseBusiness size={12} />
                   Recent matters
                 </div>
                 <div className="mb-3 space-y-0.5">
@@ -381,7 +381,7 @@ export function Sidebar({
               </>
             )}
             <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.09em] text-white/30">
-              <Clock size={11} />
+              <Clock size={12} />
               Recent LexChats
             </div>
             {threads.length > 0 ? (
