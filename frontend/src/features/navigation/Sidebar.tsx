@@ -348,7 +348,7 @@ export function Sidebar({
           >
             {matters.length > 0 && (
               <>
-                <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.09em] text-white/30">
+                <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.09em] text-white/30">
                   <BriefcaseBusiness size={11} />
                   Recent matters
                 </div>
@@ -380,7 +380,7 @@ export function Sidebar({
                 </div>
               </>
             )}
-            <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.09em] text-white/30">
+            <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.09em] text-white/30">
               <Clock size={11} />
               Recent LexChats
             </div>

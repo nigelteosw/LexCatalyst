@@ -110,7 +110,7 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
                 {FEATURES.map(({ icon: Icon, label, description, nav: navKey }) => (
                   <button
                     key={label}
-                    className="group flex w-full items-center gap-4 py-3.5 text-left transition-colors hover:bg-neutral-50"
+                    className="group flex w-full items-center gap-4 py-5 text-left transition-colors hover:bg-neutral-50"
                     onClick={() => navigate(navKey)}
                     type="button"
                   >
@@ -118,8 +118,8 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
                       <Icon size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="text-sm font-medium text-neutral-900">{label}</span>
-                      <span className="ml-2.5 text-xs text-neutral-400">{description}</span>
+                      <span className="block text-sm font-medium text-neutral-900">{label}</span>
+                      <span className="block text-xs text-neutral-400">{description}</span>
                     </div>
                     <ArrowRight
                       size={13}
