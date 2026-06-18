@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CheckSquare, ChevronRight, ClipboardList, Plus, Tag, Trash2 } from 'lucide-react'
+import { CheckSquare, Plus, Tag, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteActionItem,
@@ -335,7 +335,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden sm:p-6">
         {isInitialLoading ? (
           <BoardSkeleton />
         ) : actionsQuery.isError ? (
@@ -344,14 +344,14 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           </div>
         ) : (
           statusColumns.map((col) => (
-            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72 sm:min-h-0">
-              <div className="mb-3 flex items-center gap-2">
-                <h3 className="text-xs font-semibold text-[#5a5a56]">{col.label}</h3>
-                <span className="rounded-full bg-[#f4f3ef] px-1.5 py-0.5 text-[10px] text-[#9a9a94]">
+            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-64 sm:min-h-0">
+              <div className="mb-3 flex items-center gap-2 border-t-2 border-[#0f0f0f] pt-3">
+                <h3 className="text-xs font-semibold text-[#0f0f0f]">{col.label}</h3>
+                <span className="text-[10px] text-[#9a9a94]">
                   {grouped[col.id].length}
                 </span>
               </div>
-              <div className="flex flex-1 flex-col gap-2 sm:min-h-0 sm:overflow-y-auto sm:pr-1">
+              <div className="flex flex-1 flex-col sm:min-h-0 sm:overflow-y-auto">
                 {grouped[col.id].map((item) => (
                   <ActionCard
                     key={item.id}
@@ -365,7 +365,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
                   />
                 ))}
                 {grouped[col.id].length === 0 && (
-                  <div className="rounded-[12px] border border-dashed border-black/10 px-3 py-5 text-center text-[11px] text-[#aaa9a3]">
+                  <div className="py-6 text-center text-xs text-[#aaa9a3]">
                     No {col.label.toLowerCase()} tickets
                   </div>
                 )}
@@ -420,23 +420,19 @@ function BoardSkeleton() {
   return (
     <>
       {statusColumns.map((col) => (
-        <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72">
-          <div className="mb-3 flex items-center gap-2">
+        <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-64">
+          <div className="mb-3 flex items-center gap-2 border-t-2 border-[#eeecea] pt-3">
             <div className="h-3 w-16 rounded bg-[#eeecea]" />
-            <div className="h-4 w-6 rounded-full bg-[#eeecea]" />
+            <div className="h-3 w-4 rounded bg-[#f4f3ef]" />
           </div>
-          <div className="flex flex-1 flex-col gap-2">
+          <div className="flex flex-1 flex-col">
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="animate-pulse rounded-[12px] border border-black/10 bg-white p-3.5"
+                className="animate-pulse border-b border-black/6 border-l-2 border-l-[#eeecea] py-3.5 pl-4"
               >
                 <div className="h-3 w-3/4 rounded bg-[#eeecea]" />
                 <div className="mt-2 h-2.5 w-1/2 rounded bg-[#f4f3ef]" />
-                <div className="mt-3 flex gap-1.5">
-                  <div className="h-3 w-12 rounded-full bg-[#f4f3ef]" />
-                  <div className="h-3 w-16 rounded-full bg-[#f4f3ef]" />
-                </div>
               </div>
             ))}
           </div>
@@ -455,69 +451,46 @@ function ActionCard({
   onClick: () => void
   onDelete: () => void
 }) {
+  const priorityBorderColor =
+    item.priority === 'high'
+      ? 'border-l-[#e05252]'
+      : item.priority === 'medium'
+        ? 'border-l-[#d97706]'
+        : 'border-l-black/10'
+
+  const assigneeLabel = item.assignee
+    ? (item.assignee.fullName ?? item.assignee.email)
+    : 'Unassigned'
+
+  const dueDateLabel = item.dueDate
+    ? `Due ${new Date(item.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+    : null
+
+  const meta = [assigneeLabel, dueDateLabel].filter(Boolean).join(' · ')
+
   return (
-    <article className="group relative rounded-[12px] border border-black/10 bg-white transition-all hover:border-black/20 hover:shadow-sm">
+    <article className={`group relative border-b border-black/6 border-l-2 ${priorityBorderColor}`}>
       <button
-        className="w-full p-3.5 pr-14 text-left"
+        className="w-full py-3.5 pl-4 pr-10 text-left transition-colors hover:bg-[#f7f6f3]"
         onClick={onClick}
         type="button"
       >
-        <div className="flex items-start justify-between gap-2">
-          <p className="line-clamp-2 text-xs font-medium text-[#0f0f0f]">{item.title}</p>
-          <div className="mt-0.5 shrink-0">
-            <ChevronRight size={13} className="text-[#aaa9a3]" />
-          </div>
-        </div>
+        <p className="line-clamp-2 text-sm font-medium text-[#0f0f0f]">{item.title}</p>
         {item.activeHandoffId && (
-          <div
-            className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-medium ${
-              item.status === 'in_progress'
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-[#fff1d6] text-[#8a5a00]'
-            }`}
-          >
-            <ClipboardList size={10} />
+          <p className="mt-0.5 text-[10px] text-[#d97706]">
             {item.status === 'in_progress' ? 'Returned for rework' : 'Handoff ready'}
-          </div>
+          </p>
         )}
-        {item.description && (
-          <p className="mt-1 line-clamp-1 text-[11px] text-[#8c8c86]">{item.description}</p>
+        {meta && (
+          <p className="mt-1 text-[11px] text-[#6f6f69]">{meta}</p>
         )}
         {item.tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {item.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-[#eeecff] px-2 py-0.5 text-[9.5px] font-medium text-[#4a3db0]"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+          <p className="mt-0.5 text-[10px] text-[#9a9a94]">{item.tags.join(', ')}</p>
         )}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-medium capitalize ${priorityColors[item.priority]}`}>
-            {item.priority}
-          </span>
-          {item.assignee ? (
-            <span className="rounded-full bg-[#e8f0fe] px-2 py-0.5 text-[9.5px] font-medium text-[#1a4a8a]">
-              {item.assignee.fullName ?? item.assignee.email}
-            </span>
-          ) : (
-            <span className="rounded-full bg-[#f4f3ef] px-2 py-0.5 text-[9.5px] font-medium text-[#8c8c86]">
-              Unassigned
-            </span>
-          )}
-          {item.dueDate && (
-            <span className="text-[9.5px] text-[#9a9a94]">
-              Due {new Date(item.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-            </span>
-          )}
-        </div>
       </button>
       <button
         aria-label={`Delete ${item.title}`}
-        className="absolute right-8 top-3 grid h-5 w-5 place-items-center rounded text-red-600/40 transition-colors hover:bg-red-50 hover:text-red-600"
+        className="absolute right-2 top-1/2 -translate-y-1/2 grid h-6 w-6 place-items-center rounded text-[#aaa9a3] opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"
         onClick={onDelete}
         title="Delete ticket"
         type="button"
