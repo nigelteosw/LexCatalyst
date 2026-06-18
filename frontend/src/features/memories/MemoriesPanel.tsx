@@ -225,7 +225,7 @@ export function MemoriesPanel() {
         </div>
       )}
       {dreamResult && (
-        <div className="border-b border-emerald-100 bg-emerald-50 px-6 py-3 text-xs text-emerald-900">
+        <div className="border-b border-emerald-100 bg-emerald-50/70 px-6 py-3 text-xs text-emerald-900">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-semibold">
@@ -262,7 +262,7 @@ export function MemoriesPanel() {
       )}
 
       <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6 lg:p-8">
-        <div className="max-w-4xl mx-auto space-y-12">
+        <div className="mx-auto max-w-4xl space-y-10">
           {(error || memoriesQuery.error) && (
             <ErrorBanner
               message={error ?? getErrorMessage(memoriesQuery.error, 'Failed to load memories')}
@@ -329,7 +329,7 @@ export function MemoriesPanel() {
               Loading memories...
             </div>
           ) : (
-          <div className="space-y-16">
+          <div className="space-y-12">
             {categories.map((cat) => {
               const catMemories = memories.filter((m) => m.category === cat.id)
               return (
