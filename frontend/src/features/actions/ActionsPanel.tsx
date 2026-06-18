@@ -16,7 +16,7 @@ import type {
   ResourceMetadata,
 } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
-import { isManager, priorityColors, statusColumns, userLabel } from './config'
+import { isManager, statusColumns, userLabel } from './config'
 import { ActionDetailDialog } from './components/ActionDetailDialog'
 import { CreateActionDialog } from './components/CreateActionDialog'
 import { Button } from '../../shared/ui/Button'
