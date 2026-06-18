@@ -9,6 +9,7 @@ type MemoriesView = { view: 'memories' }
 type WellbeingView = { view: 'wellbeing' }
 type KnowledgeBankView = { view: 'knowledge_bank'; entryId: string | null }
 type ActionsView = { view: 'actions'; actionId: string | null }
+type HandoffReviewView = { view: 'handoff_review'; actionId: string }
 type SettingsView = { view: 'settings' }
 
 export type AppView =
@@ -20,6 +21,7 @@ export type AppView =
   | WellbeingView
   | KnowledgeBankView
   | ActionsView
+  | HandoffReviewView
   | SettingsView
 
 type NavigationOptions = {
@@ -39,7 +41,16 @@ function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute:
   const segments = pathname.split('/').filter(Boolean)
   const [section, rawId] = segments
   const id = decodeSegment(rawId)
-  if (segments.length > 2) return { current: { view: 'home' }, isKnownRoute: false }
+  if (segments.length > 2) {
+    // Only allowed 3-segment path: /actions/[id]/review
+    if (section === 'actions' && rawId && segments[2] === 'review') {
+      return {
+        current: { view: 'handoff_review', actionId: id! },
+        isKnownRoute: true,
+      }
+    }
+    return { current: { view: 'home' }, isKnownRoute: false }
+  }
 
   if (!section || section === 'home') {
     return { current: { view: 'home' }, isKnownRoute: true }
@@ -130,6 +141,11 @@ export function useWorkspaceNavigation() {
     selectActions: useCallback(
       (actionId?: string | null, options?: NavigationOptions) =>
         go(routeWithId('/actions', actionId), options),
+      [go],
+    ),
+    selectHandoffReview: useCallback(
+      (actionId: string, options?: NavigationOptions) =>
+        go(`/actions/${encodeURIComponent(actionId)}/review`, options),
       [go],
     ),
     selectSettings: useCallback(
