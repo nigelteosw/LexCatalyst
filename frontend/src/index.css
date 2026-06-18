@@ -2,6 +2,7 @@
 
 @theme {
   --font-sans: "Inter", "Aptos", "Helvetica Neue", Helvetica, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
 }
 
 * {
