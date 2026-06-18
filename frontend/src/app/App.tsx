@@ -600,7 +600,7 @@ function App() {
                   onMatterChange={handleMatterChange}
                   currentUser={currentUser}
                 />
-              ) : current.view === 'actions' ? (
+              ) : current.view === 'actions' || current.view === 'handoff_review' ? (
                 <ActionsPanel matters={matters} currentUser={currentUser} />
               ) : current.view === 'settings' ? (
                 <SettingsPanel currentUser={currentUser} />
@@ -739,6 +739,7 @@ function buildBirdiePageContext(current: import('./routes').AppView, threadTitle
   if (current.view === 'wiki') return { ...base, wikiPageTitle: current.pageId ?? undefined }
   if (current.view === 'knowledge_bank') return { ...base, kbEntryTitle: current.entryId ?? undefined }
   if (current.view === 'actions') return { ...base, actionTitle: current.actionId ?? undefined }
+  if (current.view === 'handoff_review') return { ...base, actionTitle: current.actionId }
   return base
 }
 
@@ -747,6 +748,7 @@ function mobileViewTitle(view: import('./routes').AppView['view']) {
     home: 'Home',
     chat: 'LexChat',
     actions: 'Workboard',
+    handoff_review: 'Review',
     documents: 'Documents',
     knowledge_bank: 'Knowledge Bank',
     memories: 'Memories',
