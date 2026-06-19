@@ -1,5 +1,6 @@
 """Document upload, viewing, comments, rename, and delete."""
 
+from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 from fastapi import (
@@ -13,6 +14,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -47,6 +49,46 @@ from app.services.storage_service import StorageError, download_document_file
 router = APIRouter(tags=["documents"])
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+_MAX_DOCS = 50
+_MAX_DOCS_PER_DAY = 10
+_MAX_BYTES = 1 * 1024 * 1024 * 1024  # 1 GB
+
+
+def _check_upload_limits(db: Session, user: User, incoming_bytes: int) -> None:
+    if user.is_admin:
+        return
+
+    total = db.scalar(select(func.count(Document.id)).where(Document.user_id == user.id)) or 0
+    if total >= _MAX_DOCS:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Document limit reached ({_MAX_DOCS} max). Delete some documents to upload more.",
+        )
+
+    since = datetime.now(UTC) - timedelta(hours=24)
+    daily = db.scalar(
+        select(func.count(Document.id)).where(
+            Document.user_id == user.id,
+            Document.created_at >= since,
+        )
+    ) or 0
+    if daily >= _MAX_DOCS_PER_DAY:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Upload rate limit reached ({_MAX_DOCS_PER_DAY} per day). Try again later.",
+        )
+
+    used_bytes = db.scalar(
+        select(func.sum(Document.file_size)).where(
+            Document.user_id == user.id,
+            Document.file_size.is_not(None),
+        )
+    ) or 0
+    if used_bytes + incoming_bytes > _MAX_BYTES:
+        raise HTTPException(
+            status_code=429,
+            detail="Storage limit reached (1 GB). Delete some documents to upload more.",
+        )
 
 
 def build_document_response(
@@ -103,6 +145,7 @@ async def upload_document(
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
         if len(file_bytes) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail="Uploaded file is too large")
+        _check_upload_limits(db, current_user, len(file_bytes))
 
         document = await create_pending_document(
             db,
