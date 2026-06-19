@@ -676,10 +676,10 @@ function App() {
                   </div>
                   <Button
                     aria-label="Memories"
-                    aria-pressed={current.view === 'memories'}
-                    onClick={selectMemories}
-                    onMouseEnter={() => queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: listMemories })}
-                    onFocus={() => queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: listMemories })}
+                    aria-pressed={false}
+                    onClick={() => selectMemories()}
+                    onMouseEnter={() => queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: () => listMemories() })}
+                    onFocus={() => queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: () => listMemories() })}
                     size="icon"
                     title="Memories"
                     variant="ghost"
