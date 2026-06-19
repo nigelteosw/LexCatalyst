@@ -160,6 +160,7 @@ async def create_pending_document(
         status="uploaded",
         matter_id=matter_id,
         team_id=team_id,
+        file_size=len(file_bytes),
     )
     db.add(document)
     db.commit()
