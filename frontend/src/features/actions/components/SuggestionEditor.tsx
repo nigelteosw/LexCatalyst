@@ -7,9 +7,11 @@ type Props = {
   onSave: (suggestedText: string, note: string) => void
   onCancel: () => void
   isSaving?: boolean
+  /** Save failure to show inline; the draft is kept so the reviewer can retry. */
+  error?: string | null
 }
 
-export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving }: Props) {
+export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, error }: Props) {
   const [suggestedText, setSuggestedText] = useState(selectedText)
   const [note, setNote] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -83,6 +85,10 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving }: P
           />
         </div>
 
+        {error && (
+          <p className="rounded-md bg-red-50 px-2 py-1 text-[10px] text-red-600">{error} — your draft is kept; try again.</p>
+        )}
+
         <div className="flex items-center justify-between pt-0.5">
           <span className="text-[9.5px] text-[#c4c3bc]">⌘ Enter to save</span>
           <div className="flex gap-2">
@@ -99,7 +105,7 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving }: P
               onClick={handleSave}
               type="button"
             >
-              {isSaving ? 'Saving…' : 'Save'}
+              {isSaving ? 'Saving…' : error ? 'Retry' : 'Save'}
             </button>
           </div>
         </div>

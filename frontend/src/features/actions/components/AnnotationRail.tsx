@@ -55,15 +55,35 @@ export function AnnotationRail({
 }: Props) {
   const queryClient = useQueryClient()
 
+  // Per-card failure messages so a failed status change or delete never looks
+  // like it succeeded.
+  const [cardErrors, setCardErrors] = useState<Record<string, string>>({})
+  function setCardError(id: string, message: string | null) {
+    setCardErrors((prev) => {
+      const next = { ...prev }
+      if (message) next[id] = message
+      else delete next[id]
+      return next
+    })
+  }
+
   const deleteMutation = useMutation({
     mutationFn: (annotationId: string) => deleteReviewAnnotation(handoffId, annotationId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['handoffs', handoffId] }),
+    onSuccess: (_r, id) => {
+      setCardError(id, null)
+      queryClient.invalidateQueries({ queryKey: ['handoffs', handoffId] })
+    },
+    onError: (e, id) => setCardError(id, getErrorMessage(e, 'Could not delete')),
   })
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: ReviewAnnotationStatus }) =>
       updateReviewAnnotation(handoffId, id, { status }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['handoffs', handoffId] }),
+    onSuccess: (_r, { id }) => {
+      setCardError(id, null)
+      queryClient.invalidateQueries({ queryKey: ['handoffs', handoffId] })
+    },
+    onError: (e, { id }) => setCardError(id, getErrorMessage(e, 'Could not update status')),
   })
 
   if (annotations.length === 0) {
@@ -102,6 +122,7 @@ export function AnnotationRail({
                 isReviewer={isReviewer}
                 canEdit={canEdit}
                 currentUserId={currentUserId}
+                error={cardErrors[annotation.id] ?? null}
                 isDeleting={deleteMutation.isPending && deleteMutation.variables === annotation.id}
                 isUpdatingStatus={
                   statusMutation.isPending && statusMutation.variables?.id === annotation.id
@@ -131,6 +152,7 @@ function AnnotationCard({
   isReviewer,
   canEdit,
   currentUserId,
+  error,
   isDeleting,
   isUpdatingStatus,
   onDelete,
@@ -142,6 +164,7 @@ function AnnotationCard({
   isReviewer: boolean
   canEdit: boolean
   currentUserId: string | null
+  error: string | null
   isDeleting: boolean
   isUpdatingStatus: boolean
   onDelete: () => void
@@ -235,6 +258,9 @@ function AnnotationCard({
 
       {/* Content */}
       <div className="px-2.5 pb-2.5">
+        {error && (
+          <p className="mb-1.5 rounded-md bg-red-50 px-1.5 py-0.5 text-[9.5px] text-red-600">{error}</p>
+        )}
         {isUnanchored && annotation.previousAnnotationId && (
           <p className="mb-1.5 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[9.5px] font-medium text-amber-700">
             <RotateCcw size={9} />

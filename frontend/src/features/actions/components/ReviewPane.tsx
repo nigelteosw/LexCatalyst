@@ -306,6 +306,7 @@ function HandoffViewer({
 }: ViewerProps) {
   const [fileUrl, setFileUrl] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
+  const [fileReloadKey, setFileReloadKey] = useState(0)
   const [annotationError, setAnnotationError] = useState<string | null>(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [mobileTab, setMobileTab] = useState<'document' | 'annotations'>('document')
@@ -313,6 +314,8 @@ function HandoffViewer({
   // Build the current annotations list from the handoff (kept fresh by query)
   const annotations = handoff.annotations
 
+  // Annotation saves keep the popover/editor open until the request succeeds,
+  // so a failed save never loses the reviewer's text.
   const createMutation = useMutation({
     mutationFn: (payload: Parameters<typeof createReviewAnnotation>[1]) =>
       createReviewAnnotation(handoff.id, payload),
@@ -323,30 +326,37 @@ function HandoffViewer({
     onError: (e) => setAnnotationError(getErrorMessage(e)),
   })
 
+  // One error slot for the action strip; each lifecycle mutation sets it.
+  const [actionError, setActionError] = useState<string | null>(null)
+  function onLifecycleSettled(updated: ReviewHandoff) {
+    setActionError(null)
+    queryClient.setQueryData(['handoffs', handoff.id], updated)
+    queryClient.invalidateQueries({ queryKey: ['handoffs', 'action'] })
+  }
+
   const completeMutation = useMutation({
     mutationFn: () => updateReviewHandoff(handoff.id, { status: 'completed' }),
     onSuccess: (updated) => {
       onActionStateChange({ status: 'done', activeHandoffId: null })
-      queryClient.setQueryData(['handoffs', handoff.id], updated)
-      queryClient.invalidateQueries({ queryKey: ['handoffs', 'action'] })
+      onLifecycleSettled(updated)
     },
+    onError: (e) => setActionError(getErrorMessage(e, 'Could not mark complete')),
   })
 
   const returnMutation = useMutation({
     mutationFn: () => updateReviewHandoff(handoff.id, { status: 'returned' }),
     onSuccess: (updated) => {
       onActionStateChange({ status: 'in_progress' })
-      queryClient.setQueryData(['handoffs', handoff.id], updated)
-      queryClient.invalidateQueries({ queryKey: ['handoffs', 'action'] })
+      onLifecycleSettled(updated)
     },
+    onError: (e) => setActionError(getErrorMessage(e, 'Could not return for rework')),
   })
 
   const rejectMutation = useMutation({
     mutationFn: (reason: string) => rejectReviewHandoff(handoff.id, reason),
     onSuccess: (updated) => {
       onActionStateChange({ status: 'in_progress' })
-      queryClient.setQueryData(['handoffs', handoff.id], updated)
-      queryClient.invalidateQueries({ queryKey: ['handoffs', 'action'] })
+      onLifecycleSettled(updated)
       setShowRejectModal(false)
     },
   })
@@ -362,7 +372,13 @@ function HandoffViewer({
       a.click()
       URL.revokeObjectURL(url)
     },
+    onSuccess: () => setActionError(null),
+    onError: (e) => setActionError(getErrorMessage(e, 'Export failed')),
   })
+
+  // A status change in flight blocks the other status changes.
+  const lifecycleBusy =
+    completeMutation.isPending || returnMutation.isPending || rejectMutation.isPending
 
   // Derived state for the action strip
   const isActive =
@@ -386,22 +402,31 @@ function HandoffViewer({
     if (!canAnnotate) return <></>
 
     function post(kind: 'highlight' | 'strike') {
-      cancel()
+      if (createMutation.isPending) return
       const pageNo = (highlightAreas[0]?.pageIndex ?? 0) + 1
-      createMutation.mutate({
-        documentId: handoff.documentId,
-        pageNo,
-        kind,
-        anchorQuote: selectedText.trim().slice(0, 20_000),
-        anchorRects: highlightAreas,
-      })
+      createMutation
+        .mutateAsync({
+          documentId: handoff.documentId,
+          pageNo,
+          kind,
+          anchorQuote: selectedText.trim().slice(0, 20_000),
+          anchorRects: highlightAreas,
+        })
+        .then(() => cancel())
+        .catch(() => {
+          /* error is shown in the popover; selection stays for retry */
+        })
     }
 
     return (
       <div
-        className="z-50 flex items-center gap-0.5 rounded-lg border border-black/10 bg-white px-1 py-1 shadow-lg"
+        className="z-50 flex flex-col gap-1 rounded-lg border border-black/10 bg-white px-1 py-1 shadow-lg"
         style={{ position: 'absolute', zIndex: 50 }}
       >
+        {annotationError && (
+          <p className="max-w-56 px-1.5 text-[10px] text-red-600">{annotationError} — try again.</p>
+        )}
+        <div className="flex items-center gap-0.5">
         <ToolbarButton
           icon={<Highlighter size={13} />}
           label="Highlight"
@@ -421,6 +446,8 @@ function HandoffViewer({
           className="text-blue-600 hover:bg-blue-50"
           onClick={toggle}
         />
+        {createMutation.isPending && <Loader2 size={12} className="ml-1 animate-spin text-[#9a9a94]" />}
+        </div>
       </div>
     )
   }
@@ -433,17 +460,22 @@ function HandoffViewer({
     if (!canAnnotate) return <></>
 
     function save(suggestedText: string, note: string) {
-      cancel()
+      if (createMutation.isPending) return
       const pageNo = (highlightAreas[0]?.pageIndex ?? 0) + 1
-      createMutation.mutate({
-        documentId: handoff.documentId,
-        pageNo,
-        kind: 'suggestion',
-        anchorQuote: selectedText.trim().slice(0, 20_000),
-        anchorRects: highlightAreas,
-        suggestedText,
-        note: note || undefined,
-      })
+      createMutation
+        .mutateAsync({
+          documentId: handoff.documentId,
+          pageNo,
+          kind: 'suggestion',
+          anchorQuote: selectedText.trim().slice(0, 20_000),
+          anchorRects: highlightAreas,
+          suggestedText,
+          note: note || undefined,
+        })
+        .then(() => cancel())
+        .catch(() => {
+          /* editor stays open with the draft; error shown inside it */
+        })
     }
 
     return (
@@ -451,8 +483,12 @@ function HandoffViewer({
         <SuggestionEditor
           selectedText={selectedText}
           onSave={save}
-          onCancel={cancel}
+          onCancel={() => {
+            setAnnotationError(null)
+            cancel()
+          }}
           isSaving={createMutation.isPending}
+          error={annotationError}
         />
       </div>
     )
@@ -524,6 +560,8 @@ function HandoffViewer({
   useEffect(() => {
     const controller = new AbortController()
     let objectUrl: string | null = null
+    // HandoffViewer is keyed by handoff id, so a different document always
+    // mounts fresh; the abort below discards any load that is still in flight.
     // Pre-attach a no-op catch so the browser marks this promise as "handled"
     // before any microtask runs. Without this, React 18 StrictMode's synchronous
     // effect double-invoke causes the AbortError to be logged as uncaught.
@@ -542,7 +580,7 @@ function HandoffViewer({
       controller.abort()
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [handoff.documentId])
+  }, [handoff.documentId, fileReloadKey])
 
   function jumpToAnnotation(area: HighlightArea) {
     setMobileTab('document')
@@ -562,9 +600,6 @@ function HandoffViewer({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {annotationError && (
-            <span className="text-[10.5px] text-red-600">{annotationError}</span>
-          )}
           <HandoffStatusPill status={handoff.status} returnReason={handoff.returnReason} />
           {handoff.canRemove && (
             <button
@@ -586,6 +621,19 @@ function HandoffViewer({
               {addressedCount} / {annotations.length} addressed
             </span>
           )}
+          {actionError && (
+            <span className="inline-flex items-center gap-1.5 text-[10.5px] text-red-600">
+              {actionError}
+              <button
+                className="rounded px-1 text-[#9a9a94] hover:bg-black/5"
+                onClick={() => setActionError(null)}
+                type="button"
+                aria-label="Dismiss"
+              >
+                <X size={10} />
+              </button>
+            </span>
+          )}
           <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto sm:gap-2">
             {/* Export — available whenever there are annotations */}
             {annotations.length > 0 && (
@@ -604,7 +652,7 @@ function HandoffViewer({
               <>
                 <button
                   className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10.5px] font-medium text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={!hasNeedsRework || returnMutation.isPending}
+                  disabled={!hasNeedsRework || lifecycleBusy}
                   onClick={() => returnMutation.mutate()}
                   title={!hasNeedsRework ? 'Mark at least one annotation as "Needs rework" first' : undefined}
                   type="button"
@@ -613,7 +661,8 @@ function HandoffViewer({
                   Return for rework
                 </button>
                 <button
-                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10.5px] font-medium text-red-600 hover:bg-red-50"
+                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10.5px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+                  disabled={lifecycleBusy}
                   onClick={() => setShowRejectModal(true)}
                   type="button"
                 >
@@ -622,7 +671,7 @@ function HandoffViewer({
                 </button>
                 <button
                   className="inline-flex items-center gap-1 rounded-lg bg-[#1a6b4a] px-3 py-1.5 text-[10.5px] font-medium text-white hover:bg-[#155a3e] disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={openCount > 0 || completeMutation.isPending}
+                  disabled={openCount > 0 || lifecycleBusy}
                   onClick={() => completeMutation.mutate()}
                   title={openCount > 0 ? 'Resolve all open annotations first' : undefined}
                   type="button"
@@ -688,8 +737,18 @@ function HandoffViewer({
         {/* PDF — hidden on mobile when viewing annotations */}
         <div className={`min-w-0 flex-1 overflow-hidden ${mobileTab === 'annotations' ? 'hidden sm:block' : ''}`}>
           {fileError ? (
-            <div className="flex items-center justify-center p-8 text-xs text-red-600">
+            <div className="flex flex-col items-center justify-center gap-2 p-8 text-xs text-red-600">
               {fileError}
+              <button
+                className="rounded-lg border border-black/10 px-3 py-1.5 text-[11px] text-[#5a5a56]"
+                onClick={() => {
+                  setFileError(null)
+                  setFileReloadKey((k) => k + 1)
+                }}
+                type="button"
+              >
+                Retry
+              </button>
             </div>
           ) : !fileUrl ? (
             <div className="flex items-center justify-center p-8 text-[#9a9a94]">

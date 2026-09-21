@@ -178,7 +178,11 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   **Accept:** visually compare viewer and exported output for 0/90/180/270° pages, cropped pages,
   multiline selections, and mixed page sizes. Do not claim fidelity from byte-level tests alone.
 
-- [ ] **R6 — Keep drafts and show actionable failures.**
+- [x] **R6 — Keep drafts and show actionable failures.** Done: popover/editor stay open with the draft until
+  save succeeds and show the error inline; complete/return/export errors sit beside the controls and the
+  three status changes block each other while pending; rail status/delete failures show on the card; PDF
+  load failure offers Retry; round-list errors and removal errors were addressed in D3. Not simulated in a
+  browser. Original finding:
   `ReviewPane` cancels selection/editor before the save request succeeds. Complete/return/export
   errors and rail status/delete failures have no visible feedback. Handoff-list errors can look like
   an empty upload state; removal errors are stored in state only rendered by the no-handoff branch.
