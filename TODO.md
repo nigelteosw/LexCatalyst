@@ -155,7 +155,10 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   Select annotations by their rectangle page indexes; use `pageNo` only for rail grouping.
   **Accept:** one selection spanning two pages renders on both before/after refresh and at different zooms.
 
-- [ ] **R4 — Export repeats every multiline mark and truncates review content.**
+- [x] **R4 — Export repeats every multiline mark and truncates review content.** Done: one draw per
+  `(annotation, rect)`; notes appendix wraps full text for all kinds with page refs, stable numbers
+  (also stamped on-page), and Accepted/Rejected/Needs rework/Open status; rejected marks drawn grey.
+  Original finding:
   `export_flattened_pdf` adds an annotation to a page's list once per rectangle, then loops all its
   rectangles again: N same-page rectangles generate N² drawing operations, darkening highlights.
   Group `(annotation, rectangle)` pairs or deduplicate annotations per page. `_append_notes_page`
@@ -165,7 +168,10 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   **Accept:** three-line marks draw once per rectangle; long clauses and Unicode survive export;
   each callout can be matched to its page mark. Export remains annotations, not Word tracked changes.
 
-- [ ] **R5 — Verify and fix rotated/cropped PDF export geometry.**
+- [x] **R5 — Verify and fix rotated/cropped PDF export geometry.** Done: single `view_to_user` transform
+  (CropBox origin + `/Rotate`) shared by all kinds; verified by rendering with poppler and sampling pixels
+  for 0/90/180/270°, cropped, cropped+rotated, and mixed page sizes (`test_pdf_export.py`, skipped if
+  `pdftoppm` is absent). Side-by-side human comparison with the viewer still worth one pass. Original finding:
   Export swaps width/height for 90°/270° but merges the overlay onto an unnormalized source page;
   it uses MediaBox and ignores CropBox origin. Likely misalignment needs rendered fixture verification.
   Normalize page rotation/boxes or apply explicit transforms shared by all annotation kinds.
@@ -212,7 +218,8 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   separate upload/round controls and the PDF viewer. Refresh detail, action list and review-count
   queries together. Extract the annotation overlay renderer with R3, and reuse the shared dialog
   for reject/promote forms. Avoid adding another state library.
-- [ ] **F2 — Separate export layout from annotation CRUD.** Move PDF drawing/appendix logic out of
+- [x] **F2 — Separate export layout from annotation CRUD.** Done with R4/R5: `review_pdf_export_service.py`.
+  Original: Move PDF drawing/appendix logic out of
   `review_annotation_service.py` into `review_pdf_export_service.py`; keep authorization at the
   service boundary and storage loading separate from pure bytes/annotation rendering. Add synthetic
   fixtures covering R4/R5 as part of the extraction, rather than a cosmetic file split.

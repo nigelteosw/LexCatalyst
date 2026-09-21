@@ -139,6 +139,9 @@ app/services/
   memory_service.py
   organization_service.py
   rag_service.py          # Vector search over document chunks
+  review_annotation_service.py  # Annotations, replies, history, KB promotion
+  review_handoff_service.py     # Review rounds: access, capabilities, lifecycle, locks
+  review_pdf_export_service.py  # Pure PDF overlay + notes appendix rendering
   storage_service.py      # Cloudflare R2 upload/download
   survey_service.py
   user_service.py

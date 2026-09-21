@@ -29,7 +29,6 @@ from app.services.review_annotation_service import (
     create_annotation,
     delete_annotation,
     delete_reply,
-    export_flattened_pdf,
     get_annotation,
     get_annotation_history,
     list_annotations,
@@ -38,6 +37,7 @@ from app.services.review_annotation_service import (
     promote_annotation_to_kb,
     update_annotation,
 )
+from app.services.review_pdf_export_service import export_flattened_pdf
 from app.services.review_handoff_service import (
     ReviewHandoffError,
     can_remove_handoff,
