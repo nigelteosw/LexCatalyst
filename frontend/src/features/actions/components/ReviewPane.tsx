@@ -459,8 +459,10 @@ function HandoffViewer({
   }
 
   function renderHighlights({ pageIndex, getCssProperties, rotation }: RenderHighlightsProps) {
-    const pageAnnotations = annotations.filter(
-      (a) => a.pageNo === pageIndex + 1,
+    // A selection can span pages, so pick annotations by where their rectangles
+    // actually are. pageNo is only the first page, used for rail grouping.
+    const pageAnnotations = annotations.filter((a) =>
+      a.anchorRects.some((r) => r.pageIndex === pageIndex),
     )
     if (pageAnnotations.length === 0) return <></>
 

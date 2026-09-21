@@ -147,7 +147,9 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   relationship (with access checks), or copy a clearly labelled snapshot.
   **Accept:** both old-round history and new-round context remain readable after resubmission.
 
-- [ ] **R3 — Multi-page selections lose overlays after the first page.**
+- [x] **R3 — Multi-page selections lose overlays after the first page.** Done: `renderHighlights` selects
+  annotations by rectangle `pageIndex`; `pageNo` is only used for rail grouping. Exporter already grouped
+  by rectangle page. Not yet verified in-browser across zoom levels. Original finding:
   `ReviewPane.renderHighlights` filters by `a.pageNo === pageIndex + 1` before filtering individual
   rectangles. Creation stores only the first page in `pageNo`, although rectangles can span pages.
   Select annotations by their rectangle page indexes; use `pageNo` only for rail grouping.
