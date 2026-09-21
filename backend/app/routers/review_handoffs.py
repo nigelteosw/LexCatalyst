@@ -39,6 +39,8 @@ from app.services.review_annotation_service import (
 )
 from app.services.review_handoff_service import (
     ReviewHandoffError,
+    can_remove_handoff,
+    can_review_handoff,
     count_reviews_waiting,
     create_handoff,
     delete_handoff,
@@ -46,6 +48,8 @@ from app.services.review_handoff_service import (
     list_handoffs_for_action,
     reject_handoff,
     require_handoff_access,
+    require_handoff_removal,
+    require_reviewer,
     return_handoff_for_rework,
     update_handoff_status,
 )
@@ -58,8 +62,12 @@ router = APIRouter(tags=["review-handoffs"])
 # ---------------------------------------------------------------------------
 
 
-def _serialise_handoff(handoff: ReviewHandoff) -> ReviewHandoffResponse:
+def _serialise_handoff(
+    handoff: ReviewHandoff, *, db: Session, user: User
+) -> ReviewHandoffResponse:
     return ReviewHandoffResponse(
+        can_review=can_review_handoff(db, user=user, handoff=handoff),
+        can_remove=can_remove_handoff(db, user=user, handoff=handoff),
         id=handoff.id,
         action_id=handoff.action_id,
         matter_id=handoff.matter_id,
@@ -101,8 +109,12 @@ def _get_annotation_or_404(
     handoff_id: str,
     annotation_id: str,
     current_user: User,
+    *,
+    reviewer_only: bool = False,
 ) -> ReviewAnnotation:
-    _get_handoff_or_404(db, handoff_id, current_user)
+    handoff = _get_handoff_or_404(db, handoff_id, current_user)
+    if reviewer_only:
+        require_reviewer(db, user=current_user, handoff=handoff)
     annotation = get_annotation(db, annotation_id)
     if not annotation or annotation.handoff_id != handoff_id:
         raise HTTPException(status_code=404, detail="Annotation not found")
@@ -124,7 +136,7 @@ def post_handoff(
         handoff = create_handoff(db, user=current_user, schema=schema)
     except ReviewHandoffError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return _serialise_handoff(handoff)
+    return _serialise_handoff(handoff, db=db, user=current_user)
 
 
 @router.get("/handoffs/reviews/waiting", response_model=ReviewWaitingCountResponse)
@@ -144,7 +156,7 @@ def list_handoffs(
     if not action_id:
         raise HTTPException(status_code=400, detail="action_id is required")
     return [
-        _serialise_handoff(h)
+        _serialise_handoff(h, db=db, user=current_user)
         for h in list_handoffs_for_action(db, action_id, user=current_user)
     ]
 
@@ -155,7 +167,9 @@ def get_one_handoff(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ReviewHandoffResponse:
-    return _serialise_handoff(_get_handoff_or_404(db, handoff_id, current_user))
+    return _serialise_handoff(
+        _get_handoff_or_404(db, handoff_id, current_user), db=db, user=current_user
+    )
 
 
 @router.patch("/handoffs/{handoff_id}", response_model=ReviewHandoffResponse)
@@ -166,6 +180,7 @@ def patch_handoff(
     current_user: User = Depends(get_current_user),
 ) -> ReviewHandoffResponse:
     handoff = _get_handoff_or_404(db, handoff_id, current_user)
+    require_reviewer(db, user=current_user, handoff=handoff)
     try:
         if schema.status == "returned":
             updated = return_handoff_for_rework(db, handoff_id)
@@ -189,7 +204,7 @@ def patch_handoff(
         raise HTTPException(status_code=400, detail=str(exc))
     if not updated:
         raise HTTPException(status_code=404, detail="Handoff not found")
-    return _serialise_handoff(updated)
+    return _serialise_handoff(updated, db=db, user=current_user)
 
 
 @router.post("/handoffs/{handoff_id}/reject", response_model=ReviewHandoffResponse)
@@ -199,11 +214,12 @@ def post_reject_handoff(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ReviewHandoffResponse:
-    _get_handoff_or_404(db, handoff_id, current_user)
+    handoff = _get_handoff_or_404(db, handoff_id, current_user)
+    require_reviewer(db, user=current_user, handoff=handoff)
     updated = reject_handoff(db, handoff_id=handoff_id, reason=schema.reason)
     if not updated:
         raise HTTPException(status_code=404, detail="Handoff not found")
-    return _serialise_handoff(updated)
+    return _serialise_handoff(updated, db=db, user=current_user)
 
 
 @router.delete("/handoffs/{handoff_id}")
@@ -212,7 +228,8 @@ def remove_handoff(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    _get_handoff_or_404(db, handoff_id, current_user)
+    handoff = _get_handoff_or_404(db, handoff_id, current_user)
+    require_handoff_removal(db, user=current_user, handoff=handoff)
     if not delete_handoff(db, handoff_id):
         raise HTTPException(status_code=404, detail="Handoff not found")
     return {"status": "ok"}
@@ -248,6 +265,7 @@ def post_annotation(
     current_user: User = Depends(get_current_user),
 ) -> ReviewAnnotationResponse:
     handoff = _get_handoff_or_404(db, handoff_id, current_user)
+    require_reviewer(db, user=current_user, handoff=handoff)
     annotation = create_annotation(db, handoff=handoff, user=current_user, schema=schema)
     return _serialise_annotation(annotation)
 
@@ -264,7 +282,7 @@ def patch_annotation(
     current_user: User = Depends(get_current_user),
 ) -> ReviewAnnotationResponse:
     annotation = _get_annotation_or_404(
-        db, handoff_id, annotation_id, current_user
+        db, handoff_id, annotation_id, current_user, reviewer_only=True
     )
     updated = update_annotation(db, annotation=annotation, schema=schema)
     return _serialise_annotation(updated)
@@ -278,7 +296,7 @@ def remove_annotation(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     annotation = _get_annotation_or_404(
-        db, handoff_id, annotation_id, current_user
+        db, handoff_id, annotation_id, current_user, reviewer_only=True
     )
     delete_annotation(db, annotation)
     return {"status": "ok"}
@@ -372,7 +390,7 @@ async def promote_annotation(
 ) -> KnowledgeBankEntryResponse:
     handoff = _get_handoff_or_404(db, handoff_id, current_user)
     annotation = _get_annotation_or_404(
-        db, handoff_id, annotation_id, current_user
+        db, handoff_id, annotation_id, current_user, reviewer_only=True
     )
     try:
         entry = await promote_annotation_to_kb(

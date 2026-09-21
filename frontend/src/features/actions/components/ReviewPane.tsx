@@ -32,7 +32,6 @@ import type {
   ReviewAnnotation,
   ReviewHandoff,
 } from '../../../shared/types/workspace'
-import { isManager } from '../config'
 import { AlertTriangle, CheckCircle2, Download, FileText, Highlighter, Lightbulb, Loader2, RotateCcw, Strikethrough, Upload, X } from 'lucide-react'
 import { AnnotationRail } from './AnnotationRail'
 import { SuggestionEditor } from './SuggestionEditor'
@@ -148,10 +147,8 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
     )
   }
 
-  const isReviewer =
-    isManager(currentUser) ||
-    handoff.reviewerId === currentUser?.id ||
-    action.assignerId === currentUser?.id
+  // Capabilities come from the server so the UI matches what the API enforces.
+  const isReviewer = handoff.canReview
 
   return (
     <HandoffViewer
@@ -444,13 +441,15 @@ function HandoffViewer({
             <span className="text-[10.5px] text-red-600">{annotationError}</span>
           )}
           <HandoffStatusPill status={handoff.status} returnReason={handoff.returnReason} />
-          <button
-            className="rounded-lg px-2.5 py-1.5 text-[10.5px] text-[#9a9a94] hover:bg-[#f4f3ef] hover:text-red-600"
-            onClick={onDelete}
-            type="button"
-          >
-            Remove
-          </button>
+          {handoff.canRemove && (
+            <button
+              className="rounded-lg px-2.5 py-1.5 text-[10.5px] text-[#9a9a94] hover:bg-[#f4f3ef] hover:text-red-600"
+              onClick={onDelete}
+              type="button"
+            >
+              Remove
+            </button>
+          )}
         </div>
       </div>
 

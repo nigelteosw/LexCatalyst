@@ -335,6 +335,9 @@ export type ReviewHandoff = {
   matterId?: string | null
   documentId: string
   documentFilename?: string | null
+  // Server-computed viewer capabilities (see review_handoff_service.can_review_handoff).
+  canReview: boolean
+  canRemove: boolean
   submittedBy: string
   submittedAt: string
   status: ReviewHandoffStatus

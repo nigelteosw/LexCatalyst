@@ -708,6 +708,9 @@ class ReviewHandoffResponse(BaseModel):
     reviewer: ActionUserResponse | None = None
     annotations: list[ReviewAnnotationResponse] = Field(default_factory=list)
     document_filename: str | None = None
+    # Viewer capabilities, computed server-side so the UI never guesses at policy.
+    can_review: bool = False
+    can_remove: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -101,6 +101,51 @@ def require_handoff_access(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
+# Firm roles that may review any handoff they can read (mirrors the UI's isManager).
+REVIEWER_FIRM_ROLES = frozenset({"partner", "senior_associate"})
+
+
+def _action_for(db: Session, handoff: ReviewHandoff) -> ActionItem | None:
+    if not handoff.action_id:
+        return None
+    return db.get(ActionItem, handoff.action_id)
+
+
+def can_review_handoff(db: Session, *, user: User, handoff: ReviewHandoff) -> bool:
+    """Reviewer capability: annotate, resolve, complete, return or reject a handoff.
+
+    Read access (submitter, matter member, document owner) is deliberately not enough.
+    """
+    if user.is_admin or user.firm_role in REVIEWER_FIRM_ROLES:
+        return True
+    if handoff.reviewer_id == user.id:
+        return True
+    action = _action_for(db, handoff)
+    return bool(action and action.assigner_id == user.id)
+
+
+def can_remove_handoff(db: Session, *, user: User, handoff: ReviewHandoff) -> bool:
+    """The submitter may withdraw their own handoff; reviewers may remove any."""
+    return handoff.submitted_by == user.id or can_review_handoff(
+        db, user=user, handoff=handoff
+    )
+
+
+def require_reviewer(db: Session, *, user: User, handoff: ReviewHandoff) -> None:
+    if not can_review_handoff(db, user=user, handoff=handoff):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Reviewer access required"
+        )
+
+
+def require_handoff_removal(db: Session, *, user: User, handoff: ReviewHandoff) -> None:
+    if not can_remove_handoff(db, user=user, handoff=handoff):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the submitter or a reviewer can remove this handoff",
+        )
+
+
 def list_handoffs_for_action(
     db: Session,
     action_id: str,

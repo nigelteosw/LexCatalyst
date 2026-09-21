@@ -1674,6 +1674,8 @@ type BackendReviewHandoff = {
   matter_id: string | null
   document_id: string
   document_filename: string | null
+  can_review?: boolean
+  can_remove?: boolean
   submitted_by: string
   submitted_at: string
   status: ReviewHandoffStatus
@@ -1733,6 +1735,8 @@ function mapHandoff(h: BackendReviewHandoff): ReviewHandoff {
     matterId: h.matter_id,
     documentId: h.document_id,
     documentFilename: h.document_filename,
+    canReview: h.can_review ?? false,
+    canRemove: h.can_remove ?? false,
     submittedBy: h.submitted_by,
     submittedAt: h.submitted_at,
     status: h.status,
