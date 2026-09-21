@@ -214,7 +214,10 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   processing when the original PDF is viewable. **Accept:** malformed requests return 4xx, valid
   cross-page rectangles survive API mapping, and DOCX cannot enter the PDF review flow.
 
-- [ ] **R9 — Handle scanned PDFs honestly.**
+- [x] **R9 — Handle scanned PDFs honestly.** Done: `ReviewPane` probes pdf.js text content on load; when
+  absent it shows a banner, hides the select-text hint, and embeds the existing document-comments thread
+  in the rail as the fallback. Design doc corrected. OCR PDF regeneration/area annotations deferred.
+  Original finding:
   `ingestion_service._extract_pdf_ocr` produces text blocks, not a searchable replacement PDF;
   the viewer fetches the original file. OCR ingestion therefore does not make image-only PDFs selectable.
   Show a no-text-layer explanation and offer document-level comments for the demo; defer OCR PDF

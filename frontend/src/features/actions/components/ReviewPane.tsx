@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Worker, Viewer } from '@react-pdf-viewer/core'
+import type { DocumentLoadEvent } from '@react-pdf-viewer/core'
 import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout'
 import {
   highlightPlugin,
@@ -14,18 +15,21 @@ import '@react-pdf-viewer/core/lib/styles/index.css'
 import '@react-pdf-viewer/default-layout/lib/styles/index.css'
 import '@react-pdf-viewer/highlight/lib/styles/index.css'
 import {
+  createDocumentComment,
   createReviewAnnotation,
   createReviewHandoff,
   deleteReviewHandoff,
   exportAnnotatedPdf,
   fetchDocumentFile,
   getReviewHandoff,
+  listDocumentComments,
   listReviewHandoffsForAction,
   rejectReviewHandoff,
   updateReviewHandoff,
   uploadDocument,
 } from '../../../shared/api/api'
 import { getErrorMessage } from '../../../shared/lib/errors'
+import { MarkdownContent } from '../../../shared/ui/MarkdownContent'
 import type {
   ActionItem,
   CurrentUser,
@@ -282,6 +286,71 @@ function popoverStyle(region: HighlightArea): React.CSSProperties {
     : { position: 'absolute', zIndex: 50, top: `${top}%`, left: `${Math.min(region.left, 70)}%` }
 }
 
+// ---------------------------------------------------------------------------
+// DocumentCommentThread — fallback for scanned PDFs (matter-wide comments)
+// ---------------------------------------------------------------------------
+
+function DocumentCommentThread({ documentId }: { documentId: string }) {
+  const queryClient = useQueryClient()
+  const queryKey = ['documentComments', documentId]
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const commentsQuery = useQuery({ queryKey, queryFn: () => listDocumentComments(documentId) })
+  const postMutation = useMutation({
+    mutationFn: (content: string) => createDocumentComment(documentId, content),
+    onSuccess: () => {
+      setDraft('')
+      setError(null)
+      queryClient.invalidateQueries({ queryKey })
+    },
+    onError: (e) => setError(getErrorMessage(e, 'Could not post comment')),
+  })
+  const comments = commentsQuery.data ?? []
+
+  return (
+    <div className="border-b border-black/10 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Document comments</p>
+      {commentsQuery.isError && (
+        <p className="mt-1 text-[10.5px] text-red-600">
+          {getErrorMessage(commentsQuery.error, 'Could not load comments')}
+        </p>
+      )}
+      <div className="mt-1.5 space-y-1.5">
+        {comments.map((c) => (
+          <div key={c.id} className="rounded-md border border-black/5 bg-white p-2 text-[10.5px]">
+            <span className="font-medium text-[#5a5a56]">{c.author.fullName ?? c.author.email}</span>
+            <div className="text-[#5a5a56]">
+              <MarkdownContent markdown={c.content} />
+            </div>
+          </div>
+        ))}
+        {comments.length === 0 && !commentsQuery.isLoading && (
+          <p className="text-[10.5px] text-[#9a9a94]">No comments yet.</p>
+        )}
+      </div>
+      <div className="mt-2">
+        <textarea
+          aria-label="New document comment"
+          className="w-full resize-none rounded-lg border border-black/15 bg-white px-2 py-1.5 text-[11px] leading-4 outline-none focus:border-blue-400"
+          placeholder="Comment on the document as a whole (e.g. “p. 3, para 2: wrong party”)"
+          rows={3}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        {error && <p className="mt-1 text-[10px] text-red-600">{error} — your draft is kept.</p>}
+        <button
+          className="mt-1 rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-[10.5px] font-medium text-white disabled:opacity-50"
+          disabled={!draft.trim() || postMutation.isPending}
+          onClick={() => postMutation.mutate(draft.trim())}
+          type="button"
+        >
+          {postMutation.isPending ? 'Posting…' : error ? 'Retry' : 'Post comment'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function roundStatusLabel(r: ReviewHandoff): string {
   switch (r.status) {
     case 'ready_for_review':
@@ -326,6 +395,26 @@ function HandoffViewer({
   const [mobileTab, setMobileTab] = useState<'document' | 'annotations'>('document')
   // Card clicked in the rail; its mark is emphasised in the PDF.
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null)
+  // null = unknown (not loaded yet); false = scanned/image-only PDF with no
+  // selectable text, so text-anchored annotation is impossible in this viewer.
+  const [hasTextLayer, setHasTextLayer] = useState<boolean | null>(null)
+
+  async function detectTextLayer(e: DocumentLoadEvent) {
+    try {
+      const pagesToCheck = Math.min(e.doc.numPages, 3)
+      for (let i = 0; i < pagesToCheck; i++) {
+        const page = await e.doc.getPage(i + 1)
+        const content = await page.getTextContent()
+        if (content.items.some((item) => item.str.trim().length > 0)) {
+          setHasTextLayer(true)
+          return
+        }
+      }
+      setHasTextLayer(false)
+    } catch {
+      setHasTextLayer(null)
+    }
+  }
 
   // Build the current annotations list from the handoff (kept fresh by query)
   const annotations = handoff.annotations
@@ -712,6 +801,17 @@ function HandoffViewer({
         </div>
       ) : null}
 
+      {/* Scanned PDF banner */}
+      {hasTextLayer === false && (
+        <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+          <span>
+            This PDF has no text layer (it looks scanned), so text cannot be selected for highlights,
+            strikes or suggestions here. Leave document-level comments in the annotation panel instead.
+          </span>
+        </div>
+      )}
+
       {/* Rejection banner */}
       {handoff.status === 'returned' && handoff.returnReason && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5">
@@ -786,6 +886,7 @@ function HandoffViewer({
               <Worker workerUrl={PDFJS_WORKER_URL}>
                 <Viewer
                   fileUrl={fileUrl}
+                  onDocumentLoad={(e) => void detectTextLayer(e)}
                   plugins={[defaultLayoutInstance, highlightPluginInstance]}
                 />
               </Worker>
@@ -808,12 +909,20 @@ function HandoffViewer({
                 </span>
               )}
             </p>
-            {canAnnotate && (
+            {canAnnotate && hasTextLayer !== false && (
               <p className="mt-0.5 text-[9.5px] text-[#9a9a94]">
                 Select text in the PDF to annotate.
               </p>
             )}
+            {hasTextLayer === false && (
+              <p className="mt-0.5 text-[9.5px] text-amber-700">
+                Scanned PDF — no selectable text. Use document comments below.
+              </p>
+            )}
           </div>
+          {hasTextLayer === false && (
+            <DocumentCommentThread documentId={handoff.documentId} />
+          )}
           <AnnotationRail
             handoffId={handoff.id}
             annotations={annotations}

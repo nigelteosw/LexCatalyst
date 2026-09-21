@@ -89,7 +89,12 @@ Three candidate stacks, with the tradeoffs that matter:
 Non-obvious gotchas:
 
 - **pdf.js text layer is approximate.** Some PDFs (scanned, OCR'd) have a noisy or misaligned text layer; selection works but the anchored rects can drift. We store both the text quote *and* the visual rects so the rail can re-locate annotations even if pdf.js re-renders at a different zoom or with a different text-layer pass.
-- **OCR'd PDFs** (the recent ingest path added OCR for image-only PDFs) emit a text layer whose runs may not align with the visual baseline. We accept this for v1; the annotation still anchors to the quote even if the highlight rectangle is a few px off.
+- **Image-only (scanned) PDFs have no selectable text in the viewer.** Ingestion's OCR path
+  (`_extract_pdf_ocr`) produces text blocks for search/RAG only; it does not write a searchable PDF
+  back to storage, and the review viewer always loads the original file. So OCR does *not* make a scan
+  annotatable. `ReviewPane` detects a missing text layer on load (pdf.js `getTextContent` on the first
+  pages), explains it, hides the "select text" hint, and offers document-level comments as the fallback.
+  Regenerating an OCR'd PDF or area (rectangle) annotations are later enhancements.
 - **Page coordinates are PDF-space, not screen-space.** Persist normalised `(page_no, x, y, w, h)` in PDF user-space units so the same annotation renders consistently at any zoom.
 
 ---
@@ -411,7 +416,7 @@ Super-user mode (KB RFC §4.1) bypasses enforcement but still records `author_us
 11. On the new round, a previously `needs_rework` annotation from the prior round is carried forward as a fresh `open` annotation with `previous_annotation_id` set. The reply thread is continuous — Jane and Sarah's earlier back-and-forth is visible in the carried-forward card.
 12. Sarah clicks **Export marked PDF** → file downloads → opens in Acrobat showing highlight rects, strike lines, and margin callouts with the suggested text.
 13. As a user who is not on the matter: 403 on `GET /annotations`, the replies endpoints, and the export endpoint.
-14. OCR'd PDF (image-only with extracted text layer): selection still produces an `anchor_quote`; the annotation rect may be slightly misaligned but the rail entry and the flattened export both anchor to the quote.
+14. Scanned PDF (image-only): the viewer shows a "no text layer" banner, no selection toolbar appears, and the reviewer leaves document-level comments in the panel instead.
 15. The matter-wide `document_comments` thread (from `pdf-viewer-comments.md`) renders in the drawer footer simultaneously with the annotation rail and is unaffected by handoff status — confirming the two channels coexist without conflict.
 
 ---
