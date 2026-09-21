@@ -1,5 +1,65 @@
 # Engineering TODO — Review Findings
 
+## RAM and hosting cost reduction — reviewed 2026-09-21
+
+Requested cost review: hosting RAM, separate from the product's saved memories and LLM token
+costs. These are code-confirmed allocation patterns, not measured production bottlenecks.
+All work below is pending; prioritize measurement, then OCR and file buffering.
+
+- [ ] **M1 — Baseline actual RAM and cost before tuning.** Record per-service Railway memory
+  over a representative idle/demo period, plus peak container memory during synthetic native-PDF,
+  scanned-PDF and DOCX ingestion, export, and overlapping uploads/chat. Include OCR subprocesses;
+  Python-only allocation measurements miss native and child-process memory. Record document sizes,
+  page counts, concurrency, latency and failures so before/after runs are comparable.
+  Railway bills RAM usage at $10/GB/month: reducing average usage by 0.25 GB would reduce the
+  RAM usage charge by roughly $2.50/month, subject to plan minimums/included usage. Lowering a
+  memory limit alone is not a demonstrated saving. Sources checked 2026-09-21:
+  [pricing](https://docs.railway.com/pricing),
+  [metrics](https://docs.railway.com/observability/metrics).
+  **Accept:** recorded baseline and after-change average/peak RAM, CPU and estimated cost;
+  no savings claim based solely on an isolated peak or a smaller configured limit.
+
+- [ ] **M2 — Bound OCR image memory (highest-confidence peak-RAM opportunity).**
+  `backend/app/services/ingestion_service.py::_extract_pdf_ocr` calls
+  `convert_from_bytes(file_bytes, dpi=150)` for the entire PDF and retains the image list.
+  Render one page or a small bounded batch at a time, using temporary disk files where helpful,
+  and close images/clean temporary files on success and failure. Keep page numbers and citations.
+  Retain current OCR quality initially; do not lower resolution without a readability comparison.
+  **Accept:** a long synthetic scan no longer retains all raster pages simultaneously;
+  extracted text/citations remain correct and measured peak container RAM drops.
+
+- [ ] **M3 — Avoid full-file buffering and reject oversize uploads early.**
+  `backend/app/routers/documents.py::upload_document` checks `MAX_UPLOAD_BYTES` only after
+  `await file.read()`. Read with an enforced byte bound, then adapt storage/ingestion to use the
+  existing spooled upload or bounded temporary files instead of complete byte copies.
+  `backend/app/services/storage_service.py::download_document_file` also buffers the entire R2
+  body; inspect original-file serving and PDF export callers before changing its interface.
+  Preserve authentication, ownership/matter checks, quotas, response headers and stream cleanup.
+  **Accept:** oversized uploads stop at the enforced bound even without a trustworthy Content-Length;
+  concurrent valid uploads/downloads use bounded buffers and failed transfers clean up resources.
+
+- [ ] **M4 — Persist embeddings in bounded batches.**
+  `backend/app/providers/embedding_provider.py` already batches API requests by 64, but accumulates
+  every returned vector. `backend/app/services/document_service.py::process_document` retains
+  file bytes, blocks, chunks and embeddings, then constructs all `DocumentChunk` objects at once.
+  Release no-longer-needed inputs and embed/insert bounded batches without retaining every vector
+  or pending ORM object. Preserve claim ownership, retry idempotency and atomic readiness; partially
+  processed chunks must not become searchable. Avoid holding a DB transaction open across slow
+  provider calls; use a staged approach only if needed to preserve these guarantees.
+  **Accept:** large-document peak RAM drops, citations/search results are unchanged, and failed or
+  reclaimed jobs expose no partial results or duplicate chunks.
+
+- [ ] **M5 — Tune persistent service overhead only after measuring it.**
+  `backend/railway.toml` starts Uvicorn without an explicit worker count; `backend/app/main.py`
+  starts an embedded worker per app process. Verify deployed replicas and worker overrides before
+  adding processes, which duplicate imports, pools and worker activity. `backend/app/database.py`
+  leaves connection-pool sizing at defaults: measure concurrent API/worker demand and Postgres
+  memory, then set a small explicit pool/overflow budget with headroom. Inspect deployed frontend
+  serving to confirm it uses the built static bundle rather than a development server.
+  **Accept:** documented production process/connection counts and lower measured idle RAM without
+  connection timeouts, stalled jobs or worse demo responsiveness. Do not add worker infrastructure
+  or shrink Postgres caches blindly to pursue an unmeasured saving.
+
 ## Demo-first action plan — reviewed 2026-09-21
 
 Start here. The older thematic inventory below is retained for context; this section supersedes
@@ -69,7 +129,10 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
 
 ### 2. Redlining fidelity and usability
 
-- [ ] **R1 — Do not carry old coordinates onto a revised PDF.**
+- [x] **R1 — Do not carry old coordinates onto a revised PDF.** Done: carry-forward stores `anchor_rects=[]`,
+  the rail shows “From previous round — locate in revised draft (was p. N)” with jump-to disabled, and
+  `ReviewAnnotationUpdate` accepts `page_no`/`anchor_rects` for explicit re-anchoring (API only; no
+  re-anchor UI yet). Design doc updated. Tests in `test_carry_forward.py`. Original finding:
   `_carry_forward_annotations` copies `page_no` and `anchor_rects` unchanged into a different document.
   An inserted paragraph/page can place criticism on unrelated wording. For the demo, show carried
   items as “From previous round — locate in revised draft” without an overlay until explicitly re-anchored.

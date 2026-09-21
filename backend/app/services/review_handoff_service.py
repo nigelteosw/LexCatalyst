@@ -341,6 +341,11 @@ def _carry_forward_annotations(
 ) -> None:
     """Clone needs_rework annotations into the new handoff round.
 
+    The revised PDF may have shifted or re-paginated the text, so coordinates
+    are NOT carried: anchor_rects is left empty and the card shows as
+    "from previous round — locate in revised draft" until a reviewer explicitly
+    re-anchors it (PATCH page_no/anchor_rects). page_no is kept only as a hint.
+
     Replies are re-pointed to the carried-forward row so the conversation
     survives the round boundary. The old annotation rows keep their terminal
     status for history.
@@ -365,7 +370,7 @@ def _carry_forward_annotations(
             page_no=old_ann.page_no,
             kind=old_ann.kind,
             anchor_quote=old_ann.anchor_quote,
-            anchor_rects=old_ann.anchor_rects,
+            anchor_rects=[],
             suggested_text=old_ann.suggested_text,
             note=old_ann.note,
             status="open",

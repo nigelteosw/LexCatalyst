@@ -172,14 +172,19 @@ function AnnotationCard({
   const needsReworkBorder =
     annotation.status === 'needs_rework' ? 'border-amber-400' : border
 
+  // Carried forward from a previous round: the revised PDF may have shifted the
+  // text, so there is no overlay to jump to until it is explicitly re-anchored.
+  const isUnanchored = annotation.anchorRects.length === 0
+
   return (
     <div className={`rounded-lg border ${needsReworkBorder} ${bg} text-xs`}>
       {/* Card header row */}
       <div className="flex items-start gap-2 p-2.5">
         <button
-          className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
+          className="flex min-w-0 flex-1 items-start gap-1.5 text-left disabled:cursor-default"
+          disabled={isUnanchored}
           onClick={onJumpTo}
-          title="Jump to in PDF"
+          title={isUnanchored ? 'Not yet located in the revised draft' : 'Jump to in PDF'}
           type="button"
         >
           <span className={`mt-0.5 shrink-0 ${color}`}>{icon}</span>
@@ -229,6 +234,12 @@ function AnnotationCard({
 
       {/* Content */}
       <div className="px-2.5 pb-2.5">
+        {isUnanchored && annotation.previousAnnotationId && (
+          <p className="mb-1.5 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[9.5px] font-medium text-amber-700">
+            <RotateCcw size={9} />
+            From previous round — locate in revised draft (was p. {annotation.pageNo})
+          </p>
+        )}
         <p
           className={`leading-4 text-[#9a9a94] ${annotation.kind === 'suggestion' ? 'line-through opacity-60' : ''} ${!expanded ? 'line-clamp-2' : ''}`}
         >

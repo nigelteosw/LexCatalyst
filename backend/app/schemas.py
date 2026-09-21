@@ -627,6 +627,9 @@ class ReviewAnnotationUpdate(BaseModel):
     status: ReviewAnnotationStatus | None = None
     suggested_text: str | None = Field(default=None, max_length=20_000)
     note: str | None = Field(default=None, max_length=10_000)
+    # Explicit re-anchoring of a carried-forward annotation onto the revised PDF.
+    page_no: int | None = Field(default=None, ge=1)
+    anchor_rects: list[dict] | None = None
 
 
 class ReviewAnnotationReplyCreate(BaseModel):

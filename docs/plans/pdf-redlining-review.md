@@ -268,6 +268,11 @@ When the junior re-uploads on the same action, a new `review_handoffs` row is cr
 
 - `previous_annotation_id` set to the old row's id
 - `status = open`
+- `anchor_rects = []` — coordinates are **not** carried. The revised PDF may have inserted or
+  re-flowed text, so the old rectangles could land on unrelated wording. The card shows as
+  "From previous round — locate in revised draft (was p. N)" with no overlay and no jump-to until a
+  reviewer explicitly re-anchors it via `PATCH …/annotations/{id}` with `page_no` + `anchor_rects`.
+  `page_no` is kept only as a hint. Automatic quote matching is a later enhancement.
 - replies thread **carried over by re-pointing the replies** (we do not duplicate replies — the thread continues across rounds, anchored to the *new* annotation row; the old row keeps its terminal status)
 
 `status = resolved` and `status = rejected` annotations from the previous round stay on the old handoff and are not carried forward. The reviewer sees them as historical when scrolling the previous round.
