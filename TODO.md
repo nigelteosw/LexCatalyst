@@ -139,7 +139,9 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   Retain the quote, prior document link, and `previous_annotation_id`; automatic quote matching can wait.
   **Accept:** a revised draft with an inserted page never displays stale coordinates as a valid mark.
 
-- [ ] **R2 — Preserve reply history across rounds.**
+- [x] **R2 — Preserve reply history across rounds.** Done: replies stay on their original annotation;
+  `GET …/annotations/{id}/history` walks `previous_annotation_id` with a per-handoff access check, and the
+  rail shows an “Earlier rounds” read-only thread on expand. Original finding:
   The same function reassigns `reply.annotation_id`, removing replies from the previous annotation.
   Keep replies on their original round; display linked earlier discussion through the previous-annotation
   relationship (with access checks), or copy a clearly labelled snapshot.

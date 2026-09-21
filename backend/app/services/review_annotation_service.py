@@ -7,6 +7,8 @@ docs/plans/pdf-redlining-review.md §6.
 
 from datetime import UTC, datetime
 
+from fastapi import HTTPException
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
@@ -17,7 +19,11 @@ from app.models import (
     ReviewHandoff,
     User,
 )
-from app.services.review_handoff_service import lock_active_handoff
+from app.services.review_handoff_service import (
+    get_handoff,
+    lock_active_handoff,
+    require_handoff_access,
+)
 from app.schemas import (
     KnowledgeBankEntryCreate,
     ReviewAnnotationCreate,
@@ -113,6 +119,36 @@ def delete_annotation(db: Session, annotation: ReviewAnnotation) -> None:
     lock_active_handoff(db, annotation.handoff_id)
     db.delete(annotation)
     db.commit()
+
+
+MAX_HISTORY_DEPTH = 20
+
+
+def get_annotation_history(
+    db: Session, *, user: User, annotation: ReviewAnnotation
+) -> list[ReviewAnnotation]:
+    """Earlier rounds of a carried-forward annotation, newest first.
+
+    Each prior annotation lives on a previous handoff; the caller's access to
+    that handoff is re-checked at every step, and the walk stops (without
+    error) at the first round they cannot read.
+    """
+    history: list[ReviewAnnotation] = []
+    previous_id = annotation.previous_annotation_id
+    while previous_id and len(history) < MAX_HISTORY_DEPTH:
+        previous = get_annotation(db, previous_id)
+        if not previous:
+            break
+        handoff = get_handoff(db, previous.handoff_id)
+        if not handoff:
+            break
+        try:
+            require_handoff_access(db, user=user, handoff=handoff)
+        except HTTPException:
+            break
+        history.append(previous)
+        previous_id = previous.previous_annotation_id
+    return history
 
 
 # ---------------------------------------------------------------------------

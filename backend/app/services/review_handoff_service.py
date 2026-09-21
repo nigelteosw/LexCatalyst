@@ -346,9 +346,10 @@ def _carry_forward_annotations(
     "from previous round — locate in revised draft" until a reviewer explicitly
     re-anchors it (PATCH page_no/anchor_rects). page_no is kept only as a hint.
 
-    Replies are re-pointed to the carried-forward row so the conversation
-    survives the round boundary. The old annotation rows keep their terminal
-    status for history.
+    Replies stay on their original annotation; the new round reaches the
+    earlier discussion through previous_annotation_id (see
+    review_annotation_service.get_annotation_history), so both the old round's
+    history and the new round's context remain intact.
     """
     prev_annotations = list(
         db.scalars(
@@ -378,11 +379,6 @@ def _carry_forward_annotations(
             previous_annotation_id=old_ann.id,
         )
         db.add(new_ann)
-        db.flush()
-
-        # Re-point replies from the old annotation to the carried-forward one
-        for reply in list(old_ann.replies):
-            reply.annotation_id = new_id
 
     db.flush()
 

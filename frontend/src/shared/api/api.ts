@@ -1810,6 +1810,17 @@ export async function listReviewAnnotations(handoffId: string): Promise<ReviewAn
   return items.map(mapAnnotation)
 }
 
+/** Earlier rounds of a carried-forward annotation (with replies), newest first. */
+export async function getReviewAnnotationHistory(
+  handoffId: string,
+  annotationId: string,
+): Promise<ReviewAnnotation[]> {
+  const items = await request<BackendReviewAnnotation[]>(
+    `/handoffs/${handoffId}/annotations/${annotationId}/history`,
+  )
+  return items.map(mapAnnotation)
+}
+
 export async function createReviewAnnotation(
   handoffId: string,
   payload: {

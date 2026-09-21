@@ -31,6 +31,7 @@ from app.services.review_annotation_service import (
     delete_reply,
     export_flattened_pdf,
     get_annotation,
+    get_annotation_history,
     list_annotations,
     list_replies,
     post_reply,
@@ -319,6 +320,24 @@ def remove_annotation(
     except ReviewHandoffError as exc:
         raise _closed_round(exc)
     return {"status": "ok"}
+
+
+@router.get(
+    "/handoffs/{handoff_id}/annotations/{annotation_id}/history",
+    response_model=list[ReviewAnnotationResponse],
+)
+def get_annotation_history_endpoint(
+    handoff_id: str,
+    annotation_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[ReviewAnnotationResponse]:
+    """Earlier rounds of a carried-forward annotation (with their replies), newest first."""
+    annotation = _get_annotation_or_404(db, handoff_id, annotation_id, current_user)
+    return [
+        _serialise_annotation(a)
+        for a in get_annotation_history(db, user=current_user, annotation=annotation)
+    ]
 
 
 # ---------------------------------------------------------------------------

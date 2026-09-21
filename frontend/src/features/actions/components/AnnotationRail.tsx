@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { HighlightArea } from '@react-pdf-viewer/highlight'
 import {
   ArrowRight,
@@ -20,6 +20,7 @@ import {
 import {
   deleteAnnotationReply,
   deleteReviewAnnotation,
+  getReviewAnnotationHistory,
   postAnnotationReply,
   promoteAnnotationToKb,
   updateReviewAnnotation,
@@ -336,13 +337,82 @@ function AnnotationCard({
 
       {/* Reply thread — shown when expanded */}
       {expanded && (
-        <ReplyThread
-          handoffId={handoffId}
-          annotation={annotation}
-          currentUserId={currentUserId}
-          queryClient={queryClient}
-        />
+        <>
+          {annotation.previousAnnotationId && (
+            <PreviousRoundsThread handoffId={handoffId} annotationId={annotation.id} />
+          )}
+          <ReplyThread
+            handoffId={handoffId}
+            annotation={annotation}
+            currentUserId={currentUserId}
+            queryClient={queryClient}
+          />
+        </>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PreviousRoundsThread — read-only discussion from earlier rounds
+// ---------------------------------------------------------------------------
+
+function PreviousRoundsThread({
+  handoffId,
+  annotationId,
+}: {
+  handoffId: string
+  annotationId: string
+}) {
+  const historyQuery = useQuery({
+    queryKey: ['handoffs', handoffId, 'annotations', annotationId, 'history'],
+    queryFn: () => getReviewAnnotationHistory(handoffId, annotationId),
+    staleTime: 60_000,
+  })
+
+  if (historyQuery.isLoading) {
+    return (
+      <div className="border-t border-black/5 px-2.5 py-1.5 text-[9.5px] text-[#9a9a94]">
+        Loading earlier discussion…
+      </div>
+    )
+  }
+  const rounds = historyQuery.data ?? []
+  if (rounds.length === 0) return null
+
+  return (
+    <div className="border-t border-black/5 bg-[#fafaf8] px-2.5 py-2">
+      <p className="mb-1 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-[#9a9a94]">
+        Earlier rounds
+      </p>
+      <div className="space-y-2">
+        {rounds.map((prev, i) => (
+          <div key={prev.id} className="rounded-md border border-black/5 bg-white p-2">
+            <p className="text-[9.5px] text-[#9a9a94]">
+              {i === 0 ? 'Previous round' : `${i + 1} rounds ago`} · p. {prev.pageNo} ·{' '}
+              {statusLabel(prev.status)}
+            </p>
+            {prev.suggestedText && (
+              <p className="mt-1 text-[10.5px] text-[#5a5a56]">→ {prev.suggestedText}</p>
+            )}
+            {prev.note && <p className="mt-1 text-[10.5px] text-[#5a5a56]">{prev.note}</p>}
+            {prev.replies.length > 0 && (
+              <div className="mt-1.5 space-y-1 border-t border-black/5 pt-1.5">
+                {prev.replies.map((r) => (
+                  <div key={r.id} className="text-[10.5px]">
+                    <span className="font-medium text-[#5a5a56]">
+                      {r.author?.fullName ?? r.author?.email ?? 'Someone'}
+                    </span>
+                    <div className="text-[#5a5a56]">
+                      <MarkdownContent markdown={r.bodyMarkdown} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

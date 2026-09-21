@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+import unittest.mock
 from unittest.mock import MagicMock
 
 from app.models import ReviewAnnotation
@@ -58,3 +59,52 @@ class ReanchorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReplyHistoryTests(unittest.TestCase):
+    def test_replies_stay_on_original_annotation(self) -> None:
+        reply = SimpleNamespace(annotation_id="old-ann")
+        old = SimpleNamespace(
+            id="old-ann", page_no=1, kind="highlight", anchor_quote="q",
+            anchor_rects=[], suggested_text=None, note=None,
+            author_user_id="senior", replies=[reply],
+        )
+        db = MagicMock()
+        db.scalars.return_value.unique.return_value = [old]
+        _carry_forward_annotations(
+            db, prev_handoff_id="round-1",
+            new_handoff=SimpleNamespace(id="round-2", document_id="doc-2"),
+        )
+        self.assertEqual(reply.annotation_id, "old-ann")
+
+    def test_history_walks_chain_and_checks_access(self) -> None:
+        from fastapi import HTTPException
+
+        from app.services.review_annotation_service import get_annotation_history
+
+        oldest = SimpleNamespace(id="a0", handoff_id="h0", previous_annotation_id=None, replies=["r0"])
+        middle = SimpleNamespace(id="a1", handoff_id="h1", previous_annotation_id="a0", replies=["r1"])
+        current = SimpleNamespace(id="a2", handoff_id="h2", previous_annotation_id="a1", replies=[])
+        by_id = {"a0": oldest, "a1": middle}
+        db = MagicMock()
+        user = SimpleNamespace(id="u", is_admin=False)
+
+        with (
+            unittest.mock.patch(
+                "app.services.review_annotation_service.get_annotation",
+                side_effect=lambda _db, aid: by_id.get(aid),
+            ),
+            unittest.mock.patch(
+                "app.services.review_annotation_service.get_handoff",
+                side_effect=lambda _db, hid: SimpleNamespace(id=hid),
+            ),
+            unittest.mock.patch(
+                "app.services.review_annotation_service.require_handoff_access"
+            ) as access,
+        ):
+            history = get_annotation_history(db, user=user, annotation=current)
+            self.assertEqual([a.id for a in history], ["a1", "a0"])  # newest first
+            self.assertEqual(access.call_count, 2)
+
+            access.side_effect = HTTPException(status_code=403)
+            self.assertEqual(get_annotation_history(db, user=user, annotation=current), [])
