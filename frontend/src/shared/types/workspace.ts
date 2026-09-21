@@ -337,6 +337,8 @@ export type ReviewHandoff = {
   documentFilename?: string | null
   // Server-computed viewer capabilities (see review_handoff_service.can_review_handoff).
   canReview: boolean
+  /** canReview and the round is still open (annotation edits allowed). */
+  canAnnotate: boolean
   canRemove: boolean
   submittedBy: string
   submittedAt: string

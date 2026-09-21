@@ -38,6 +38,8 @@ type Props = {
   handoffId: string
   annotations: ReviewAnnotation[]
   isReviewer: boolean
+  /** Reviewer on an open round — status changes and deletes are allowed. */
+  canEdit: boolean
   currentUserId: string | null
   onJumpTo: (area: HighlightArea) => void
 }
@@ -46,6 +48,7 @@ export function AnnotationRail({
   handoffId,
   annotations,
   isReviewer,
+  canEdit,
   currentUserId,
   onJumpTo,
 }: Props) {
@@ -67,7 +70,7 @@ export function AnnotationRail({
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
         <Highlighter size={22} className="text-[#c4c3bc]" />
         <p className="text-xs text-[#9a9a94]">
-          {isReviewer
+          {canEdit
             ? 'Select text in the PDF to add a highlight, strike, or suggestion.'
             : 'No annotations yet.'}
         </p>
@@ -96,6 +99,7 @@ export function AnnotationRail({
                 handoffId={handoffId}
                 annotation={annotation}
                 isReviewer={isReviewer}
+                canEdit={canEdit}
                 currentUserId={currentUserId}
                 isDeleting={deleteMutation.isPending && deleteMutation.variables === annotation.id}
                 isUpdatingStatus={
@@ -124,6 +128,7 @@ function AnnotationCard({
   handoffId,
   annotation,
   isReviewer,
+  canEdit,
   currentUserId,
   isDeleting,
   isUpdatingStatus,
@@ -134,6 +139,7 @@ function AnnotationCard({
   handoffId: string
   annotation: ReviewAnnotation
   isReviewer: boolean
+  canEdit: boolean
   currentUserId: string | null
   isDeleting: boolean
   isUpdatingStatus: boolean
@@ -206,8 +212,8 @@ function AnnotationCard({
             {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
           </button>
 
-          {/* Delete (reviewer only) */}
-          {isReviewer && (
+          {/* Delete (reviewer, open round only) */}
+          {canEdit && (
             <button
               aria-label="Delete annotation"
               className="rounded p-0.5 text-[#c4c3bc] hover:text-red-500 disabled:opacity-40"
@@ -242,8 +248,8 @@ function AnnotationCard({
           </div>
         )}
 
-        {/* Status controls — reviewer only */}
-        {isReviewer && (
+        {/* Status controls — reviewer, open round only */}
+        {canEdit && (
           <div className="mt-2 flex flex-wrap items-center gap-1">
             <StatusButton
               active={annotation.status === 'needs_rework'}
@@ -294,8 +300,8 @@ function AnnotationCard({
           </div>
         )}
 
-        {/* Status pill for non-reviewer */}
-        {!isReviewer && annotation.status !== 'open' && (
+        {/* Status pill when controls are hidden */}
+        {!canEdit && annotation.status !== 'open' && (
           <span
             className={`mt-1.5 inline-block rounded-full px-1.5 py-0.5 text-[9.5px] font-medium ${statusCls(annotation.status)}`}
           >

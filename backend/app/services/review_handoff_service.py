@@ -101,6 +101,69 @@ def require_handoff_access(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
+# ---------------------------------------------------------------------------
+# Lifecycle policy
+# ---------------------------------------------------------------------------
+
+ACTIVE_STATUSES = frozenset({"ready_for_review", "in_review"})
+TERMINAL_STATUSES = frozenset({"completed", "returned"})
+ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
+    "ready_for_review": frozenset({"in_review", "completed", "returned"}),
+    "in_review": frozenset({"completed", "returned"}),
+    "completed": frozenset(),
+    "returned": frozenset(),
+}
+
+
+def is_handoff_active(handoff: ReviewHandoff) -> bool:
+    return handoff.status in ACTIVE_STATUSES
+
+
+def assert_transition(handoff: ReviewHandoff, new_status: str) -> None:
+    """Raise unless ``handoff`` may move to ``new_status``. Same-status is a no-op."""
+    if new_status == handoff.status:
+        return
+    if new_status not in ALLOWED_TRANSITIONS:
+        raise ReviewHandoffError(f"Unknown review status: {new_status}")
+    if new_status not in ALLOWED_TRANSITIONS.get(handoff.status, frozenset()):
+        if handoff.status in TERMINAL_STATUSES:
+            raise ReviewHandoffError("This review round is closed")
+        raise ReviewHandoffError(
+            f"Cannot move a review from {handoff.status} to {new_status}"
+        )
+
+
+def lock_handoff(db: Session, handoff_id: str) -> ReviewHandoff | None:
+    """Row-lock the handoff for the current transaction.
+
+    Every status change and annotation write takes this lock first, so a
+    completion racing a new annotation (or two terminal actions) serialise and
+    the second sees the first's result.
+    """
+    return db.scalar(
+        select(ReviewHandoff).where(ReviewHandoff.id == handoff_id).with_for_update()
+    )
+
+
+def lock_active_handoff(db: Session, handoff_id: str) -> ReviewHandoff:
+    handoff = lock_handoff(db, handoff_id)
+    if not handoff:
+        raise ReviewHandoffError("Handoff not found")
+    if not is_handoff_active(handoff):
+        raise ReviewHandoffError("This review round is closed")
+    return handoff
+
+
+def _action_if_current(db: Session, handoff: ReviewHandoff) -> ActionItem | None:
+    """The linked action, only when this handoff is still its active round."""
+    if not handoff.action_id:
+        return None
+    action = db.get(ActionItem, handoff.action_id)
+    if action and str(action.active_handoff_id) == str(handoff.id):
+        return action
+    return None
+
+
 # Firm roles that may review any handoff they can read (mirrors the UI's isManager).
 REVIEWER_FIRM_ROLES = frozenset({"partner", "senior_associate"})
 
@@ -318,11 +381,13 @@ def update_handoff_status(
     status: str,
     reviewer_id: str | None = None,
 ) -> ReviewHandoff | None:
-    handoff = db.get(ReviewHandoff, handoff_id)
+    handoff = lock_handoff(db, handoff_id)
     if not handoff:
         return None
+    assert_transition(handoff, status)
 
-    if status == "completed":
+    action_to_sync: ActionItem | None = None
+    if status == "completed" and handoff.status != "completed":
         open_annotation_id = db.scalar(
             select(ReviewAnnotation.id)
             .where(
@@ -336,69 +401,67 @@ def update_handoff_status(
                 "All annotations must be resolved before marking complete"
             )
         handoff.completed_at = datetime.now(UTC)
-        if handoff.action_id:
-            action = db.get(ActionItem, handoff.action_id)
-            if action and str(action.active_handoff_id) == str(handoff.id):
-                action.status = "done"
-                action.active_handoff_id = None
+        action_to_sync = _action_if_current(db, handoff)
+        if action_to_sync:
+            action_to_sync.status = "done"
+            action_to_sync.active_handoff_id = None
 
     handoff.status = status
     if reviewer_id is not None:
         handoff.reviewer_id = reviewer_id
 
     db.commit()
-    if status == "completed" and handoff.action_id:
-        completed_action = db.get(ActionItem, handoff.action_id)
-        if completed_action:
-            sync_metadata_safe(db, sync_action_metadata, completed_action)
+    if action_to_sync:
+        sync_metadata_safe(db, sync_action_metadata, action_to_sync)
     sync_metadata_safe(db, sync_handoff_metadata, handoff)
-    db.refresh(handoff)
     return get_handoff(db, handoff.id)
 
 
-def return_handoff_for_rework(db: Session, handoff_id: str) -> ReviewHandoff | None:
-    handoff = db.get(ReviewHandoff, handoff_id)
+def _return_handoff(
+    db: Session,
+    handoff_id: str,
+    *,
+    reason: str | None,
+    clear_active: bool,
+) -> ReviewHandoff | None:
+    handoff = lock_handoff(db, handoff_id)
     if not handoff:
         return None
+    assert_transition(handoff, "returned")
     handoff.status = "returned"
-    action_to_sync = None
-    if handoff.action_id:
-        action = db.get(ActionItem, handoff.action_id)
-        if action:
-            action.status = "in_progress"
-            action_to_sync = action
+    if reason is not None:
+        handoff.return_reason = reason
+
+    # Only the current round may move the action; an older round returning
+    # late must not reset a newer submission.
+    action_to_sync = _action_if_current(db, handoff)
+    if action_to_sync:
+        action_to_sync.status = "in_progress"
+        if clear_active:
+            action_to_sync.active_handoff_id = None
+
     db.commit()
     if action_to_sync:
         sync_metadata_safe(db, sync_action_metadata, action_to_sync)
     sync_metadata_safe(db, sync_handoff_metadata, handoff)
     return get_handoff(db, handoff.id)
+
+
+def return_handoff_for_rework(db: Session, handoff_id: str) -> ReviewHandoff | None:
+    """Return for rework: the action keeps this as its active round so the next
+    submission carries forward needs_rework annotations."""
+    return _return_handoff(db, handoff_id, reason=None, clear_active=False)
 
 
 def reject_handoff(
     db: Session, *, handoff_id: str, reason: str
 ) -> ReviewHandoff | None:
-    """Whole-draft reject — returns the handoff with a required reason banner.
+    """Whole-draft reject with a required reason banner.
 
-    Clears active_handoff_id so that when the junior re-submits, create_handoff
-    does NOT carry forward annotations from this rejected draft.
+    Clears active_handoff_id so the next submission starts clean rather than
+    carrying forward annotations from the rejected draft.
     """
-    handoff = db.get(ReviewHandoff, handoff_id)
-    if not handoff:
-        return None
-    handoff.status = "returned"
-    handoff.return_reason = reason
-    action_to_sync = None
-    if handoff.action_id:
-        action = db.get(ActionItem, handoff.action_id)
-        if action:
-            action.status = "in_progress"
-            action.active_handoff_id = None
-            action_to_sync = action
-    db.commit()
-    if action_to_sync:
-        sync_metadata_safe(db, sync_action_metadata, action_to_sync)
-    sync_metadata_safe(db, sync_handoff_metadata, handoff)
-    return get_handoff(db, handoff.id)
+    return _return_handoff(db, handoff_id, reason=reason, clear_active=True)
 
 
 def delete_handoff(db: Session, handoff_id: str) -> bool:

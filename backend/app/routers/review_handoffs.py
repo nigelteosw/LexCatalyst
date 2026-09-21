@@ -45,6 +45,7 @@ from app.services.review_handoff_service import (
     create_handoff,
     delete_handoff,
     get_handoff,
+    is_handoff_active,
     list_handoffs_for_action,
     reject_handoff,
     require_handoff_access,
@@ -65,8 +66,10 @@ router = APIRouter(tags=["review-handoffs"])
 def _serialise_handoff(
     handoff: ReviewHandoff, *, db: Session, user: User
 ) -> ReviewHandoffResponse:
+    can_review = can_review_handoff(db, user=user, handoff=handoff)
     return ReviewHandoffResponse(
-        can_review=can_review_handoff(db, user=user, handoff=handoff),
+        can_review=can_review,
+        can_annotate=can_review and is_handoff_active(handoff),
         can_remove=can_remove_handoff(db, user=user, handoff=handoff),
         id=handoff.id,
         action_id=handoff.action_id,
@@ -90,6 +93,10 @@ def _serialise_handoff(
 
 def _serialise_annotation(annotation: ReviewAnnotation) -> ReviewAnnotationResponse:
     return ReviewAnnotationResponse.model_validate(annotation)
+
+
+def _closed_round(exc: ReviewHandoffError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 def _get_handoff_or_404(
@@ -201,7 +208,7 @@ def patch_handoff(
         else:
             updated = handoff
     except ReviewHandoffError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _closed_round(exc)
     if not updated:
         raise HTTPException(status_code=404, detail="Handoff not found")
     return _serialise_handoff(updated, db=db, user=current_user)
@@ -216,7 +223,10 @@ def post_reject_handoff(
 ) -> ReviewHandoffResponse:
     handoff = _get_handoff_or_404(db, handoff_id, current_user)
     require_reviewer(db, user=current_user, handoff=handoff)
-    updated = reject_handoff(db, handoff_id=handoff_id, reason=schema.reason)
+    try:
+        updated = reject_handoff(db, handoff_id=handoff_id, reason=schema.reason)
+    except ReviewHandoffError as exc:
+        raise _closed_round(exc)
     if not updated:
         raise HTTPException(status_code=404, detail="Handoff not found")
     return _serialise_handoff(updated, db=db, user=current_user)
@@ -266,7 +276,10 @@ def post_annotation(
 ) -> ReviewAnnotationResponse:
     handoff = _get_handoff_or_404(db, handoff_id, current_user)
     require_reviewer(db, user=current_user, handoff=handoff)
-    annotation = create_annotation(db, handoff=handoff, user=current_user, schema=schema)
+    try:
+        annotation = create_annotation(db, handoff=handoff, user=current_user, schema=schema)
+    except ReviewHandoffError as exc:
+        raise _closed_round(exc)
     return _serialise_annotation(annotation)
 
 
@@ -284,7 +297,10 @@ def patch_annotation(
     annotation = _get_annotation_or_404(
         db, handoff_id, annotation_id, current_user, reviewer_only=True
     )
-    updated = update_annotation(db, annotation=annotation, schema=schema)
+    try:
+        updated = update_annotation(db, annotation=annotation, schema=schema)
+    except ReviewHandoffError as exc:
+        raise _closed_round(exc)
     return _serialise_annotation(updated)
 
 
@@ -298,7 +314,10 @@ def remove_annotation(
     annotation = _get_annotation_or_404(
         db, handoff_id, annotation_id, current_user, reviewer_only=True
     )
-    delete_annotation(db, annotation)
+    try:
+        delete_annotation(db, annotation)
+    except ReviewHandoffError as exc:
+        raise _closed_round(exc)
     return {"status": "ok"}
 
 

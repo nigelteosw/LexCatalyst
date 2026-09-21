@@ -149,11 +149,13 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
 
   // Capabilities come from the server so the UI matches what the API enforces.
   const isReviewer = handoff.canReview
+  const canAnnotate = handoff.canAnnotate
 
   return (
     <HandoffViewer
       handoff={handoff}
       isReviewer={isReviewer}
+      canAnnotate={canAnnotate}
       currentUserId={currentUser?.id ?? null}
       onDelete={() => deleteMutation.mutate(handoff.id)}
       onActionStateChange={onActionStateChange}
@@ -169,6 +171,7 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
 type ViewerProps = {
   handoff: ReviewHandoff
   isReviewer: boolean
+  canAnnotate: boolean
   currentUserId: string | null
   onDelete: () => void
   onActionStateChange: (patch: Partial<ActionItem>) => void
@@ -178,6 +181,7 @@ type ViewerProps = {
 function HandoffViewer({
   handoff,
   isReviewer,
+  canAnnotate,
   currentUserId,
   onDelete,
   onActionStateChange,
@@ -260,7 +264,7 @@ function HandoffViewer({
     cancel,
     toggle,
   }: RenderHighlightTargetProps) {
-    if (!isReviewer) return <></>
+    if (!canAnnotate) return <></>
 
     function post(kind: 'highlight' | 'strike') {
       cancel()
@@ -307,7 +311,7 @@ function HandoffViewer({
     selectedText,
     cancel,
   }: RenderHighlightContentProps) {
-    if (!isReviewer) return <></>
+    if (!canAnnotate) return <></>
 
     function save(suggestedText: string, note: string) {
       cancel()
@@ -597,7 +601,7 @@ function HandoffViewer({
                 </span>
               )}
             </p>
-            {isReviewer && (
+            {canAnnotate && (
               <p className="mt-0.5 text-[9.5px] text-[#9a9a94]">
                 Select text in the PDF to annotate.
               </p>
@@ -607,6 +611,7 @@ function HandoffViewer({
             handoffId={handoff.id}
             annotations={annotations}
             isReviewer={isReviewer}
+            canEdit={canAnnotate}
             currentUserId={currentUserId}
             onJumpTo={jumpToAnnotation}
           />

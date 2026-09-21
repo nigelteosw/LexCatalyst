@@ -17,6 +17,7 @@ from app.models import (
     ReviewHandoff,
     User,
 )
+from app.services.review_handoff_service import lock_active_handoff
 from app.schemas import (
     KnowledgeBankEntryCreate,
     ReviewAnnotationCreate,
@@ -68,6 +69,7 @@ def create_annotation(
     user: User,
     schema: ReviewAnnotationCreate,
 ) -> ReviewAnnotation:
+    lock_active_handoff(db, handoff.id)
     annotation = ReviewAnnotation(
         handoff_id=handoff.id,
         document_id=handoff.document_id,
@@ -97,6 +99,7 @@ def update_annotation(
     annotation: ReviewAnnotation,
     schema: ReviewAnnotationUpdate,
 ) -> ReviewAnnotation:
+    lock_active_handoff(db, annotation.handoff_id)
     payload = schema.model_dump(exclude_unset=True)
     for field, value in payload.items():
         setattr(annotation, field, value)
@@ -107,6 +110,7 @@ def update_annotation(
 
 
 def delete_annotation(db: Session, annotation: ReviewAnnotation) -> None:
+    lock_active_handoff(db, annotation.handoff_id)
     db.delete(annotation)
     db.commit()
 

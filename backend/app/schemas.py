@@ -710,6 +710,7 @@ class ReviewHandoffResponse(BaseModel):
     document_filename: str | None = None
     # Viewer capabilities, computed server-side so the UI never guesses at policy.
     can_review: bool = False
+    can_annotate: bool = False  # can_review and the round is still active
     can_remove: bool = False
 
     model_config = {"from_attributes": True}

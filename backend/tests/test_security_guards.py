@@ -79,6 +79,7 @@ class SecurityGuardTests(unittest.TestCase):
             document_id="owned-document",
             status="in_review",
         )
+        db.scalar.return_value = handoff  # row lock re-fetch
         user = SimpleNamespace(id="reviewer")
         schema = ReviewAnnotationCreate(
             document_id="other-document",
