@@ -50,8 +50,12 @@ type Props = {
 export function ReviewPane({ action, currentUser, onActionStateChange }: Props) {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Which round is being viewed; null means "the latest".
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Set when the PDF uploaded fine but creating the handoff failed, so the
+  // user can retry without re-uploading.
+  const [pendingDocumentId, setPendingDocumentId] = useState<string | null>(null)
 
   const handoffsQuery = useQuery({
     queryKey: ['handoffs', 'action', action.id],
@@ -59,52 +63,71 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
     staleTime: 5_000,
   })
 
-  const latest = handoffsQuery.data?.[0]
+  // Newest first from the API.
+  const rounds = handoffsQuery.data ?? []
+  const latest = rounds[0]
+  const selected = rounds.find((r) => r.id === selectedId) ?? latest
 
   const detailQuery = useQuery({
-    queryKey: ['handoffs', latest?.id],
-    queryFn: () => getReviewHandoff(latest!.id),
-    enabled: !!latest,
+    queryKey: ['handoffs', selected?.id],
+    queryFn: () => getReviewHandoff(selected!.id),
+    enabled: !!selected,
     staleTime: 5_000,
   })
 
-  const handoff: ReviewHandoff | undefined = detailQuery.data ?? latest
+  const handoff: ReviewHandoff | undefined = detailQuery.data ?? selected
+
+  function invalidateRounds() {
+    queryClient.invalidateQueries({ queryKey: ['handoffs', 'action', action.id] })
+    queryClient.invalidateQueries({ queryKey: ['actions'] })
+  }
+
+  const submitMutation = useMutation({
+    mutationFn: (documentId: string) =>
+      createReviewHandoff({
+        documentId,
+        actionId: action.id,
+        matterId: action.matterId ?? null,
+      }),
+    onSuccess: (created) => {
+      setPendingDocumentId(null)
+      setError(null)
+      setSelectedId(null)
+      onActionStateChange({ status: 'review', activeHandoffId: created.id })
+      invalidateRounds()
+    },
+    onError: (e, documentId) => {
+      setPendingDocumentId(documentId)
+      setError(getErrorMessage(e))
+    },
+  })
 
   const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      setUploading(true)
-      try {
-        const doc = await uploadDocument(file)
-        return await createReviewHandoff({
-          documentId: doc.id,
-          actionId: action.id,
-          matterId: action.matterId ?? null,
-        })
-      } finally {
-        setUploading(false)
-      }
-    },
-    onSuccess: (created) => {
-      onActionStateChange({ status: 'review', activeHandoffId: created.id })
-      queryClient.invalidateQueries({ queryKey: ['handoffs', 'action', action.id] })
-    },
+    mutationFn: (file: File) => uploadDocument(file),
+    onSuccess: (doc) => submitMutation.mutate(doc.id),
     onError: (e) => setError(getErrorMessage(e)),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteReviewHandoff(id),
-    onSuccess: () => {
-      onActionStateChange({ status: 'in_progress', activeHandoffId: null })
-      queryClient.invalidateQueries({ queryKey: ['handoffs', 'action', action.id] })
+    onSuccess: (_result, id) => {
+      if (id === action.activeHandoffId) {
+        onActionStateChange({ status: 'in_progress', activeHandoffId: null })
+      }
+      setSelectedId(null)
+      invalidateRounds()
     },
     onError: (e) => setError(getErrorMessage(e)),
   })
+
+  const busy = uploadMutation.isPending || submitMutation.isPending
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
     setError(null)
+    setPendingDocumentId(null)
     uploadMutation.mutate(file)
   }
 
@@ -116,6 +139,70 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
     )
   }
 
+  if (handoffsQuery.isError) {
+    return (
+      <div className="p-5">
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+          {getErrorMessage(handoffsQuery.error, 'Could not load review rounds')}
+        </p>
+        <button
+          className="mt-3 rounded-lg border border-black/10 px-3 py-1.5 text-xs"
+          onClick={() => handoffsQuery.refetch()}
+          type="button"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  const uploadControls = (
+    <>
+      <input
+        ref={fileInputRef}
+        accept=".pdf"
+        className="hidden"
+        onChange={handleFileChange}
+        type="file"
+      />
+      {pendingDocumentId ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f0f0f] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+            disabled={busy}
+            onClick={() => submitMutation.mutate(pendingDocumentId)}
+            type="button"
+          >
+            {busy ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+            Retry submission
+          </button>
+          <button
+            className="rounded-lg border border-black/10 px-3 py-2 text-xs text-[#5a5a56] disabled:opacity-50"
+            disabled={busy}
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+          >
+            Choose a different PDF
+          </button>
+        </div>
+      ) : (
+        <button
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f0f0f] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+          disabled={busy}
+          onClick={() => fileInputRef.current?.click()}
+          type="button"
+        >
+          {busy ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+          {uploadMutation.isPending
+            ? 'Uploading…'
+            : submitMutation.isPending
+              ? 'Submitting…'
+              : 'Choose PDF'}
+        </button>
+      )}
+    </>
+  )
+
   if (!handoff) {
     return (
       <div className="space-y-4 p-5">
@@ -126,42 +213,72 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
           <p className="mb-4 text-xs text-[#9a9a94]">
             Upload your completed review for the senior to annotate and redline.
           </p>
-          <input
-            ref={fileInputRef}
-            accept=".pdf"
-            className="hidden"
-            onChange={handleFileChange}
-            type="file"
-          />
-          <button
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f0f0f] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
-            disabled={uploading}
-            onClick={() => fileInputRef.current?.click()}
-            type="button"
-          >
-            {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-            {uploading ? 'Uploading…' : 'Choose PDF'}
-          </button>
+          {uploadControls}
         </div>
       </div>
     )
   }
 
-  // Capabilities come from the server so the UI matches what the API enforces.
-  const isReviewer = handoff.canReview
-  const canAnnotate = handoff.canAnnotate
+  // A revised draft can be submitted once the latest round has been returned.
+  const canResubmit = latest?.status === 'returned'
 
   return (
-    <HandoffViewer
-      handoff={handoff}
-      isReviewer={isReviewer}
-      canAnnotate={canAnnotate}
-      currentUserId={currentUser?.id ?? null}
-      onDelete={() => deleteMutation.mutate(handoff.id)}
-      onActionStateChange={onActionStateChange}
-      queryClient={queryClient}
-    />
+    <div className="flex h-full flex-col">
+      {(rounds.length > 1 || canResubmit || error) && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-2">
+          {rounds.length > 1 && (
+            <label className="flex items-center gap-1.5 text-[10.5px] text-[#5a5a56]">
+              Round
+              <select
+                className="rounded-md border border-black/10 bg-white px-1.5 py-1 text-[10.5px]"
+                onChange={(e) => setSelectedId(e.target.value === latest?.id ? null : e.target.value)}
+                value={selected?.id ?? ''}
+              >
+                {rounds.map((r, i) => (
+                  <option key={r.id} value={r.id}>
+                    {rounds.length - i}
+                    {i === 0 ? ' (latest)' : ''} · {roundStatusLabel(r)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {error && <span className="text-[10.5px] text-red-600">{error}</span>}
+          {canResubmit && (
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-[10.5px] text-[#9a9a94]">Upload a revised PDF to start the next round.</span>
+              {uploadControls}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
+        <HandoffViewer
+          key={handoff.id}
+          handoff={handoff}
+          isReviewer={handoff.canReview}
+          canAnnotate={handoff.canAnnotate}
+          currentUserId={currentUser?.id ?? null}
+          onDelete={() => deleteMutation.mutate(handoff.id)}
+          onActionStateChange={onActionStateChange}
+          queryClient={queryClient}
+        />
+      </div>
+    </div>
   )
+}
+
+function roundStatusLabel(r: ReviewHandoff): string {
+  switch (r.status) {
+    case 'ready_for_review':
+      return 'ready'
+    case 'in_review':
+      return 'in review'
+    case 'completed':
+      return 'completed'
+    case 'returned':
+      return r.returnReason ? 'rejected' : 'returned'
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -220,6 +337,7 @@ function HandoffViewer({
     onSuccess: (updated) => {
       onActionStateChange({ status: 'in_progress' })
       queryClient.setQueryData(['handoffs', handoff.id], updated)
+      queryClient.invalidateQueries({ queryKey: ['handoffs', 'action'] })
     },
   })
 
@@ -228,6 +346,7 @@ function HandoffViewer({
     onSuccess: (updated) => {
       onActionStateChange({ status: 'in_progress' })
       queryClient.setQueryData(['handoffs', handoff.id], updated)
+      queryClient.invalidateQueries({ queryKey: ['handoffs', 'action'] })
       setShowRejectModal(false)
     },
   })

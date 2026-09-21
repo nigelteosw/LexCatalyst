@@ -181,3 +181,39 @@ class RouterLifecycleTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as raised:
                 router.post_annotation("h", schema, db, senior)
         self.assertEqual(raised.exception.status_code, 409)
+
+
+class ResubmitTests(unittest.TestCase):
+    def _db(self, *, previous_status: str):
+        from app.models import ActionItem, Document, ReviewHandoff
+
+        document = SimpleNamespace(id="doc-2", user_id="junior", matter_id=None)
+        action = SimpleNamespace(
+            id="action", assignee_id="junior", assigner_id="senior",
+            matter_id=None, active_handoff_id="round-1", status="in_progress",
+        )
+        previous = _handoff(previous_status)
+        by_type = {Document: document, ActionItem: action, ReviewHandoff: previous}
+        db = MagicMock()
+        db.get.side_effect = lambda model, _id: by_type.get(model)
+        db.scalar.return_value = None
+        return db, action
+
+    def test_new_round_refused_while_previous_is_active(self) -> None:
+        db, _ = self._db(previous_status="in_review")
+        schema = SimpleNamespace(document_id="doc-2", matter_id=None, action_id="action", reviewer_id=None)
+        with self.assertRaises(ReviewHandoffError):
+            rhs.create_handoff(db, user=SimpleNamespace(id="junior", is_admin=False), schema=schema)
+        db.add.assert_not_called()
+
+    def test_new_round_allowed_after_return(self) -> None:
+        db, action = self._db(previous_status="returned")
+        schema = SimpleNamespace(document_id="doc-2", matter_id=None, action_id="action", reviewer_id=None)
+        with (
+            patch.object(rhs, "_carry_forward_annotations") as carry,
+            patch.object(rhs, "sync_metadata_safe"),
+        ):
+            handoff = rhs.create_handoff(db, user=SimpleNamespace(id="junior", is_admin=False), schema=schema)
+        carry.assert_called_once()
+        self.assertEqual(action.active_handoff_id, handoff.id)
+        self.assertEqual(action.status, "review")

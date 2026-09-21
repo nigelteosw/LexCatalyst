@@ -288,6 +288,14 @@ def create_handoff(
             matter_id = action.matter_id
         if not reviewer_id:
             reviewer_id = action.assigner_id
+        # One open round per action: a revised draft may only follow a
+        # returned or completed round.
+        if action.active_handoff_id:
+            current = db.get(ReviewHandoff, action.active_handoff_id)
+            if current and is_handoff_active(current):
+                raise ReviewHandoffError(
+                    "A review round is already in progress for this action"
+                )
     if matter_id and not user.is_admin:
         is_member = db.scalar(
             select(MatterMember.id).where(

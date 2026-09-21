@@ -44,14 +44,20 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   **Accept:** synthetic names remain unavailable to wider-scope readers/search until approved;
   matter-scoped entries retain matter access; repeated promotion does not create duplicate entries.
 
-- [ ] **D3 — Returned/rejected drafts have no resubmit path.**
+- [x] **D3 — Returned/rejected drafts have no resubmit path.** Done: `ReviewPane` keeps every round with a
+  round selector, shows “Upload revised PDF” once the latest round is returned, and keeps the uploaded
+  document ID for a retry if handoff creation fails. `create_handoff` refuses a new round while one is still
+  active. Original finding:
   `ReviewPane.tsx` renders its upload control only when there is no handoff; returned rounds still
   render the viewer. Add “Upload revised PDF” for the submitter, preserve previous rounds, and show a
   small round selector. Do not require deleting review history to upload again.
   **Accept:** upload → annotate → return → revise → upload → complete works without deleting a round;
   failed handoff creation after upload offers retry using the uploaded document ID.
 
-- [ ] **D4 — Old rounds can change the current action; terminal rounds remain editable.**
+- [x] **D4 — Old rounds can change the current action; terminal rounds remain editable.** Done in `dfbaa72`:
+  `assert_transition` / `lock_active_handoff` in `review_handoff_service.py`, return/reject only touch the
+  action when they are its active round, annotation writes 409 on closed rounds, `can_annotate` on the
+  response. Tests in `test_review_lifecycle.py`. Original finding:
   `return_handoff_for_rework` and `reject_handoff` update the linked action without checking its
   `active_handoff_id` (completion/deletion already check it). Status transitions are unrestricted,
   and annotation writes do not check handoff status. The viewer hides completion controls for terminal
