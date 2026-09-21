@@ -191,7 +191,10 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   **Accept:** simulated 403/500/network errors preserve text and show a retry; switching PDFs after a
   failed load works; failed delete does not look successful; loading never looks like an empty review.
 
-- [ ] **R7 — Place selection controls next to the selected text.**
+- [x] **R7 — Place selection controls next to the selected text.** Done: popovers use the plugin's
+  `selectionRegion` (below the selection, right-anchored in the right half, top clamped); clicking a rail
+  card emphasises its mark (outline) and the card (ring); All/Open/Resolved filter chips; toolbar and card
+  buttons have labels and visible focus. Edge/mobile placement not yet checked in a browser. Original finding:
   Both highlight render callbacks return absolutely positioned wrappers without selection-relative
   top/left placement. Use the plugin's selection region, clamp to the viewer, and verify after selection
   settles. Add selected-annotation emphasis, clear open/resolved filtering, and keyboard-accessible

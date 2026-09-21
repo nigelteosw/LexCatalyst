@@ -42,8 +42,11 @@ type Props = {
   /** Reviewer on an open round — status changes and deletes are allowed. */
   canEdit: boolean
   currentUserId: string | null
-  onJumpTo: (area: HighlightArea) => void
+  selectedId: string | null
+  onJumpTo: (annotationId: string, area: HighlightArea | null) => void
 }
+
+type RailFilter = 'all' | 'open' | 'resolved'
 
 export function AnnotationRail({
   handoffId,
@@ -51,9 +54,11 @@ export function AnnotationRail({
   isReviewer,
   canEdit,
   currentUserId,
+  selectedId,
   onJumpTo,
 }: Props) {
   const queryClient = useQueryClient()
+  const [filter, setFilter] = useState<RailFilter>('all')
 
   // Per-card failure messages so a failed status change or delete never looks
   // like it succeeded.
@@ -99,7 +104,14 @@ export function AnnotationRail({
     )
   }
 
-  const byPage = annotations.reduce<Record<number, ReviewAnnotation[]>>((acc, a) => {
+  const visible = annotations.filter((a) => {
+    if (filter === 'open') return a.status === 'open' || a.status === 'needs_rework'
+    if (filter === 'resolved') return a.status === 'resolved' || a.status === 'rejected'
+    return true
+  })
+  const openTotal = annotations.filter((a) => a.status === 'open' || a.status === 'needs_rework').length
+
+  const byPage = visible.reduce<Record<number, ReviewAnnotation[]>>((acc, a) => {
     if (!acc[a.pageNo]) acc[a.pageNo] = []
     acc[a.pageNo].push(a)
     return acc
@@ -108,6 +120,30 @@ export function AnnotationRail({
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto p-3">
+      <div className="flex items-center gap-1" role="group" aria-label="Filter annotations">
+        {(
+          [
+            ['all', `All ${annotations.length}`],
+            ['open', `Open ${openTotal}`],
+            ['resolved', `Resolved ${annotations.length - openTotal}`],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            aria-pressed={filter === value}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+              filter === value ? 'bg-[#0f0f0f] text-white' : 'bg-white text-[#5a5a56] hover:bg-[#f4f3ef]'
+            }`}
+            onClick={() => setFilter(value)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {pages.length === 0 && (
+        <p className="text-center text-[10.5px] text-[#9a9a94]">Nothing matches this filter.</p>
+      )}
       {pages.map((pageNo) => (
         <div key={pageNo}>
           <p className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-widest text-[#9a9a94]">
@@ -123,16 +159,14 @@ export function AnnotationRail({
                 canEdit={canEdit}
                 currentUserId={currentUserId}
                 error={cardErrors[annotation.id] ?? null}
+                selected={annotation.id === selectedId}
                 isDeleting={deleteMutation.isPending && deleteMutation.variables === annotation.id}
                 isUpdatingStatus={
                   statusMutation.isPending && statusMutation.variables?.id === annotation.id
                 }
                 onDelete={() => deleteMutation.mutate(annotation.id)}
                 onUpdateStatus={(status) => statusMutation.mutate({ id: annotation.id, status })}
-                onJumpTo={() => {
-                  const firstRect = annotation.anchorRects[0]
-                  if (firstRect) onJumpTo(firstRect)
-                }}
+                onJumpTo={() => onJumpTo(annotation.id, annotation.anchorRects[0] ?? null)}
               />
             ))}
           </div>
@@ -153,6 +187,7 @@ function AnnotationCard({
   canEdit,
   currentUserId,
   error,
+  selected,
   isDeleting,
   isUpdatingStatus,
   onDelete,
@@ -165,6 +200,7 @@ function AnnotationCard({
   canEdit: boolean
   currentUserId: string | null
   error: string | null
+  selected: boolean
   isDeleting: boolean
   isUpdatingStatus: boolean
   onDelete: () => void
@@ -201,12 +237,17 @@ function AnnotationCard({
   const isUnanchored = annotation.anchorRects.length === 0
 
   return (
-    <div className={`rounded-lg border ${needsReworkBorder} ${bg} text-xs`}>
+    <div
+      className={`rounded-lg border ${needsReworkBorder} ${bg} text-xs ${
+        selected ? 'ring-2 ring-[#4a3db0]/60' : ''
+      }`}
+      aria-current={selected ? 'true' : undefined}
+    >
       {/* Card header row */}
       <div className="flex items-start gap-2 p-2.5">
         <button
-          className="flex min-w-0 flex-1 items-start gap-1.5 text-left disabled:cursor-default"
-          disabled={isUnanchored}
+          aria-label={isUnanchored ? `${label} (not yet located in revised draft)` : `${label}: jump to mark in PDF`}
+          className="flex min-w-0 flex-1 items-start gap-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
           onClick={onJumpTo}
           title={isUnanchored ? 'Not yet located in the revised draft' : 'Jump to in PDF'}
           type="button"

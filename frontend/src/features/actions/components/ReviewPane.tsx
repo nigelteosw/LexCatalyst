@@ -268,6 +268,20 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
   )
 }
 
+/**
+ * Absolute placement for a popover next to the selected text. The plugin gives the
+ * selection region as page percentages, so the popover is anchored just below the
+ * selection and flipped to hang from its right edge when the selection sits in the
+ * right half of the page, which keeps it inside the viewer at page edges.
+ */
+function popoverStyle(region: HighlightArea): React.CSSProperties {
+  const anchorRight = region.left + region.width / 2 > 50
+  const top = Math.min(region.top + region.height + 0.5, 94)
+  return anchorRight
+    ? { position: 'absolute', zIndex: 50, top: `${top}%`, right: `${Math.max(100 - region.left - region.width, 0)}%` }
+    : { position: 'absolute', zIndex: 50, top: `${top}%`, left: `${Math.min(region.left, 70)}%` }
+}
+
 function roundStatusLabel(r: ReviewHandoff): string {
   switch (r.status) {
     case 'ready_for_review':
@@ -310,6 +324,8 @@ function HandoffViewer({
   const [annotationError, setAnnotationError] = useState<string | null>(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [mobileTab, setMobileTab] = useState<'document' | 'annotations'>('document')
+  // Card clicked in the rail; its mark is emphasised in the PDF.
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null)
 
   // Build the current annotations list from the handoff (kept fresh by query)
   const annotations = handoff.annotations
@@ -396,6 +412,7 @@ function HandoffViewer({
   function renderHighlightTarget({
     highlightAreas,
     selectedText,
+    selectionRegion,
     cancel,
     toggle,
   }: RenderHighlightTargetProps) {
@@ -420,8 +437,10 @@ function HandoffViewer({
 
     return (
       <div
+        aria-label="Annotate selection"
         className="z-50 flex flex-col gap-1 rounded-lg border border-black/10 bg-white px-1 py-1 shadow-lg"
-        style={{ position: 'absolute', zIndex: 50 }}
+        role="toolbar"
+        style={popoverStyle(selectionRegion)}
       >
         {annotationError && (
           <p className="max-w-56 px-1.5 text-[10px] text-red-600">{annotationError} — try again.</p>
@@ -455,6 +474,7 @@ function HandoffViewer({
   function renderHighlightContent({
     highlightAreas,
     selectedText,
+    selectionRegion,
     cancel,
   }: RenderHighlightContentProps) {
     if (!canAnnotate) return <></>
@@ -479,7 +499,7 @@ function HandoffViewer({
     }
 
     return (
-      <div style={{ position: 'absolute', zIndex: 50 }}>
+      <div style={popoverStyle(selectionRegion)}>
         <SuggestionEditor
           selectedText={selectedText}
           onSave={save}
@@ -509,13 +529,17 @@ function HandoffViewer({
             .filter((r) => r.pageIndex === pageIndex)
             .map((rect, i) => {
               const css = getCssProperties(rect, rotation)
+              const selected = annotation.id === selectedAnnotationId
+              const emphasis: React.CSSProperties = selected
+                ? { outline: '2px solid #4a3db0', outlineOffset: 1, zIndex: 2 }
+                : {}
               if (annotation.kind === 'strike') {
                 // Render a wrapper at the exact text rect position, then draw the
                 // strike line as a child centered vertically inside it.
                 // Do NOT override top/height from getCssProperties — those encode
                 // the actual page coordinates of the selected text.
                 return (
-                  <div key={`${annotation.id}-${i}`} style={{ ...css, background: 'transparent' }}>
+                  <div key={`${annotation.id}-${i}`} style={{ ...css, background: 'transparent', ...emphasis }}>
                     <div
                       style={{
                         position: 'absolute',
@@ -537,6 +561,7 @@ function HandoffViewer({
                     ...css,
                     mixBlendMode: 'multiply',
                     ...overlayStyle(annotation.kind),
+                    ...emphasis,
                   }}
                 />
               )
@@ -582,7 +607,9 @@ function HandoffViewer({
     }
   }, [handoff.documentId, fileReloadKey])
 
-  function jumpToAnnotation(area: HighlightArea) {
+  function jumpToAnnotation(annotationId: string, area: HighlightArea | null) {
+    setSelectedAnnotationId(annotationId)
+    if (!area) return
     setMobileTab('document')
     requestAnimationFrame(() => highlightPluginInstance.jumpToHighlightArea(area))
   }
@@ -793,6 +820,7 @@ function HandoffViewer({
             isReviewer={isReviewer}
             canEdit={canAnnotate}
             currentUserId={currentUserId}
+            selectedId={selectedAnnotationId}
             onJumpTo={jumpToAnnotation}
           />
         </div>
@@ -896,7 +924,8 @@ function ToolbarButton({
 }) {
   return (
     <button
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${className}`}
+      aria-label={label}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 ${className}`}
       onClick={onClick}
       type="button"
     >
