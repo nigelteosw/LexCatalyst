@@ -217,9 +217,13 @@ async def _execute_tool(
         return body, summary
 
     if name == "search_memories":
-        query = str(args.get("query", "")).strip().lower()
-        memories = list_memories(db, user_id=user.id)
-        relevant = [m for m in memories if not query or query in m.content.lower()]
+        query = str(args.get("query", "")).strip()
+        relevant = list_memories(
+            db,
+            user_id=user.id,
+            contains=query or None,
+            limit=MAX_MEMORY_RESULTS,
+        )
         if not relevant:
             return "No relevant memories found.", "no results"
         body = "\n".join(f"[{m.category}] {m.content}" for m in relevant)

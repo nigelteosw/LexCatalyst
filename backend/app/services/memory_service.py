@@ -63,10 +63,21 @@ def format_memory_context(memories: list[Memory]) -> str:
     return "\n\nUser Context (Long-term Memory):\n" + "\n\n".join(blocks)
 
 
-def list_memories(db: Session, user_id: str, category: str | None = None, limit: int | None = None) -> list[Memory]:
+def list_memories(
+    db: Session,
+    user_id: str,
+    category: str | None = None,
+    limit: int | None = None,
+    contains: str | None = None,
+) -> list[Memory]:
     stmt = select(Memory).where(Memory.user_id == user_id)
     if category:
         stmt = stmt.where(Memory.category == category)
+    if contains:
+        pattern = (
+            contains.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        stmt = stmt.where(Memory.content.ilike(f"%{pattern}%", escape="\\"))
     stmt = stmt.order_by(desc(Memory.updated_at))
     if limit is not None:
         stmt = stmt.limit(limit)
