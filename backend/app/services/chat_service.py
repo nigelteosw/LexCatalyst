@@ -35,6 +35,11 @@ _SUMMARISE_THRESHOLD = _RECENT_LIMIT  # start summarising once we exceed the rec
 _RESUMMARY_THRESHOLD = 5
 
 
+def needs_resummary(archived: int, summarised_up_to: int) -> bool:
+    """True when enough messages have been archived since the last summary to redo it."""
+    return archived - summarised_up_to >= _RESUMMARY_THRESHOLD
+
+
 def make_thread_title(message: str) -> str:
     normalized = " ".join(message.split())
     if len(normalized) <= 80:
@@ -155,8 +160,7 @@ async def _maybe_refresh_summary(db: Session, thread: ChatThread) -> None:
     if archived <= 0:
         return
 
-    last_archived = thread.summary_up_to or 0
-    if archived - last_archived < _RESUMMARY_THRESHOLD:
+    if not needs_resummary(archived, thread.summary_up_to or 0):
         return
 
     all_messages = _get_all_messages(db, thread.id)

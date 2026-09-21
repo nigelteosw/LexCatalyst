@@ -2,7 +2,7 @@ import unittest
 
 from sqlalchemy.dialects import postgresql
 
-from app.services.chat_service import _RESUMMARY_THRESHOLD
+from app.services.chat_service import _RESUMMARY_THRESHOLD, needs_resummary
 from app.services.survey_service import (
     MINIMUM_COHORT_SIZE,
     _survey_trends_statement,
@@ -10,8 +10,17 @@ from app.services.survey_service import (
 
 
 class ChatSurveyCorrectnessTests(unittest.TestCase):
-    def test_every_archived_message_triggers_resummary(self):
-        self.assertEqual(_RESUMMARY_THRESHOLD, 1)
+    def test_resummary_waits_for_the_threshold_of_archived_messages(self):
+        # Summarisation is an LLM call, so it is deliberately batched rather than run
+        # on every archived message.
+        self.assertFalse(needs_resummary(archived=_RESUMMARY_THRESHOLD - 1, summarised_up_to=0))
+        self.assertTrue(needs_resummary(archived=_RESUMMARY_THRESHOLD, summarised_up_to=0))
+
+    def test_resummary_counts_only_messages_archived_since_the_last_summary(self):
+        self.assertFalse(needs_resummary(archived=100, summarised_up_to=100))
+        self.assertTrue(
+            needs_resummary(archived=100 + _RESUMMARY_THRESHOLD, summarised_up_to=100)
+        )
 
     def test_survey_query_normalizes_direction_and_enforces_cohort(self):
         sql = str(
