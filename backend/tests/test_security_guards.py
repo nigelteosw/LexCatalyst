@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -19,6 +19,33 @@ class SecurityGuardTests(unittest.TestCase):
     def test_jwt_secret_is_required(self) -> None:
         with self.assertRaises(ValidationError):
             Settings(jwt_secret_key="")
+
+    def test_admin_emails_default_to_empty_when_unset(self) -> None:
+        import importlib
+        import os
+
+        from app import config
+
+        with patch.dict(os.environ, {"ADMIN_EMAILS": ""}, clear=False):
+            reloaded = importlib.reload(config)
+            try:
+                self.assertEqual(reloaded.Settings(jwt_secret_key="x" * 32).admin_emails, [])
+            finally:
+                importlib.reload(config)
+
+    def test_production_requires_admin_emails_and_encryption_key(self) -> None:
+        base = {"jwt_secret_key": "x" * 32, "environment": "production"}
+
+        with self.assertRaises(ValidationError):
+            Settings(**base, admin_emails=[], field_encryption_key="k" * 32)
+
+        with self.assertRaises(ValidationError):
+            Settings(**base, admin_emails=["ops@example.com"], field_encryption_key="")
+
+        settings = Settings(
+            **base, admin_emails=["ops@example.com"], field_encryption_key="k" * 32
+        )
+        self.assertEqual(settings.admin_emails, ["ops@example.com"])
 
     def test_handoff_access_denies_outsider(self) -> None:
         db = MagicMock()

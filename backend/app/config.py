@@ -15,11 +15,16 @@ def getenv_bool(name: str, default: bool = False) -> bool:
 
 
 class Settings(BaseModel):
+    environment: str = getenv("ENVIRONMENT", "development")
     database_url: str = getenv(
         "DATABASE_URL",
         "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst",
     )
     auto_create_tables: bool = getenv_bool("AUTO_CREATE_TABLES", False)
+
+    @property
+    def is_development(self) -> bool:
+        return self.environment.strip().lower() in {"development", "dev", "local", "test"}
 
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
@@ -29,6 +34,16 @@ class Settings(BaseModel):
             self.database_url = self.database_url.replace("postgresql://", "postgresql+psycopg://", 1)
         if len(self.jwt_secret_key.strip()) < 32:
             raise ValueError("JWT_SECRET_KEY must be configured with at least 32 characters")
+        self.admin_emails = [e.strip() for e in self.admin_emails if e.strip()]
+        if not self.is_development:
+            if not self.admin_emails:
+                raise ValueError(
+                    "ADMIN_EMAILS must be set explicitly outside development"
+                )
+            if not (self.field_encryption_key or "").strip():
+                raise ValueError(
+                    "FIELD_ENCRYPTION_KEY must be set explicitly outside development"
+                )
         return self
 
     deepseek_api_key: str | None = getenv("DEEPSEEK_API_KEY")
@@ -49,6 +64,9 @@ class Settings(BaseModel):
     google_client_id: str | None = getenv("GOOGLE_CLIENT_ID")
     jwt_secret_key: str = getenv("JWT_SECRET_KEY", "")
     jwt_algorithm: str = "HS256"
+    # Dedicated key for at-rest field encryption. Kept separate from JWT_SECRET_KEY so that
+    # rotating the JWT secret does not destroy every encrypted column.
+    field_encryption_key: str | None = getenv("FIELD_ENCRYPTION_KEY")
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
     cors_origins: list[str] = getenv(
@@ -56,10 +74,9 @@ class Settings(BaseModel):
         "http://127.0.0.1:5173,http://localhost:5173,https://lexcatalyst.pages.dev",
     ).split(",")
 
-    admin_emails: list[str] = getenv(
-        "ADMIN_EMAILS",
-        "nigelteosw@gmail.com",
-    ).split(",")
+    admin_emails: list[str] = [
+        e for e in getenv("ADMIN_EMAILS", "").split(",") if e.strip()
+    ]
 
 
 @lru_cache
