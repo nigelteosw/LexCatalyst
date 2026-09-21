@@ -82,7 +82,7 @@ def create_annotation(
         page_no=schema.page_no,
         kind=schema.kind,
         anchor_quote=schema.anchor_quote,
-        anchor_rects=schema.anchor_rects,
+        anchor_rects=schema.stored_rects(),
         suggested_text=schema.suggested_text,
         note=schema.note,
         author_user_id=user.id,
@@ -106,8 +106,7 @@ def update_annotation(
     schema: ReviewAnnotationUpdate,
 ) -> ReviewAnnotation:
     lock_active_handoff(db, annotation.handoff_id)
-    payload = schema.model_dump(exclude_unset=True)
-    for field, value in payload.items():
+    for field, value in schema.changes().items():
         setattr(annotation, field, value)
     annotation.updated_at = datetime.now(UTC)
     db.commit()

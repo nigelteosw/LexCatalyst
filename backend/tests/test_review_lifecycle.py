@@ -129,7 +129,8 @@ class ClosedRoundAnnotationTests(unittest.TestCase):
         handoff = SimpleNamespace(id="round-1", document_id="doc", status="completed")
         db = _db_with_locked(handoff)
         schema = ReviewAnnotationCreate(
-            document_id="doc", page_no=1, kind="highlight", anchor_quote="x"
+            document_id="doc", page_no=1, kind="highlight", anchor_quote="x",
+            anchor_rects=[{"pageIndex": 0, "left": 1, "top": 1, "width": 1, "height": 1}],
         )
         with self.assertRaises(ReviewHandoffError):
             create_annotation(
@@ -173,7 +174,9 @@ class RouterLifecycleTests(unittest.TestCase):
         handoff = SimpleNamespace(id="h", document_id="d", status="completed", action_id=None, reviewer_id="senior")
         db = MagicMock(); db.scalar.return_value = handoff; db.get.return_value = None
         senior = SimpleNamespace(id="senior", firm_role="partner", is_admin=False)
-        schema = ReviewAnnotationCreate(document_id="d", page_no=1, kind="highlight", anchor_quote="x")
+        schema = ReviewAnnotationCreate(
+            document_id="d", page_no=1, kind="highlight", anchor_quote="x", anchor_rects=[{"pageIndex": 0, "left": 1, "top": 1, "width": 1, "height": 1}]
+        )
         with (
             patch.object(router, "get_handoff", return_value=handoff),
             patch.object(router, "require_handoff_access"),
@@ -187,7 +190,10 @@ class ResubmitTests(unittest.TestCase):
     def _db(self, *, previous_status: str):
         from app.models import ActionItem, Document, ReviewHandoff
 
-        document = SimpleNamespace(id="doc-2", user_id="junior", matter_id=None)
+        document = SimpleNamespace(
+            id="doc-2", user_id="junior", matter_id=None, filename="draft.pdf",
+            content_type="application/pdf", storage_key="k",
+        )
         action = SimpleNamespace(
             id="action", assignee_id="junior", assigner_id="senior",
             matter_id=None, active_handoff_id="round-1", status="in_progress",

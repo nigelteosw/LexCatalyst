@@ -195,7 +195,10 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   **Accept:** toolbar stays visible near selection at page edges and mobile widths; selecting text
   does not jump the viewport; clicking a rail card identifies the corresponding mark.
 
-- [ ] **R8 — Validate annotation geometry and PDF review inputs.**
+- [x] **R8 — Validate annotation geometry and PDF review inputs.** Done: typed `AnchorRect` (camelCase
+  wire format, finite, in-bounds, non-empty on create), explicit nulls on update are 422, and
+  `create_handoff` requires a stored PDF while allowing extraction still in progress.
+  Tests in `test_review_validation.py`. Original finding:
   `ReviewAnnotationCreate.anchor_rects` is `list[dict]`; missing keys reach exporter indexing and can
   cause 500s. Empty rectangles, invalid page indexes, non-finite/out-of-bounds percentages and explicit
   `status: null` updates need validation. `create_handoff` checks ownership but not PDF type/storage

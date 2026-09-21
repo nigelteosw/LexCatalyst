@@ -86,6 +86,7 @@ class SecurityGuardTests(unittest.TestCase):
             page_no=1,
             kind="highlight",
             anchor_quote="Clause text",
+            anchor_rects=[{"pageIndex": 0, "left": 1, "top": 1, "width": 1, "height": 1}],
         )
 
         create_annotation(db, handoff=handoff, user=user, schema=schema)

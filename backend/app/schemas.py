@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ChatModel = Literal["deepseek-v4-flash", "deepseek-v4-pro"]
 DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
@@ -613,14 +613,43 @@ ReviewAnnotationKind = Literal["highlight", "strike", "suggestion"]
 ReviewAnnotationStatus = Literal["open", "needs_rework", "resolved", "rejected"]
 
 
+class AnchorRect(BaseModel):
+    """One rectangle of a text selection, as @react-pdf-viewer's HighlightArea.
+
+    Values are percentages of the rendered page; ``pageIndex`` is 0-based.
+    Stored as-is (camelCase) so the viewer and the exporter share one format.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    page_index: int = Field(alias="pageIndex", ge=0)
+    left: float = Field(ge=0, le=100, allow_inf_nan=False)
+    top: float = Field(ge=0, le=100, allow_inf_nan=False)
+    width: float = Field(gt=0, le=100, allow_inf_nan=False)
+    height: float = Field(gt=0, le=100, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _within_page(self) -> "AnchorRect":
+        if self.left + self.width > 100.0001 or self.top + self.height > 100.0001:
+            raise ValueError("Rectangle extends beyond the page")
+        return self
+
+
+def _rects_as_stored(rects: list[AnchorRect]) -> list[dict]:
+    return [r.model_dump(by_alias=True) for r in rects]
+
+
 class ReviewAnnotationCreate(BaseModel):
     document_id: str
     page_no: int = Field(ge=1)
     kind: ReviewAnnotationKind
     anchor_quote: str = Field(min_length=1, max_length=20_000)
-    anchor_rects: list[dict] = Field(default_factory=list)
+    anchor_rects: list[AnchorRect] = Field(min_length=1)
     suggested_text: str | None = Field(default=None, max_length=20_000)
     note: str | None = Field(default=None, max_length=10_000)
+
+    def stored_rects(self) -> list[dict]:
+        return _rects_as_stored(self.anchor_rects)
 
 
 class ReviewAnnotationUpdate(BaseModel):
@@ -629,7 +658,21 @@ class ReviewAnnotationUpdate(BaseModel):
     note: str | None = Field(default=None, max_length=10_000)
     # Explicit re-anchoring of a carried-forward annotation onto the revised PDF.
     page_no: int | None = Field(default=None, ge=1)
-    anchor_rects: list[dict] | None = None
+    anchor_rects: list[AnchorRect] | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _no_explicit_nulls(self) -> "ReviewAnnotationUpdate":
+        # These columns are NOT NULL; an explicit null must be a 422, not a 500.
+        for field in ("status", "page_no", "anchor_rects"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+        return self
+
+    def changes(self) -> dict:
+        payload = self.model_dump(exclude_unset=True)
+        if self.anchor_rects is not None:
+            payload["anchor_rects"] = _rects_as_stored(self.anchor_rects)
+        return payload
 
 
 class ReviewAnnotationReplyCreate(BaseModel):

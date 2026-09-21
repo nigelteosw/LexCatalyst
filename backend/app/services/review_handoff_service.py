@@ -231,6 +231,11 @@ def list_handoffs_for_action(
 # ---------------------------------------------------------------------------
 
 
+def _is_pdf(document: Document) -> bool:
+    content_type = (document.content_type or "").split(";")[0].strip().lower()
+    return content_type == "application/pdf" or (document.filename or "").lower().endswith(".pdf")
+
+
 def create_handoff(
     db: Session,
     *,
@@ -248,6 +253,12 @@ def create_handoff(
         raise ReviewHandoffError("Document not found")
     if document.user_id != user.id:
         raise ReviewHandoffError("Document not found")
+    # The viewer and exporter need the original PDF bytes. Extraction may still be
+    # running; that is fine as long as the file itself is stored.
+    if not _is_pdf(document):
+        raise ReviewHandoffError("Only PDF documents can be sent for review")
+    if not document.storage_key:
+        raise ReviewHandoffError("Document file is not available yet")
 
     if (
         schema.matter_id
