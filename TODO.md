@@ -20,7 +20,10 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
 
 ### 1. Before rehearsing redlining: permissions and review lifecycle
 
-- [ ] **D1 — Enforce review write permissions on the server.**
+- [x] **D1 — Enforce review write permissions on the server.** Done in `7695a26`: `can_review_handoff` /
+  `can_remove_handoff` in `review_handoff_service.py`, enforced in the router, exposed as `can_review` /
+  `can_remove` on the handoff response and consumed by `ReviewPane`. 18 tests in `test_review_permissions.py`.
+  Original finding:
   `backend/app/routers/review_handoffs.py` uses the read-access helper for creating/editing/deleting
   annotations, completing/returning/rejecting handoffs, and deleting handoffs. Read access includes
   submitters and matter members; the UI's `isReviewer` is not an API boundary.
