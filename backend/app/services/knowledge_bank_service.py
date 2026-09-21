@@ -693,6 +693,70 @@ def _fallback_redactions(content: str) -> list[dict[str, str]]:
     return results
 
 
+async def create_pending_review_entry(
+    db: Session,
+    *,
+    user: User,
+    schema: KnowledgeBankEntryCreate,
+    source_matter_id: str | None,
+    source_entry_id: str | None = None,
+) -> tuple[KnowledgeBankEntry, PiiRedaction]:
+    """Create a wider-scope entry that must pass PII review before it is published.
+
+    The stored body is the *redacted* proposal; the original text lives only on the
+    PiiRedaction row until an approver signs it off. Chat search already excludes
+    ``pending_review`` entries.
+    """
+    team_id, matter_id = _resolve_scope_targets(
+        db,
+        user=user,
+        scope=schema.scope,
+        team_id=schema.team_id,
+        matter_id=schema.matter_id,
+    )
+    redacted_fields, redacted_content = await _propose_redactions(schema.body_markdown)
+    entry = KnowledgeBankEntry(
+        team_id=team_id,
+        matter_id=matter_id,
+        source_entry_id=source_entry_id,
+        scope=schema.scope,
+        entry_type=schema.entry_type,
+        title=schema.title,
+        body_markdown=redacted_content,
+        tags=schema.tags,
+        pii_status="pending_review",
+        created_by=user.id,
+        created_by_role=user.firm_role,
+    )
+    try:
+        db.add(entry)
+        db.flush()
+        await _embed_entry(entry)
+        redaction = PiiRedaction(
+            kb_entry_id=entry.id,
+            source_matter_id=source_matter_id,
+            target_scope=schema.scope,
+            redacted_fields=redacted_fields,
+            original_content=schema.body_markdown,
+            redacted_content=redacted_content,
+        )
+        db.add(redaction)
+        log_kb_access(
+            db,
+            user_id=user.id,
+            entry_id=source_entry_id or entry.id,
+            matter_id=source_matter_id,
+            commit=False,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    sync_metadata_safe(db, sync_kb_metadata, entry)
+    db.refresh(redaction)
+    return get_kb_entry(db, entry.id) or entry, redaction
+
+
 async def promote_kb_entry(
     db: Session,
     *,
@@ -708,47 +772,21 @@ async def promote_kb_entry(
     if target_scope == source.scope:
         raise KnowledgeBankError("Target scope must be broader than the current scope")
 
-    redacted_fields, redacted_content = await _propose_redactions(source.body_markdown)
-    promoted = KnowledgeBankEntry(
-        team_id=source.team_id,
-        matter_id=None if target_scope != "matter" else source.matter_id,
+    return await create_pending_review_entry(
+        db,
+        user=user,
+        schema=KnowledgeBankEntryCreate(
+            team_id=source.team_id,
+            matter_id=None if target_scope != "matter" else source.matter_id,
+            scope=target_scope,
+            entry_type=source.entry_type,
+            title=source.title,
+            body_markdown=source.body_markdown,
+            tags=source.tags,
+        ),
+        source_matter_id=source.matter_id,
         source_entry_id=source.id,
-        scope=target_scope,
-        entry_type=source.entry_type,
-        title=source.title,
-        body_markdown=redacted_content,
-        tags=source.tags,
-        pii_status="pending_review",
-        created_by=user.id,
-        created_by_role=user.firm_role,
     )
-    try:
-        db.add(promoted)
-        db.flush()
-        await _embed_entry(promoted)
-        redaction = PiiRedaction(
-            kb_entry_id=promoted.id,
-            source_matter_id=source.matter_id,
-            target_scope=target_scope,
-            redacted_fields=redacted_fields,
-            original_content=source.body_markdown,
-            redacted_content=redacted_content,
-        )
-        db.add(redaction)
-        log_kb_access(
-            db,
-            user_id=user.id,
-            entry_id=source.id,
-            matter_id=source.matter_id,
-            commit=False,
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    sync_metadata_safe(db, sync_kb_metadata, promoted)
-    db.refresh(redaction)
-    return get_kb_entry(db, promoted.id) or promoted, redaction
 
 
 async def approve_redaction(

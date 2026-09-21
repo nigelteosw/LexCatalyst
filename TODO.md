@@ -32,7 +32,11 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
   **Accept:** a submitter/member can read and reply but cannot perform reviewer mutations by direct HTTP;
   authorized reviewers can; outsiders cannot read annotations, original files, or exports.
 
-- [ ] **D2 — Annotation promotion bypasses the promised PII review.**
+- [x] **D2 — Annotation promotion bypasses the promised PII review.** Done: `KnowledgeBankEntryCreate` never
+  had a `pii_status` field, so the value was silently dropped. Extracted `create_pending_review_entry` from
+  `promote_kb_entry`; wider-scope annotation promotion now creates a redacted `pending_review` entry plus
+  `PiiRedaction` row, matter scope stays clean, and re-promoting an annotation is rejected.
+  Tests in `test_annotation_promotion.py`. Original finding:
   `promote_annotation_to_kb` in `review_annotation_service.py` supplies `pending_review` for wider
   scopes, but `create_kb_entry` in `knowledge_bank_service.py` unconditionally persists `pii_status="clean"`.
   `AnnotationRail.tsx` nevertheless promises review before publishing. Route wider-scope promotion

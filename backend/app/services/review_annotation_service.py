@@ -170,10 +170,10 @@ async def promote_annotation_to_kb(
     user: User,
     schema: ReviewAnnotationPromoteRequest,
 ) -> KnowledgeBankEntry:
-    from app.services.knowledge_bank_service import (
-        KnowledgeBankError,
-        create_kb_entry,
-    )
+    from app.services import knowledge_bank_service as kb
+
+    if annotation.promoted_kb_entry_id:
+        raise ReviewAnnotationError("This annotation has already been promoted")
 
     # Build body_markdown from annotation content
     parts: list[str] = []
@@ -201,10 +201,16 @@ async def promote_annotation_to_kb(
         title=title,
         body_markdown=body_markdown,
         tags=schema.tags,
-        pii_status="clean" if schema.target_scope == "matter" else "pending_review",
     )
 
-    entry = await create_kb_entry(db, user=user, schema=kb_schema)
+    if schema.target_scope == "matter":
+        # Stays inside the matter's access boundary; no redaction needed.
+        entry = await kb.create_kb_entry(db, user=user, schema=kb_schema)
+    else:
+        # Wider scopes must pass PII review before readers/search see the content.
+        entry, _ = await kb.create_pending_review_entry(
+            db, user=user, schema=kb_schema, source_matter_id=handoff.matter_id
+        )
     annotation.promoted_kb_entry_id = entry.id
     annotation.updated_at = datetime.now(UTC)
     db.commit()
