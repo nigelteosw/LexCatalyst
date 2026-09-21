@@ -1,11 +1,22 @@
 # TODO
 
+Demo cleanup and redlining priorities are tracked in [`../TODO.md`](../TODO.md), starting with
+the 2026-09-21 review. Use that ordered backlog for bug fixes and refactoring; this file tracks
+product features. The existing review implementation needs refinement, not rebuilding from scratch.
+
+## Document Redlining — next demo milestone
+
+- [ ] Enforce reviewer permissions and PII approval on annotation promotion (D1–D2 in root TODO).
+- [ ] Complete return/resubmit/history flow without losing replies or reusing stale anchors (D3–D4, R1–R2).
+- [ ] Refine selection toolbar, multi-page marks, loading/errors, and scanned-PDF fallback (R3, R6–R9).
+- [ ] Make exported marks and full reviewer notes match the viewer, including rotated/cropped pages (R4–R5).
+- [ ] Rehearse the complete two-user review cycle and denied access for an unrelated user.
+
 ## Frontend State Management
 
-- [x] Replace `activeThreadId` magic string navigation with a Zustand store using a discriminated union view type.
-  - Current `activeThreadId` doubles as both a thread ID and a panel selector (`'wiki'`, `'documents'`, `'memories'`), causing bugs like New Chat snapping back to the previous thread.
-  - Define a view union: `{ view: 'chat', threadId: string | null } | { view: 'wiki', pageId: string | null } | { view: 'documents' } | { view: 'memories' }`.
-  - Navigation functions (`startNewChat`, `selectWiki`, etc.) become store actions; components read the current view directly rather than receiving it via prop drilling.
+- [x] Replace magic-string navigation with typed route-based views.
+  - Implemented with React Router and the `AppView` union in `frontend/src/app/routes.ts`.
+  - Zustand was an earlier proposal and is not installed; do not add it just to match this old checklist.
 
 - [x] Migrate server state to TanStack Query.
   - Threads, messages, documents, and wiki pages are currently fetched manually with scattered `loadX` functions and no shared cache.
@@ -14,12 +25,14 @@
 
 ## ReAct Agent Loop
 
-- [ ] Implement ReAct (Reasoning + Acting) loop for the LLM. See `docs/rfc-react-agent-loop.md` for the full plan.
+- [x] Implement ReAct (Reasoning + Acting) loop for the LLM. See `rfc-react-agent-loop.md` for the original plan.
   - Replace single-shot RAG with a tool-calling loop (max 5 rounds).
   - Tools: `search_documents`, `search_knowledge_bank`, `search_memories`, `get_kb_entry`.
   - Stream `tool_call` and `tool_result` SSE events to the frontend.
   - Show tool steps inline above the final answer in the chat UI.
   - Build order: `deepseek.py` stream_with_tools → `agent_service.py` → `chat_service.py` → `main.py` → frontend types → `api.ts` → `App.tsx` → `ChatPanel.tsx`.
+  - Implementation exists; final-round fallback, disconnect persistence and regression coverage remain
+    engineering follow-ups in the root TODO. This checkmark does not certify those edge cases.
 
 ## Chat Context
 
@@ -45,7 +58,7 @@
 
 ---
 
-## Open features (planned, not yet built)
+## Feature roadmap
 
 Each item has a full implementation plan under `docs/plans/`. They're listed in the order I'd recommend shipping them.
 
@@ -62,6 +75,8 @@ Each item has a full implementation plan under `docs/plans/`. They're listed in 
   - Durable worker reviews recent chat history and automatically applies additions, merges, updates, and drops.
   - Each automated memory stores a justification; the completion summary preserves reasons for dropped memories.
 
-- [ ] **PDF viewer + matter-wide comments** — Plan: [`docs/plans/pdf-viewer-comments.md`](./plans/pdf-viewer-comments.md)
+- [x] **PDF viewer + matter-wide comments** — Plan: [`docs/plans/pdf-viewer-comments.md`](./plans/pdf-viewer-comments.md)
   - Clicking a document opens a right-side drawer with an embedded PDF viewer.
   - Comments thread at the bottom, visible to anyone on the matter (or owner-only for `private` documents).
+  - Present in `frontend/src/features/documents/DocumentDrawer.tsx`; live access-control rehearsal
+    is still required. Anchored action-review redlining is a separate flow tracked above.

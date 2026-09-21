@@ -46,7 +46,6 @@ export function ActionDetailDialog({
   onBack,
   onUpdate,
   onDelete,
-  onActionStateChange: _onActionStateChange,
   selectHandoffReview,
   isDeleting,
   isUpdating,
