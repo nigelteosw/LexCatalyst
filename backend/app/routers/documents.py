@@ -44,6 +44,7 @@ from app.services.document_service import (
     rename_user_document,
 )
 from app.services.ingestion_service import UnsupportedDocumentError
+from app.services.review_handoff_service import can_view_handoff_document
 from app.services.storage_service import StorageError, download_document_file
 
 router = APIRouter(tags=["documents"])
@@ -254,7 +255,10 @@ def document_file(
     document = db.get(Document, document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    if not can_access_document(db, user_id=current_user.id, document=document):
+    if not (
+        can_access_document(db, user_id=current_user.id, document=document)
+        or can_view_handoff_document(db, user=current_user, document_id=document.id)
+    ):
         raise HTTPException(status_code=403, detail="Access denied")
     if not document.storage_key:
         raise HTTPException(status_code=409, detail="Document file is not available")

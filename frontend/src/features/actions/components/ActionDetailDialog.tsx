@@ -400,6 +400,29 @@ export function ActionDetailDialog({
         )}
       </div>
 
+      {!item.activeHandoffId && canMove && item.status !== 'done' && (
+        <div className="rounded-[10px] border border-black/10 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[#0f0f0f]">Submit work for review</p>
+              <p className="mt-0.5 text-[11px] text-[#9a9a94]">
+                Upload your finished PDF so a reviewer can redline it.
+              </p>
+            </div>
+            <button
+              className="shrink-0 rounded-lg bg-[#0f0f0f] px-3 py-2 text-xs font-medium text-white hover:bg-[#2a2a28]"
+              onClick={() => {
+                onClose()
+                selectHandoffReview(item.id)
+              }}
+              type="button"
+            >
+              Upload PDF
+            </button>
+          </div>
+        </div>
+      )}
+
       {item.activeHandoffId && (
         <div className="rounded-[10px] border border-amber-200 bg-amber-50 p-4">
           <div className="flex items-center justify-between gap-3">

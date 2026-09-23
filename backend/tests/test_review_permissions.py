@@ -26,55 +26,40 @@ def _handoff(*, submitted_by="junior", reviewer_id="senior", action_id="action")
     )
 
 
-def _db(action=None):
+def _db(action=None, *, visible=True):
+    """`visible` is whether the handoff passes the read-access query."""
     db = MagicMock()
     db.get.return_value = action
+    db.scalar.return_value = "handoff" if visible else None
     return db
 
 
 class ReviewerCapabilityTests(unittest.TestCase):
-    def test_submitter_who_is_a_matter_member_cannot_review(self) -> None:
+    """Anyone who can see a round may review it; read access is the boundary."""
+
+    def test_anyone_with_access_can_review(self) -> None:
         db = _db(action=SimpleNamespace(assigner_id="senior"))
-        self.assertFalse(can_review_handoff(db, user=_user("junior"), handoff=_handoff()))
+        self.assertTrue(can_review_handoff(db, user=_user("member"), handoff=_handoff()))
 
-    def test_assigned_reviewer_can_review(self) -> None:
-        db = _db(action=SimpleNamespace(assigner_id="someone-else"))
-        self.assertTrue(can_review_handoff(db, user=_user("senior"), handoff=_handoff()))
+    def test_submitter_can_review_own_round(self) -> None:
+        db = _db(action=SimpleNamespace(assigner_id="senior"))
+        self.assertTrue(can_review_handoff(db, user=_user("junior"), handoff=_handoff()))
 
-    def test_action_assigner_can_review(self) -> None:
-        db = _db(action=SimpleNamespace(assigner_id="assigner"))
-        self.assertTrue(can_review_handoff(db, user=_user("assigner"), handoff=_handoff()))
-
-    def test_partner_and_senior_associate_can_review(self) -> None:
-        db = _db(action=None)
-        handoff = _handoff(action_id=None)
-        self.assertTrue(
-            can_review_handoff(db, user=_user("p", firm_role="partner"), handoff=handoff)
-        )
-        self.assertTrue(
-            can_review_handoff(
-                db, user=_user("s", firm_role="senior_associate"), handoff=handoff
-            )
-        )
+    def test_user_without_access_cannot_review(self) -> None:
+        db = _db(action=None, visible=False)
         self.assertFalse(
-            can_review_handoff(db, user=_user("a", firm_role="associate"), handoff=handoff)
+            can_review_handoff(db, user=_user("outsider"), handoff=_handoff())
         )
 
-    def test_admin_can_review(self) -> None:
-        db = _db(action=None)
-        self.assertTrue(
-            can_review_handoff(db, user=_user("x", is_admin=True), handoff=_handoff())
-        )
-
-    def test_require_reviewer_raises_403_for_non_reviewer(self) -> None:
-        db = _db(action=SimpleNamespace(assigner_id="senior"))
+    def test_require_reviewer_raises_403_without_access(self) -> None:
+        db = _db(action=None, visible=False)
         with self.assertRaises(HTTPException) as raised:
-            require_reviewer(db, user=_user("junior"), handoff=_handoff())
+            require_reviewer(db, user=_user("outsider"), handoff=_handoff())
         self.assertEqual(raised.exception.status_code, 403)
 
-    def test_require_reviewer_passes_for_reviewer(self) -> None:
+    def test_require_reviewer_passes_with_access(self) -> None:
         db = _db(action=None)
-        require_reviewer(db, user=_user("senior"), handoff=_handoff())
+        require_reviewer(db, user=_user("member"), handoff=_handoff())
 
 
 class RemovalCapabilityTests(unittest.TestCase):
@@ -82,9 +67,27 @@ class RemovalCapabilityTests(unittest.TestCase):
         db = _db(action=None)
         self.assertTrue(can_remove_handoff(db, user=_user("junior"), handoff=_handoff()))
 
-    def test_reviewer_can_remove_handoff(self) -> None:
+    def test_designated_reviewer_can_remove_handoff(self) -> None:
         db = _db(action=None)
         self.assertTrue(can_remove_handoff(db, user=_user("senior"), handoff=_handoff()))
+
+    def test_action_assigner_can_remove_handoff(self) -> None:
+        db = _db(action=SimpleNamespace(assigner_id="assigner"))
+        self.assertTrue(
+            can_remove_handoff(db, user=_user("assigner"), handoff=_handoff())
+        )
+
+    def test_partner_and_senior_associate_can_remove_handoff(self) -> None:
+        db = _db(action=None)
+        handoff = _handoff(action_id=None)
+        self.assertTrue(
+            can_remove_handoff(db, user=_user("p", firm_role="partner"), handoff=handoff)
+        )
+        self.assertTrue(
+            can_remove_handoff(
+                db, user=_user("s", firm_role="senior_associate"), handoff=handoff
+            )
+        )
 
     def test_unrelated_member_cannot_remove_handoff(self) -> None:
         db = _db(action=SimpleNamespace(assigner_id="senior"))
@@ -97,25 +100,19 @@ class RemovalCapabilityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 403)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class RouterEnforcementTests(unittest.TestCase):
-    """A submitter (who has read access) must not be able to perform reviewer
-    mutations by calling the route handlers directly."""
+    """Users without read access to a round cannot reach reviewer mutations,
+    and removal stays limited to the submitter or a designated reviewer."""
 
     def setUp(self) -> None:
         from app.routers import review_handoffs as router
 
         self.router = router
-        self.junior = _user("junior")
+        self.outsider = _user("outsider")
         self.handoff = _handoff()
-        self.db = _db(action=SimpleNamespace(assigner_id="senior"))
-        # Read access passes; only the reviewer capability should block.
+        self.db = _db(action=SimpleNamespace(assigner_id="senior"), visible=False)
         self._patches = [
             unittest.mock.patch.object(router, "get_handoff", return_value=self.handoff),
-            unittest.mock.patch.object(router, "require_handoff_access"),
             unittest.mock.patch.object(
                 router, "get_annotation", return_value=SimpleNamespace(handoff_id="handoff")
             ),
@@ -129,35 +126,36 @@ class RouterEnforcementTests(unittest.TestCase):
             fn(*args, **kwargs)
         self.assertEqual(raised.exception.status_code, 403)
 
-    def test_submitter_cannot_change_status(self) -> None:
+    def test_outsider_cannot_change_status(self) -> None:
         schema = SimpleNamespace(status="completed", reviewer_id=None)
-        self._assert_403(self.router.patch_handoff, "handoff", schema, self.db, self.junior)
+        self._assert_403(self.router.patch_handoff, "handoff", schema, self.db, self.outsider)
 
-    def test_submitter_cannot_reject(self) -> None:
+    def test_outsider_cannot_reject(self) -> None:
         schema = SimpleNamespace(reason="no")
         self._assert_403(
-            self.router.post_reject_handoff, "handoff", schema, self.db, self.junior
+            self.router.post_reject_handoff, "handoff", schema, self.db, self.outsider
+        )
+
+    def test_outsider_cannot_create_annotation(self) -> None:
+        schema = SimpleNamespace()
+        self._assert_403(
+            self.router.post_annotation, "handoff", schema, self.db, self.outsider
+        )
+
+    def test_outsider_cannot_update_annotation(self) -> None:
+        schema = SimpleNamespace()
+        self._assert_403(
+            self.router.patch_annotation, "handoff", "ann", schema, self.db, self.outsider
+        )
+
+    def test_outsider_cannot_delete_annotation(self) -> None:
+        self._assert_403(
+            self.router.remove_annotation, "handoff", "ann", self.db, self.outsider
         )
 
     def test_unrelated_member_cannot_delete_handoff(self) -> None:
-        self._assert_403(self.router.remove_handoff, "handoff", self.db, _user("member"))
-
-    def test_submitter_cannot_create_annotation(self) -> None:
-        schema = SimpleNamespace()
-        self._assert_403(
-            self.router.post_annotation, "handoff", schema, self.db, self.junior
-        )
-
-    def test_submitter_cannot_update_annotation(self) -> None:
-        schema = SimpleNamespace()
-        self._assert_403(
-            self.router.patch_annotation, "handoff", "ann", schema, self.db, self.junior
-        )
-
-    def test_submitter_cannot_delete_annotation(self) -> None:
-        self._assert_403(
-            self.router.remove_annotation, "handoff", "ann", self.db, self.junior
-        )
+        db = _db(action=SimpleNamespace(assigner_id="senior"))
+        self._assert_403(self.router.remove_handoff, "handoff", db, _user("member"))
 
 
 class HandoffResponseCapabilityTests(unittest.TestCase):
@@ -189,7 +187,8 @@ class HandoffResponseCapabilityTests(unittest.TestCase):
         db = _db(action=None)
 
         as_junior = _serialise_handoff(handoff, db=db, user=_user("junior"))
-        self.assertFalse(as_junior.can_review)
+        self.assertTrue(as_junior.can_review)
+        self.assertTrue(as_junior.can_annotate)
         self.assertTrue(as_junior.can_remove)
 
         as_senior = _serialise_handoff(handoff, db=db, user=_user("senior"))
@@ -197,5 +196,9 @@ class HandoffResponseCapabilityTests(unittest.TestCase):
         self.assertTrue(as_senior.can_remove)
 
         as_member = _serialise_handoff(handoff, db=db, user=_user("member"))
-        self.assertFalse(as_member.can_review)
+        self.assertTrue(as_member.can_review)
         self.assertFalse(as_member.can_remove)
+
+
+if __name__ == "__main__":
+    unittest.main()

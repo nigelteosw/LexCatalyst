@@ -82,7 +82,34 @@ def _handoff_access_filter(user: User):
                 ActionItem.assigner_id == user.id,
             )
         ),
+        # Workboard tickets are firm-wide, so a round on a ticket with no matter
+        # is open to anyone. Matter-scoped rounds stay limited to matter members.
+        and_(
+            ReviewHandoff.matter_id.is_(None),
+            ReviewHandoff.action_id.is_not(None),
+        ),
     )
+
+
+def has_handoff_access(db: Session, *, user: User, handoff: ReviewHandoff) -> bool:
+    return db.scalar(
+        select(ReviewHandoff.id).where(
+            ReviewHandoff.id == handoff.id,
+            _handoff_access_filter(user),
+        )
+    ) is not None
+
+
+def can_view_handoff_document(db: Session, *, user: User, document_id: str) -> bool:
+    """Whether the user can open a document through a review round they can see."""
+    return db.scalar(
+        select(ReviewHandoff.id)
+        .where(
+            ReviewHandoff.document_id == document_id,
+            _handoff_access_filter(user),
+        )
+        .limit(1)
+    ) is not None
 
 
 def require_handoff_access(
@@ -91,13 +118,7 @@ def require_handoff_access(
     user: User,
     handoff: ReviewHandoff,
 ) -> None:
-    allowed = db.scalar(
-        select(ReviewHandoff.id).where(
-            ReviewHandoff.id == handoff.id,
-            _handoff_access_filter(user),
-        )
-    )
-    if not allowed:
+    if not has_handoff_access(db, user=user, handoff=handoff):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
@@ -174,11 +195,7 @@ def _action_for(db: Session, handoff: ReviewHandoff) -> ActionItem | None:
     return db.get(ActionItem, handoff.action_id)
 
 
-def can_review_handoff(db: Session, *, user: User, handoff: ReviewHandoff) -> bool:
-    """Reviewer capability: annotate, resolve, complete, return or reject a handoff.
-
-    Read access (submitter, matter member, document owner) is deliberately not enough.
-    """
+def _is_designated_reviewer(db: Session, *, user: User, handoff: ReviewHandoff) -> bool:
     if user.is_admin or user.firm_role in REVIEWER_FIRM_ROLES:
         return True
     if handoff.reviewer_id == user.id:
@@ -187,9 +204,18 @@ def can_review_handoff(db: Session, *, user: User, handoff: ReviewHandoff) -> bo
     return bool(action and action.assigner_id == user.id)
 
 
+def can_review_handoff(db: Session, *, user: User, handoff: ReviewHandoff) -> bool:
+    """Reviewer capability: annotate, resolve, complete, return or reject a handoff.
+
+    Anyone who can see the round may review it, including the submitter; the
+    matter scoping in _handoff_access_filter is the boundary.
+    """
+    return has_handoff_access(db, user=user, handoff=handoff)
+
+
 def can_remove_handoff(db: Session, *, user: User, handoff: ReviewHandoff) -> bool:
-    """The submitter may withdraw their own handoff; reviewers may remove any."""
-    return handoff.submitted_by == user.id or can_review_handoff(
+    """The submitter may withdraw their own handoff; designated reviewers may remove any."""
+    return handoff.submitted_by == user.id or _is_designated_reviewer(
         db, user=user, handoff=handoff
     )
 
