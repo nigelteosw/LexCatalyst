@@ -107,7 +107,20 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
   })
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadDocument(file),
+    mutationFn: async (file: File) => {
+      const doc = await uploadDocument(file)
+      // The upload endpoint returns 200 with status 'failed' when storing the
+      // file fails; surface that reason instead of submitting a document with
+      // no stored PDF.
+      if (doc.status === 'failed') {
+        throw new Error(
+          doc.errorMessage
+            ? `Upload failed: ${doc.errorMessage}`
+            : 'Upload failed: the PDF could not be stored. Please try again.',
+        )
+      }
+      return doc
+    },
     onSuccess: (doc) => submitMutation.mutate(doc.id),
     onError: (e) => setError(getErrorMessage(e)),
   })
