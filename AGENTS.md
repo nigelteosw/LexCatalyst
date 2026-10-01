@@ -40,8 +40,8 @@ backend/
     config.py
     routers/          # thin HTTP handlers — one file per domain
     services/         # business logic — keep route handlers thin
-    providers/        # LLM and embedding adapters
-  migrations/         # Alembic; current head: w8f9a0b1c2d3
+    providers/        # LLM and embedding adapters (deepseek, openrouter, embeddings)
+  migrations/         # Alembic; current head: x9a0b1c2d3e4
   Makefile
   requirements.txt
 
@@ -129,6 +129,10 @@ app/services/
   agent_service.py        # Tool dispatch inside streamed chat (search, KB, memory)
   action_service.py       # Action board items
   birdie_service.py       # Birdie AI mentor
+  birdie_provider.py      # Per-user LLM choice: personal OpenRouter key, else DeepSeek
+  lesson_service.py       # Reviewer feedback → Birdie lessons (submitter-only)
+  user_settings_service.py # Per-user settings (OpenRouter key/model, encrypted)
+  demo_seed_service.py    # Demo firm seed + reset (DEMO_MODE only); demo_pdfs.py builds the PDFs
   chat_service.py         # Thread + message CRUD, streaming, thread summarisation
   document_service.py     # Upload, worker claim, processing lifecycle
   dream_service.py        # Memory consolidation agent (DB-backed async jobs)
@@ -164,7 +168,7 @@ Do not add a tool registry unless it removes real duplication.
 
 All schema changes go through Alembic (`backend/migrations/`). Never add new tables or indexes only to `create_db_tables()` — that path runs only when `AUTO_CREATE_TABLES=true`, which is not the case in production.
 
-Current head: `w8f9a0b1c2d3`
+Current head: `x9a0b1c2d3e4`
 
 ```sh
 cd backend && source .venv/bin/activate
@@ -269,5 +273,9 @@ Keep README setup commands current whenever dependencies, ports, env vars, or ru
 If a new backend route is added, document the route and expected authentication behavior.
 
 If the LLM or embedding provider changes, update both `README.md` and this file.
+
+Birdie uses DeepSeek by default and OpenRouter when a user saves their own key (Settings → Birdie model). Birdie prompts then leave for OpenRouter and the chosen model provider; keep that disclosure in the UI and README.
+
+`DEMO_MODE=true` enables `/demo/*` (admin-only, 404 otherwise) for user switching and seeding. Never enable it in a deployment with real client data.
 
 If a new Alembic migration is added, update the "Current head" reference above.

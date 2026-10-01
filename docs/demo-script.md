@@ -18,6 +18,7 @@ Runtime: about 8 minutes. Everything runs from **one browser window** using demo
 | **You** | your Google login (must be in `ADMIN_EMAILS`) | Partner, presenter |
 | **Sarah Chen** | seeded demo user | Senior associate, the reviewer |
 | **Jane Pereira** | seeded demo user | Year-1 associate, the junior |
+| **Marcus Webb** | seeded demo user | Background colleague (makes wellbeing trends visible) |
 
 Matter: **Meridian Capital — Share Purchase** (`DEMO-MERIDIAN-001`).
 
@@ -41,8 +42,9 @@ Run once on the machine or environment you'll present from.
 3. **Sign in once** with Google, so your user row exists.
 4. **Seed** 🆕: run `make seed-demo PRESENTER=you@example.com` from `backend/`, or use
    Settings → Development & Testing → **Load demo data**.
-   The summary should show 3 documents, 5 KB entries, 5 tickets, 2 review rounds, 6 weeks of
-   surveys, 4 memories and 3 wiki pages.
+   The summary should show 3 documents, 5 KB entries, 5 tickets, 2 review rounds (4 annotations),
+   288 survey responses (3 people × 6 weeks × 16 questions), 4 memories and 3 wiki pages. Any
+   `documents_failed` or `kb_failed` above 0 means R2 or OpenAI isn't configured.
 5. **Wait about a minute for document processing.** Switch to Jane → Documents, and check all
    three show **ready**. If one shows **failed**, rerun the seed.
 6. **Dry run of the risky calls**:

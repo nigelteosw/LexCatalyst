@@ -25,9 +25,11 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 
 ### Birdie — Floating AI Mentor
 - A **draggable picture-in-picture widget** (320×480, fixed position, drag anywhere). Open via the "Birdie" pill in the chat header.
-- Tabs: **Ask** (live chat), **Review** (mentor cards), **Examples** (KB-backed), **Progress** (skills map).
-- Uses a dedicated `/birdie/stream` endpoint with a mentor-specific system prompt — separate agent from the main legal chat. Always runs on `deepseek-v4-flash` for snappy conversational replies.
-- Pulls firm KB context (RBAC-respecting) for grounded answers.
+- Tabs: **Ask** (live chat), **Review** (reviewer feedback and lessons), **Examples** (KB-backed), **Progress** (skills map).
+- **Review tab:** comments seniors leave while redlining a junior's returned/completed review round appear here automatically, with no promote step. Birdie distils each round into 1–4 general lessons (once, on first open) and every comment has an **Explain this** button that continues in the Ask tab. Only the junior who submitted the round sees its feedback.
+- Uses a dedicated `/birdie/stream` endpoint with a mentor-specific system prompt — separate agent from the main legal chat. Runs on `deepseek-v4-flash` by default; users can add their own **OpenRouter key and model** in Settings → Birdie model.
+- Pulls firm KB context (RBAC-respecting) and recent reviewer feedback for grounded answers.
+- **Privacy:** with a personal OpenRouter key, Birdie prompts (document excerpts, KB entries, reviewer feedback) go to OpenRouter and the chosen model provider.
 
 ### Wellbeing — Weekly Team Check-ins
 - Survey responses are linked to the submitting user and upserted per user, question, and week.
@@ -223,7 +225,35 @@ CLOUDFLARE_R2_ENDPOINT_URL=...
 
 # Must be at least 32 chars; rotating this invalidates encrypted client_name fields
 JWT_SECRET_KEY=at_least_32_characters_long
+
+# Demo only (see "Demo mode" below). Leave unset/false in real deployments.
+DEMO_MODE=false
 ```
+
+Users' personal OpenRouter keys are not environment variables: they are saved per user in Settings, encrypted with `FIELD_ENCRYPTION_KEY` (or the dev fallback), and never returned by the API.
+
+---
+
+## Demo mode
+
+For presentations. Set `DEMO_MODE=true` and put your Google email in `ADMIN_EMAILS`, sign in once, then:
+
+```sh
+cd backend && source .venv/bin/activate
+make seed-demo PRESENTER=you@example.com   # or Settings → Development & Testing → Load demo data
+```
+
+The seed creates a Corporate team, the *Meridian Capital — Share Purchase* matter, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), six weeks of wellbeing check-ins, memories and wiki pages. Re-running resets previous demo data and never touches your own.
+
+With demo mode on, admins get a **Switch user** picker in the sidebar to act as Sarah Chen (senior associate), Jane Pereira (associate) or Marcus Webb without Google. Switching works only into seeded `dummy:` users, never real accounts, and a banner shows who you are acting as. See `docs/demo-script.md` for the full walkthrough.
+
+| Route | Auth | Behaviour |
+|---|---|---|
+| `GET /demo/users` | admin + `DEMO_MODE` | seeded users you can switch into |
+| `POST /demo/switch` | admin + `DEMO_MODE` | 12-hour token for a seeded user |
+| `POST /demo/seed` | admin + `DEMO_MODE` | (re)load demo data |
+
+All three return 404 unless demo mode is on and the caller is an admin.
 
 ---
 
@@ -323,6 +353,15 @@ embedded worker claims it from the durable Postgres queue.
 - `/birdie/stream` is an endpoint distinct from `/chat/stream`. Client manages history.
 - System prompt: brief (3–5 sentences), legal hard skills + soft skills equally weighted, cites firm KB inline.
 - Reuses `search_kb_for_chat` so KB scope filtering still applies.
+- The LLM is chosen per user by `get_birdie_provider`: their OpenRouter key if set (no silent fallback — a rejected key surfaces an error pointing to Settings), otherwise DeepSeek.
+
+| Route | Auth | Behaviour |
+|---|---|---|
+| `GET /birdie/lessons` | signed-in user | reviewer feedback on rounds the user submitted (returned/completed), with stored lessons |
+| `POST /birdie/lessons/{handoff_id}/distill` | signed-in submitter of that round | idempotent; returns stored lessons or distils them once. 404 for anyone else |
+| `GET /settings/birdie` | signed-in user | `{has_openrouter_key, key_last4, openrouter_model, effective_model}`; never the key |
+| `PUT /settings/birdie` | signed-in user | save `openrouter_api_key` and/or `openrouter_model` |
+| `DELETE /settings/birdie/openrouter-key` | signed-in user | remove the key; Birdie returns to DeepSeek |
 
 ---
 

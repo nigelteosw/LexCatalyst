@@ -1,7 +1,7 @@
 # Birdie Mentor Lessons, Personal OpenRouter Key, Demo Mode — Design
 
 Date: 2026-10-01
-Status: Draft — awaiting review
+Status: Implemented (seed not yet run against a live database)
 
 ## Goal
 
@@ -167,9 +167,10 @@ and junior from one browser window.
 ### Cast
 
 - **Presenter**: the admin's real Google account (`ADMIN_EMAILS`), acting as partner.
-- **Sarah Chen** (`dummy:sarah-chen`, senior_associate) and **Jane Pereira**
-  (`dummy:jane-pereira`, associate). These reuse `DUMMY_USERS` / `create_dummy_users` in
-  `user_service.py`.
+- **Sarah Chen** (`dummy:sarah-chen`, senior_associate), **Jane Pereira**
+  (`dummy:jane-pereira`, associate) and **Marcus Webb** (`dummy:marcus-webb`, associate). These
+  reuse `DUMMY_USERS` / `create_dummy_users` in `user_service.py`. Marcus is a background
+  colleague: wellbeing trends need at least 3 respondents (`MINIMUM_COHORT_SIZE`) to display.
 
 ### User switching
 
@@ -214,7 +215,7 @@ non-demo data.
 | Documents | Three synthetic PDFs built with reportlab (already a dependency): *Meridian NDA*, *SPA extract (indemnities, governing law)*, *Disclosure letter*. All owned by Jane and linked to the matter. Each is uploaded through `storage_service` and `create_pending_document`, so the normal worker extracts, chunks and embeds them (needs R2 + OpenAI) |
 | Knowledge Bank | 5 approved entries through `knowledge_bank_service` (so they're embedded): firm style guide (defined terms, numbering), playbook ("Indemnity caps", governing law, limitation of liability), plus one matter-scoped note |
 | Workboard | 5 tickets Sarah→Jane across `pending`, `in_progress`, `review`, `done`, with priorities and due dates around today |
-| Review round 1 | Jane's NDA, status `returned`, reviewer Sarah, return reason set. 4 Sarah-authored annotations (uncapped indemnity, governing law, defined-term inconsistency, a stylistic note), each with note and suggested wording; at least one is `needs_rework`, matching what the real Return flow requires. `anchor_rects` are computed from the reportlab layout as page percentages (`AnchorRect`), so highlights sit on the real text. This feeds Birdie lessons |
+| Review round 1 | Jane's NDA, status `returned`, reviewer Sarah (no reject reason, so the UI shows "Returned for rework"). 4 Sarah-authored annotations (uncapped indemnity, governing law, defined-term inconsistency, a stylistic note), each with note and suggested wording; at least one is `needs_rework`, matching what the real Return flow requires. `anchor_rects` are computed from the reportlab layout as page percentages (`AnchorRect`), so highlights sit on the real text. This feeds Birdie lessons |
 | Review round 2 | Jane's SPA extract, `ready_for_review`, linked to the `review` ticket "SPA extract — indemnities", for Sarah to redline live |
 | Wellbeing | 6 weekly responses for Jane and Sarah to the seeded survey questions, with a believable dip-and-recover trend for Jane |
 | Memories | 4 for Jane (supervising senior is Sarah, prefers concise answers, NDA focus, year-1 associate) |
