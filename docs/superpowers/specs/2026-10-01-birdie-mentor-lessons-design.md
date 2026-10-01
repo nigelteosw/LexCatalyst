@@ -212,10 +212,10 @@ non-demo data.
 |---|---|
 | Team + matter | Team `Corporate (Demo)`; matter **Meridian Capital — Share Purchase** (`DEMO-MERIDIAN-001`, client name encrypted as usual); presenter (partner), Sarah, Jane as team + matter members |
 | Documents | Three synthetic PDFs built with reportlab (already a dependency): *Meridian NDA*, *SPA extract (indemnities, governing law)*, *Disclosure letter*. All owned by Jane and linked to the matter. Each is uploaded through `storage_service` and `create_pending_document`, so the normal worker extracts, chunks and embeds them (needs R2 + OpenAI) |
-| Knowledge Bank | 5 approved entries through `knowledge_bank_service` (so they're embedded): firm style guide (defined terms, numbering), playbook (indemnity caps, governing law, limitation of liability), plus one matter-scoped note |
+| Knowledge Bank | 5 approved entries through `knowledge_bank_service` (so they're embedded): firm style guide (defined terms, numbering), playbook ("Indemnity caps", governing law, limitation of liability), plus one matter-scoped note |
 | Workboard | 5 tickets Sarah→Jane across `pending`, `in_progress`, `review`, `done`, with priorities and due dates around today |
-| Review round 1 | Jane's NDA, status `returned`, reviewer Sarah, return reason set. 4 Sarah-authored annotations (uncapped indemnity, governing law, defined-term inconsistency, a stylistic note), each with note and suggested wording. `anchor_rects` are computed from the reportlab layout as page percentages (`AnchorRect`), so highlights sit on the real text. This feeds Birdie lessons |
-| Review round 2 | Jane's SPA extract, `ready_for_review`, linked to a `review` ticket, for Sarah to redline live |
+| Review round 1 | Jane's NDA, status `returned`, reviewer Sarah, return reason set. 4 Sarah-authored annotations (uncapped indemnity, governing law, defined-term inconsistency, a stylistic note), each with note and suggested wording; at least one is `needs_rework`, matching what the real Return flow requires. `anchor_rects` are computed from the reportlab layout as page percentages (`AnchorRect`), so highlights sit on the real text. This feeds Birdie lessons |
+| Review round 2 | Jane's SPA extract, `ready_for_review`, linked to the `review` ticket "SPA extract — indemnities", for Sarah to redline live |
 | Wellbeing | 6 weekly responses for Jane and Sarah to the seeded survey questions, with a believable dip-and-recover trend for Jane |
 | Memories | 4 for Jane (supervising senior is Sarah, prefers concise answers, NDA focus, year-1 associate) |
 | Chat | One short Jane thread about the NDA, so the sidebar isn't empty (live chat is done on stage) |
@@ -227,14 +227,9 @@ Review tab.
 The seed returns a summary (counts, plus how many documents are still processing). The CLI prints
 it and the Settings button shows a toast.
 
-### Demo script (`docs/demo-script.md`)
+### Demo script
 
-1. Presenter: Home → Workboard (team load) → Wellbeing insights.
-2. Switch to Jane: chat about the NDA (citations), open Birdie → Review shows Sarah's comments,
-   lessons distil, **Explain this** → Ask.
-3. Switch to Sarah: open round 2, redline live, return it.
-4. Switch to Jane: the new lessons appear in Birdie.
-5. Settings: show the personal OpenRouter key.
+See `docs/demo-script.md` (preflight, stage run, recovery table).
 
 ### Tests
 
