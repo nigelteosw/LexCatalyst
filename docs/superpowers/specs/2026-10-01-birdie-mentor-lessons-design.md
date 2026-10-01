@@ -1,7 +1,7 @@
 # Birdie Mentor Lessons + Personal OpenRouter Key — Design
 
 Date: 2026-10-01
-Status: Approved for planning
+Status: Draft — awaiting review
 
 ## Goal
 
@@ -17,7 +17,7 @@ and the junior opens Birdie to find the senior's comments plus distilled lessons
 
 - No senior-facing "Teach" box. Lessons come only from review annotations.
 - No change to the KB promotion flow. It stays available, just not required.
-- The Progress tab stays a placeholder.
+- No deletion of backend code or tables for hidden features (section 4).
 - No firm-wide or admin-managed key.
 - Main chat stays on DeepSeek. The OpenRouter key powers Birdie only.
 
@@ -158,6 +158,29 @@ New "Birdie model" section in `SettingsPanel.tsx`:
   placeholder, **Save**, and **Remove key** when one exists.
 - Short note: Birdie prompts, including document context and reviewer feedback, are sent to
   OpenRouter and the chosen model provider when a key is set (AGENTS.md external-LLM rule).
+
+## 4. Streamline for the hackathon
+
+Reduce the app to the demo loop: Chat · Documents · Workboard (review) · Knowledge Bank ·
+Wellbeing · Birdie · Settings. Cut features are **hidden from the UI only**. Backend routes,
+services, tables and tests stay untouched, so this is reversible after the hackathon. No
+destructive migrations.
+
+| hide | where it surfaces today | change |
+|---|---|---|
+| Lex-Wiki | `app/routes.ts` (`wiki` view), `App.tsx:592` panel, Home card (`HomePanel.tsx:41`), Login feature tile (`LoginPage.tsx:276`) | drop the Home card and Login tile; `/wiki` routes redirect to Home (`isKnownRoute: false`); remove the panel branch from `App.tsx` |
+| Memories page + Dream | Home card (`HomePanel.tsx:40`), chat header Brain button (`App.tsx:677`), `memories` view | drop the card and button; `/memories` redirects to Home. Chat keeps saving and using memories silently; Birdie keeps reading them |
+| Birdie Progress tab | `ProgressTab` (fake percentages) | remove the tab and its help step |
+| Birdie Examples tab | `ExamplesTab` (re-lists KB entries) | remove the tab and its help step; KB examples still reach Birdie through Ask's KB search |
+
+Birdie becomes two tabs: **Ask** and **Review**. Review opens by default when the user has a
+feedback round with no stored lessons yet (the "new feedback" signal). Otherwise Ask opens.
+
+Workboard's `wiki_page` resource label (`ActionsPanel.tsx:627`) stays, because it only labels
+existing data.
+
+Keep the `features/wiki` and `features/memories` directories, but leave them unimported. Removing
+their imports is enough for Vite to tree-shake them. Delete only after the hackathon.
 
 ## Error handling summary
 
