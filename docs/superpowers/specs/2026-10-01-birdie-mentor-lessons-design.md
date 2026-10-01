@@ -1,4 +1,4 @@
-# Birdie Mentor Lessons + Personal OpenRouter Key — Design
+# Birdie Mentor Lessons, Personal OpenRouter Key, Demo Mode — Design
 
 Date: 2026-10-01
 Status: Draft — awaiting review
@@ -159,6 +159,91 @@ New "Birdie model" section in `SettingsPanel.tsx`:
 - Short note: Birdie prompts, including document context and reviewer feedback, are sent to
   OpenRouter and the chosen model provider when a key is set (AGENTS.md external-LLM rule).
 
+## 4. Demo mode: user switching + seeded firm
+
+Goal: every feature has believable data on stage, and the presenter can act as partner, senior
+and junior from one browser window.
+
+### Cast
+
+- **Presenter**: the admin's real Google account (`ADMIN_EMAILS`), acting as partner.
+- **Sarah Chen** (`dummy:sarah-chen`, senior_associate) and **Jane Pereira**
+  (`dummy:jane-pereira`, associate). These reuse `DUMMY_USERS` / `create_dummy_users` in
+  `user_service.py`.
+
+### User switching
+
+- New setting `DEMO_MODE` (env, default `false`). It is enabled only on the demo deployment,
+  and documented in README and `.env.example`.
+- `POST /demo/switch` with body `{user_id}` returns `{access_token, user}` for the target. It
+  succeeds only when `DEMO_MODE` is true, the caller is an admin, and the target's `google_id`
+  starts with `dummy:`. Any other case returns **404**, so the route is invisible when disabled.
+  Tokens use the normal `create_access_token`, with expiry capped at 12 hours.
+- `GET /demo/users` (same guards) lists the switchable users.
+- `/config` gains `demo_mode: bool` so the frontend knows whether to show demo controls.
+- Frontend (`shared/api/api.ts` + a small `features/demo/` module):
+  - Switching stores the presenter's token as `demoPresenterToken`, writes the new token to
+    `token`, clears the TanStack Query cache and navigates Home.
+  - While `demoPresenterToken` exists, a slim top bar shows "Demo · viewing as Jane Pereira
+    (associate) · Switch back". Switch back restores the presenter's token and clears the cache.
+  - The sidebar footer gets a "Switch user" picker (admin and demo mode only). Switching between
+    dummy users while impersonating goes back through the presenter token, since dummy users
+    aren't admins.
+  - A 401 while impersonating restores the presenter token instead of logging out.
+- Google login and real-account auth are unchanged. Real accounts can never be impersonated.
+
+### Seed
+
+`app/services/demo_seed_service.py: seed_demo(db, presenter: User | None) -> DemoSeedSummary`
+
+Entry points:
+- `make seed-demo PRESENTER=<email>` runs `python -m app.demo_seed --presenter <email>`. The
+  presenter must have logged in once.
+- `POST /demo/seed`: admin and `DEMO_MODE` only (404 otherwise); the presenter is the caller.
+  Settings' existing "Development & Testing" block gets a **Load demo data** button next to the
+  dummy-user buttons. It confirms before resetting.
+
+Resets: demo rows are identified by fixed markers: team name `Corporate (Demo)`, matter case
+number `DEMO-MERIDIAN-001`, the dummy users, and rows owned by or linked to them. Re-running
+deletes those first (dummy users cascade), then reseeds. It never touches the presenter's own
+non-demo data.
+
+| area | content |
+|---|---|
+| Team + matter | Team `Corporate (Demo)`; matter **Meridian Capital — Share Purchase** (`DEMO-MERIDIAN-001`, client name encrypted as usual); presenter (partner), Sarah, Jane as team + matter members |
+| Documents | Three synthetic PDFs built with reportlab (already a dependency): *Meridian NDA*, *SPA extract (indemnities, governing law)*, *Disclosure letter*. All owned by Jane and linked to the matter. Each is uploaded through `storage_service` and `create_pending_document`, so the normal worker extracts, chunks and embeds them (needs R2 + OpenAI) |
+| Knowledge Bank | 5 approved entries through `knowledge_bank_service` (so they're embedded): firm style guide (defined terms, numbering), playbook (indemnity caps, governing law, limitation of liability), plus one matter-scoped note |
+| Workboard | 5 tickets Sarah→Jane across `pending`, `in_progress`, `review`, `done`, with priorities and due dates around today |
+| Review round 1 | Jane's NDA, status `returned`, reviewer Sarah, return reason set. 4 Sarah-authored annotations (uncapped indemnity, governing law, defined-term inconsistency, a stylistic note), each with note and suggested wording. `anchor_rects` are computed from the reportlab layout as page percentages (`AnchorRect`), so highlights sit on the real text. This feeds Birdie lessons |
+| Review round 2 | Jane's SPA extract, `ready_for_review`, linked to a `review` ticket, for Sarah to redline live |
+| Wellbeing | 6 weekly responses for Jane and Sarah to the seeded survey questions, with a believable dip-and-recover trend for Jane |
+| Memories | 4 for Jane (supervising senior is Sarah, prefers concise answers, NDA focus, year-1 associate) |
+| Chat | One short Jane thread about the NDA, so the sidebar isn't empty (live chat is done on stage) |
+| Wiki | 3 linked pages (matter overview → parties → key risks), so the graph view renders |
+
+Seeding doesn't create lessons in advance. They distil live the first time Jane opens Birdie's
+Review tab.
+
+The seed returns a summary (counts, plus how many documents are still processing). The CLI prints
+it and the Settings button shows a toast.
+
+### Demo script (`docs/demo-script.md`)
+
+1. Presenter: Home → Workboard (team load) → Wellbeing insights.
+2. Switch to Jane: chat about the NDA (citations), open Birdie → Review shows Sarah's comments,
+   lessons distil, **Explain this** → Ask.
+3. Switch to Sarah: open round 2, redline live, return it.
+4. Switch to Jane: the new lessons appear in Birdie.
+5. Settings: show the personal OpenRouter key.
+
+### Tests
+
+- `/demo/*` returns 404 when `DEMO_MODE` is off, when the caller is not an admin, and when the
+  target is a real user. The switch succeeds for dummy users.
+- `seed_demo` is idempotent: running it twice gives the same counts and no duplicates, and the
+  presenter's non-demo rows survive. Storage and embedding calls are stubbed in tests.
+- The seeded annotation rects pass `AnchorRect` validation.
+
 ## Error handling summary
 
 | case | behaviour |
@@ -189,4 +274,5 @@ and with a bad key to see the Settings pointer.
 ## Docs
 
 - README: new routes and auth, OpenRouter per-user key, data sent to OpenRouter.
-- AGENTS.md: OpenRouter provider for Birdie, new services, new migration head.
+- README: `DEMO_MODE`, `/demo/*` routes (admin-only, 404 when disabled), `make seed-demo`.
+- AGENTS.md: OpenRouter provider for Birdie, new services, new migration head, demo mode.
