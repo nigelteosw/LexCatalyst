@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowUp, BookMarked, Lightbulb, X } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { listKnowledgeBankEntries, streamBirdieMessage } from '../../shared/api/api'
-import type { BirdiePageContext, KnowledgeBankEntry } from '../../shared/types/workspace'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  distillBirdieLessons,
+  listBirdieLessons,
+  listKnowledgeBankEntries,
+  streamBirdieMessage,
+} from '../../shared/api/api'
+import { getErrorMessage } from '../../shared/lib/errors'
+import type {
+  BirdieLesson,
+  BirdiePageContext,
+  FeedbackRound,
+  KnowledgeBankEntry,
+  LessonAnnotation,
+} from '../../shared/types/workspace'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import birdieLogo from '../../assets/Birdie.png'
@@ -18,8 +30,8 @@ const BIRDIE_HELP: HelpContent = {
     },
     {
       emoji: '📋',
-      title: 'Review tab — mentor cards',
-      body: 'Curated tips and prompts based on common junior associate challenges. Browse these when you\'re not sure where to start.',
+      title: 'Review tab — feedback from your reviewers',
+      body: 'Comments your seniors left on your drafts, plus the general lessons Birdie draws from them. Tap "Explain this" on any comment to talk it through in the Ask tab.',
     },
     {
       emoji: '💡',
@@ -216,6 +228,29 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdieP
 
 function BirdiePanelBody({ matterId, pageContext }: { matterId: string | null; pageContext?: BirdiePageContext }) {
   const [activeTab, setActiveTab] = useState<MentorTab>('ask')
+  const [pendingPrompt, setPendingPrompt] = useState<{ id: string; text: string } | null>(null)
+  const pickedTabRef = useRef(false)
+
+  const lessonsQuery = useQuery({ queryKey: ['birdieLessons'], queryFn: listBirdieLessons })
+  const rounds = lessonsQuery.data ?? []
+
+  // Open on Review when there is feedback whose lessons haven't been drawn up yet.
+  const hasNewFeedback = rounds.some((round) => round.lessons.length === 0)
+  useEffect(() => {
+    if (hasNewFeedback && !pickedTabRef.current) setActiveTab('review')
+  }, [hasNewFeedback])
+
+  function selectTab(tab: MentorTab) {
+    pickedTabRef.current = true
+    setActiveTab(tab)
+  }
+
+  function explain(text: string) {
+    pickedTabRef.current = true
+    setPendingPrompt({ id: crypto.randomUUID(), text })
+    setActiveTab('ask')
+  }
+
   return (
     <>
       <nav className="flex shrink-0 border-b border-black/10">
@@ -227,16 +262,34 @@ function BirdiePanelBody({ matterId, pageContext }: { matterId: string | null; p
                 ? 'border-[#2d9e6b] text-[#0f0f0f]'
                 : 'border-transparent text-[#9a9a94] hover:text-[#5a5a56]'
             }`}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => selectTab(tab)}
             type="button"
           >
             {tab}
+            {tab === 'review' && hasNewFeedback && (
+              <span aria-label="New feedback" className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[#2d9e6b] align-middle" />
+            )}
           </button>
         ))}
       </nav>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {activeTab === 'ask' && <AskTab matterId={matterId} pageContext={pageContext} />}
-        {activeTab === 'review' && <ReviewTab />}
+        {/* Ask stays mounted so the conversation survives tab switches. */}
+        <div className={activeTab === 'ask' ? 'h-full' : 'hidden'}>
+          <AskTab
+            matterId={matterId}
+            onPromptConsumed={() => setPendingPrompt(null)}
+            pageContext={pageContext}
+            pendingPrompt={pendingPrompt}
+          />
+        </div>
+        {activeTab === 'review' && (
+          <ReviewTab
+            error={lessonsQuery.error}
+            isLoading={lessonsQuery.isLoading}
+            onExplain={explain}
+            rounds={rounds}
+          />
+        )}
         {activeTab === 'examples' && <ExamplesTab matterId={matterId} />}
         {activeTab === 'progress' && <ProgressTab />}
       </div>
@@ -244,12 +297,148 @@ function BirdiePanelBody({ matterId, pageContext }: { matterId: string | null; p
   )
 }
 
-function ReviewTab() {
+function ReviewTab({
+  rounds,
+  isLoading,
+  error,
+  onExplain,
+}: {
+  rounds: FeedbackRound[]
+  isLoading: boolean
+  error: unknown
+  onExplain: (prompt: string) => void
+}) {
   return (
-    <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-2.5">
-      {STARTER_CARDS.map((card) => (
-        <ReviewCard key={card.id} card={card} />
+    <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-4">
+      {isLoading && <div className="text-xs text-[#9a9a94]">Loading feedback...</div>}
+      {error != null && (
+        <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">
+          {getErrorMessage(error, 'Could not load reviewer feedback.')}
+        </div>
+      )}
+      {!isLoading && error == null && rounds.length === 0 && (
+        <div className="rounded-[10px] border border-dashed border-black/15 px-3 py-3 text-[11.5px] leading-5 text-[#8c8c86]">
+          Feedback from your reviewers will appear here after a review is returned.
+        </div>
+      )}
+      {rounds.map((round) => (
+        <RoundGroup key={round.handoffId} onExplain={onExplain} round={round} />
       ))}
+      {rounds.length === 0 &&
+        STARTER_CARDS.map((card) => <ReviewCard key={card.id} card={card} />)}
+    </div>
+  )
+}
+
+function explainPrompt(documentName: string, a: LessonAnnotation): string {
+  const parts = [
+    `Explain this feedback from my reviewer on "${documentName}" (p.${a.pageNo}).`,
+    `They flagged: "${a.anchorQuote}".`,
+  ]
+  if (a.suggestedText) parts.push(`They suggested: "${a.suggestedText}".`)
+  if (a.note) parts.push(`Their note: "${a.note}".`)
+  parts.push('Why does it matter, and what should I do next time?')
+  return parts.join(' ')
+}
+
+function RoundGroup({ round, onExplain }: { round: FeedbackRound; onExplain: (prompt: string) => void }) {
+  const queryClient = useQueryClient()
+  const distill = useMutation({
+    mutationFn: () => distillBirdieLessons(round.handoffId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['birdieLessons'] }),
+  })
+  const startedRef = useRef(false)
+  const needsLessons = round.lessons.length === 0
+
+  useEffect(() => {
+    if (needsLessons && !startedRef.current) {
+      startedRef.current = true
+      distill.mutate()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsLessons])
+
+  const meta = [
+    round.reviewerName ? `Reviewed by ${round.reviewerName}` : 'Reviewed',
+    new Date(round.date).toLocaleDateString(),
+  ].join(' · ')
+
+  return (
+    <section>
+      <div className="mb-2">
+        <div className="truncate text-[11.5px] font-semibold text-[#0f0f0f]">{round.documentName}</div>
+        <div className="text-[10px] text-[#9a9a94]">{meta}</div>
+      </div>
+
+      <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Lessons</div>
+      <div className="mb-3 space-y-2">
+        {round.lessons.map((lesson) => (
+          <LessonCard key={lesson.id} lesson={lesson} />
+        ))}
+        {needsLessons && distill.isPending && (
+          <div className="text-[11px] text-[#9a9a94]">Distilling lessons…</div>
+        )}
+        {needsLessons && distill.isError && (
+          <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">
+            {getErrorMessage(distill.error, 'Could not draw up lessons.')}{' '}
+            <button className="font-medium underline" onClick={() => distill.mutate()} type="button">
+              Retry
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Comments</div>
+      <div className="space-y-2">
+        {round.annotations.map((a) => (
+          <CommentCard
+            key={a.id}
+            annotation={a}
+            onExplain={() => onExplain(explainPrompt(round.documentName, a))}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function LessonCard({ lesson }: { lesson: BirdieLesson }) {
+  return (
+    <div className="overflow-hidden rounded-[10px] border border-[#1a4a8a]/15">
+      <div className="flex items-center gap-1.5 border-b border-[#1a4a8a]/15 bg-[#e8f0fe] px-3 py-2 text-[11px] font-medium text-[#1a4a8a]">
+        <Lightbulb size={11} />
+        <span className="truncate">{lesson.title}</span>
+      </div>
+      <div className="px-3 py-2.5 text-[11.5px] leading-[1.6] text-[#5a5a56]">{lesson.body}</div>
+    </div>
+  )
+}
+
+function CommentCard({ annotation, onExplain }: { annotation: LessonAnnotation; onExplain: () => void }) {
+  return (
+    <div className="overflow-hidden rounded-[10px] border border-black/10">
+      <div className="space-y-1.5 px-3 py-2.5 text-[11.5px] leading-[1.6]">
+        <div className="italic text-[#8c8c86]" style={{ fontFamily: 'Georgia, serif' }}>
+          “{annotation.anchorQuote}”
+        </div>
+        {annotation.suggestedText && (
+          <div className="text-[#1a6b4a]">
+            <span className="font-medium">Suggested: </span>
+            {annotation.suggestedText}
+          </div>
+        )}
+        {annotation.note && <div className="text-[#5a5a56]">{annotation.note}</div>}
+      </div>
+      <div className="flex items-center justify-between border-t border-black/5 px-3 py-1.5">
+        <span className="text-[10px] text-[#9a9a94]">Page {annotation.pageNo}</span>
+        <button
+          className="text-[10.5px] font-medium text-[#1a6b4a] hover:underline"
+          onClick={onExplain}
+          type="button"
+        >
+          Explain this
+        </button>
+      </div>
     </div>
   )
 }
@@ -378,7 +567,17 @@ const STARTERS = [
   "What's the right way to ask for guidance without looking junior?",
 ]
 
-function AskTab({ matterId, pageContext }: { matterId: string | null; pageContext?: BirdiePageContext }) {
+function AskTab({
+  matterId,
+  pageContext,
+  pendingPrompt,
+  onPromptConsumed,
+}: {
+  matterId: string | null
+  pageContext?: BirdiePageContext
+  pendingPrompt: { id: string; text: string } | null
+  onPromptConsumed: () => void
+}) {
   const [messages, setMessages] = useState<BirdieMsg[]>([])
   const [prompt, setPrompt] = useState('')
   const [isResponding, setIsResponding] = useState(false)
@@ -457,6 +656,16 @@ function AskTab({ matterId, pageContext }: { matterId: string | null; pageContex
       abortRef.current = null
     }
   }
+
+  // "Explain this" from the Review tab arrives as a pending prompt; send it once.
+  const consumedPromptRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!pendingPrompt || consumedPromptRef.current === pendingPrompt.id || isResponding) return
+    consumedPromptRef.current = pendingPrompt.id
+    onPromptConsumed()
+    void send(pendingPrompt.text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrompt])
 
   return (
     <div className="flex h-full flex-col">

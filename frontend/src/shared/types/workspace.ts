@@ -416,6 +416,45 @@ export type BirdiePageContext = {
   actionTitle?: string | null
 }
 
+export type BirdieSettings = {
+  hasOpenrouterKey: boolean
+  keyLast4: string | null
+  openrouterModel: string | null
+  effectiveModel: string | null
+}
+
+export type LessonAnnotation = {
+  id: string
+  pageNo: number
+  anchorQuote: string
+  suggestedText: string | null
+  note: string | null
+}
+
+export type BirdieLesson = {
+  id: string
+  title: string
+  body: string
+  sourceAnnotationIds: string[]
+}
+
+export type FeedbackRound = {
+  handoffId: string
+  documentName: string
+  reviewerName: string | null
+  status: string
+  date: string
+  annotations: LessonAnnotation[]
+  lessons: BirdieLesson[]
+}
+
+export type DemoUser = {
+  id: string
+  fullName: string | null
+  email: string
+  firmRole: FirmRole
+}
+
 export type ResourceMetadata = {
   id: string
   resourceType: string

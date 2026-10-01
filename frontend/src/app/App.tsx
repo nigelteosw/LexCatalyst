@@ -6,6 +6,8 @@ import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
 import { PanelErrorBoundary } from '../shared/ui/PanelErrorBoundary'
 import { Sidebar } from '../features/navigation/Sidebar'
+import { DemoBar } from '../features/demo/DemoBar'
+import { DemoSwitcher } from '../features/demo/DemoSwitcher'
 import { LoginPage } from '../features/auth/LoginPage'
 import {
   deleteChatMessage,
@@ -17,6 +19,10 @@ import {
   streamChatMessage,
   subscribeToUnauthorized,
   loginWithGoogle,
+  clearPresenterSession,
+  isImpersonating,
+  restorePresenterSession,
+  switchToDemoUser,
   uploadDocument,
 } from '../shared/api/api'
 import type {
@@ -237,6 +243,7 @@ function App() {
     setError(null)
     try {
       const response = await loginWithGoogle(credential)
+      clearPresenterSession()
       localStorage.setItem('token', response.accessToken)
       localStorage.setItem('user', JSON.stringify(response.user))
       setUser(response.user)
@@ -246,10 +253,37 @@ function App() {
     }
   }
 
+  // Demo mode: swap the whole session, then reset every cached query so nothing from the
+  // previous user's view leaks into the next one.
+  async function resetForSessionChange(nextUser: SessionUser | null) {
+    streamAbortReasonRef.current = 'navigation'
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setUser(nextUser)
+    setIsResponding(false)
+    setActiveStream(null)
+    selectHome()
+    await queryClient.resetQueries()
+  }
+
+  async function handleDemoSwitch(userId: string) {
+    try {
+      await resetForSessionChange(await switchToDemoUser(userId))
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError))
+    }
+  }
+
+  async function handleDemoReturn() {
+    if (!restorePresenterSession()) return
+    await resetForSessionChange(getSavedUser())
+  }
+
   function handleLogout() {
     streamAbortReasonRef.current = 'navigation'
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
+    clearPresenterSession()
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     setIsAuthenticated(false)
@@ -538,6 +572,14 @@ function App() {
         userFullName={currentUser?.fullName ?? user?.fullName ?? ''}
         userInitials={userInitials}
         onLogout={handleLogout}
+        footerExtra={
+          <DemoSwitcher
+            currentUserId={currentUser?.id ?? user?.id ?? null}
+            isAdmin={currentUser?.isAdmin ?? user?.isAdmin ?? false}
+            onReturn={handleDemoReturn}
+            onSwitch={handleDemoSwitch}
+          />
+        }
       />
 
       {/* Birdie floating PiP — outside layout flow */}
@@ -551,6 +593,13 @@ function App() {
       </Suspense>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white lg:border-l lg:border-neutral-200 lg:shadow-sm">
+        {isImpersonating() && (
+          <DemoBar
+            name={currentUser?.fullName ?? user?.fullName ?? 'demo user'}
+            onReturn={handleDemoReturn}
+            role={(currentUser?.firmRole ?? user?.firmRole ?? '').replace('_', ' ')}
+          />
+        )}
         {current.view !== 'chat' && (
           <header className="flex h-12 shrink-0 items-center gap-3 border-b border-neutral-100 px-3 lg:hidden">
             <Button

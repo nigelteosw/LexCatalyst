@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { Settings, UserPlus, UserMinus, UserRound, Users } from 'lucide-react'
+import { Database, Settings, UserPlus, UserMinus, UserRound, Users } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createDummyUsers,
   deleteDummyUsers,
+  getAppConfig,
   listFirmUsers,
+  seedDemoData,
   updateOtherUserRole,
 } from '../../shared/api/api'
+import { BirdieSettingsSection } from './BirdieSettingsSection'
 import type { CurrentUser, FirmRole } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
@@ -88,6 +91,26 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
     },
   })
 
+  const configQuery = useQuery({ queryKey: ['appConfig'], queryFn: getAppConfig, staleTime: Infinity })
+  const demoMode = configQuery.data?.demoMode ?? false
+
+  const seedMutation = useMutation({
+    mutationFn: seedDemoData,
+    onSuccess: (summary) => {
+      queryClient.invalidateQueries()
+      const processing = summary.documents_still_processing
+        ? ' Documents are still processing — wait a minute before demoing chat.'
+        : ''
+      const failed = Number(summary.documents_failed) + Number(summary.kb_failed)
+      setMessage(
+        `Demo data loaded: ${summary.documents} documents, ${summary.kb_entries} KB entries, ${summary.tickets} tickets, ${summary.review_rounds} review rounds.` +
+          (failed > 0 ? ` ${failed} item(s) failed — check R2/OpenAI config.` : '') +
+          processing,
+      )
+    },
+    onError: (error) => setMessage(getErrorMessage(error)),
+  })
+
   const usersQuery = useQuery({
     queryKey: ['firmUsers'],
     queryFn: listFirmUsers,
@@ -133,6 +156,8 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
               </div>
             </div>
           </div>
+
+          <BirdieSettingsSection />
 
           <div className="rounded-xl border border-black/10 bg-white p-4">
             <h3 className="text-sm font-semibold text-[#0f0f0f]">Professional role</h3>
@@ -226,6 +251,21 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                   <UserMinus size={14} />
                   Clear dummy data
                 </button>
+                {demoMode && (
+                  <button
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-black/10 bg-[#0f0f0f] px-4 text-xs font-medium text-white hover:bg-black disabled:opacity-50"
+                    disabled={seedMutation.isPending}
+                    onClick={() => {
+                      if (window.confirm('Load demo data? This resets any previous demo data (Sarah, Jane, Marcus and the Meridian matter).')) {
+                        seedMutation.mutate()
+                      }
+                    }}
+                    type="button"
+                  >
+                    <Database size={14} />
+                    {seedMutation.isPending ? 'Loading demo data…' : 'Load demo data'}
+                  </button>
+                )}
               </div>
             </div>
           )}

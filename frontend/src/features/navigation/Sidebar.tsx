@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import {
   BookMarked,
   BriefcaseBusiness,
@@ -41,6 +41,7 @@ export type SidebarProps = {
   onLogout: () => void
   userFullName: string
   userInitials: string
+  footerExtra?: ReactNode
 }
 
 const MIN_WIDTH = 200
@@ -68,6 +69,7 @@ export function Sidebar({
   onLogout,
   userFullName,
   userInitials,
+  footerExtra,
 }: SidebarProps) {
   const {
     current,
@@ -405,6 +407,8 @@ export function Sidebar({
               <div className="px-2.5 py-3 text-[11px] text-white/30">No recent LexChats</div>
             )}
           </nav>
+
+          {footerExtra}
 
           {/* Sidebar Footer */}
           <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.08] px-2.5 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">

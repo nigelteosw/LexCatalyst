@@ -36,6 +36,10 @@ import type {
   WikiPageType,
   WorkspaceDocument,
   BirdiePageContext,
+  BirdieSettings,
+  BirdieLesson,
+  DemoUser,
+  FeedbackRound,
   ResourceMetadata,
 } from '../types/workspace'
 
@@ -258,7 +262,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (init?.body != null && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
-  if (token) {
+  if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`)
   }
 
@@ -291,6 +295,10 @@ function parseJson(value: string): Record<string, unknown> | null {
 
 function handleUnauthorized(response: Response) {
   if (response.status !== 401 || !localStorage.getItem('token')) return
+  if (restorePresenterSession()) {
+    window.location.reload()
+    return
+  }
   localStorage.removeItem('token')
   localStorage.removeItem('user')
   window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
@@ -1982,4 +1990,182 @@ export async function createDummyUsers(count: number = 2): Promise<void> {
 
 export async function deleteDummyUsers(): Promise<void> {
   await request('/system/dummy-users', { method: 'DELETE' })
+}
+
+
+// Birdie settings (personal OpenRouter key)
+
+type BackendBirdieSettings = {
+  has_openrouter_key: boolean
+  key_last4: string | null
+  openrouter_model: string | null
+  effective_model: string | null
+}
+
+function mapBirdieSettings(s: BackendBirdieSettings): BirdieSettings {
+  return {
+    hasOpenrouterKey: s.has_openrouter_key,
+    keyLast4: s.key_last4,
+    openrouterModel: s.openrouter_model,
+    effectiveModel: s.effective_model,
+  }
+}
+
+export async function getBirdieSettings(): Promise<BirdieSettings> {
+  return mapBirdieSettings(await request<BackendBirdieSettings>('/settings/birdie'))
+}
+
+export async function updateBirdieSettings(payload: {
+  openrouterApiKey?: string
+  openrouterModel?: string | null
+}): Promise<BirdieSettings> {
+  const body: Record<string, string | null> = {}
+  if (payload.openrouterApiKey) body.openrouter_api_key = payload.openrouterApiKey
+  if (payload.openrouterModel !== undefined) body.openrouter_model = payload.openrouterModel
+  return mapBirdieSettings(
+    await request<BackendBirdieSettings>('/settings/birdie', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function clearOpenrouterKey(): Promise<BirdieSettings> {
+  return mapBirdieSettings(
+    await request<BackendBirdieSettings>('/settings/birdie/openrouter-key', { method: 'DELETE' }),
+  )
+}
+
+// Birdie lessons (reviewer feedback on the user's own review rounds)
+
+type BackendLesson = {
+  id: string
+  title: string
+  body: string
+  source_annotation_ids: string[]
+}
+
+type BackendFeedbackRound = {
+  handoff_id: string
+  document_name: string
+  reviewer_name: string | null
+  status: string
+  date: string
+  annotations: {
+    id: string
+    page_no: number
+    anchor_quote: string
+    suggested_text: string | null
+    note: string | null
+  }[]
+  lessons: BackendLesson[]
+}
+
+function mapLesson(l: BackendLesson): BirdieLesson {
+  return { id: l.id, title: l.title, body: l.body, sourceAnnotationIds: l.source_annotation_ids }
+}
+
+export async function listBirdieLessons(): Promise<FeedbackRound[]> {
+  const rounds = await request<BackendFeedbackRound[]>('/birdie/lessons')
+  return rounds.map((r) => ({
+    handoffId: r.handoff_id,
+    documentName: r.document_name,
+    reviewerName: r.reviewer_name,
+    status: r.status,
+    date: r.date,
+    annotations: r.annotations.map((a) => ({
+      id: a.id,
+      pageNo: a.page_no,
+      anchorQuote: a.anchor_quote,
+      suggestedText: a.suggested_text,
+      note: a.note,
+    })),
+    lessons: r.lessons.map(mapLesson),
+  }))
+}
+
+export async function distillBirdieLessons(handoffId: string): Promise<BirdieLesson[]> {
+  const lessons = await request<BackendLesson[]>(`/birdie/lessons/${handoffId}/distill`, {
+    method: 'POST',
+  })
+  return lessons.map(mapLesson)
+}
+
+// Demo mode (admin only; the backend returns 404 unless DEMO_MODE is on)
+
+const PRESENTER_TOKEN_KEY = 'demoPresenterToken'
+const PRESENTER_USER_KEY = 'demoPresenterUser'
+
+export async function getAppConfig(): Promise<{ demoMode: boolean }> {
+  const config = await request<{ demo_mode?: boolean }>('/config')
+  return { demoMode: Boolean(config.demo_mode) }
+}
+
+export function isImpersonating(): boolean {
+  return localStorage.getItem(PRESENTER_TOKEN_KEY) !== null
+}
+
+/** The real (admin) token: the stashed presenter token while impersonating, else the session's. */
+function presenterAuthHeader(): Record<string, string> {
+  const token = localStorage.getItem(PRESENTER_TOKEN_KEY) ?? localStorage.getItem('token') ?? ''
+  return { Authorization: `Bearer ${token}` }
+}
+
+export async function listDemoUsers(): Promise<DemoUser[]> {
+  const users = await request<BackendFirmUser[]>('/demo/users', { headers: presenterAuthHeader() })
+  return users.map((u) => ({
+    id: u.id,
+    fullName: u.full_name,
+    email: u.email,
+    firmRole: u.firm_role,
+  }))
+}
+
+export async function switchToDemoUser(userId: string): Promise<SessionUser> {
+  const response = await request<{
+    access_token: string
+    user: BackendFirmUser
+  }>('/demo/switch', {
+    method: 'POST',
+    headers: presenterAuthHeader(),
+    body: JSON.stringify({ user_id: userId }),
+  })
+  if (!isImpersonating()) {
+    localStorage.setItem(PRESENTER_TOKEN_KEY, localStorage.getItem('token') ?? '')
+    localStorage.setItem(PRESENTER_USER_KEY, localStorage.getItem('user') ?? '')
+  }
+  const user: SessionUser = {
+    id: response.user.id,
+    email: response.user.email,
+    fullName: response.user.full_name,
+    firmRole: response.user.firm_role,
+    isAdmin: response.user.is_admin,
+  }
+  localStorage.setItem('token', response.access_token)
+  localStorage.setItem('user', JSON.stringify(user))
+  return user
+}
+
+/** Put the presenter's own session back. Returns false when not impersonating. */
+export function restorePresenterSession(): boolean {
+  const token = localStorage.getItem(PRESENTER_TOKEN_KEY)
+  if (token === null) return false
+  localStorage.setItem('token', token)
+  const savedUser = localStorage.getItem(PRESENTER_USER_KEY)
+  if (savedUser) localStorage.setItem('user', savedUser)
+  else localStorage.removeItem('user')
+  localStorage.removeItem(PRESENTER_TOKEN_KEY)
+  localStorage.removeItem(PRESENTER_USER_KEY)
+  return true
+}
+
+export function clearPresenterSession() {
+  localStorage.removeItem(PRESENTER_TOKEN_KEY)
+  localStorage.removeItem(PRESENTER_USER_KEY)
+}
+
+export type DemoSeedSummary = Record<string, number | boolean>
+
+export async function seedDemoData(): Promise<DemoSeedSummary> {
+  return request<DemoSeedSummary>('/demo/seed', { method: 'POST', headers: presenterAuthHeader() })
 }
