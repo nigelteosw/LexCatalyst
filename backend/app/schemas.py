@@ -775,3 +775,40 @@ class FirmUserResponse(BaseModel):
     is_admin: bool
 
     model_config = {"from_attributes": True}
+
+
+class BirdieSettingsUpdate(BaseModel):
+    openrouter_api_key: str | None = Field(default=None, min_length=10, max_length=500)
+    openrouter_model: str | None = Field(default=None, max_length=200)
+
+
+class BirdieSettingsResponse(BaseModel):
+    has_openrouter_key: bool
+    key_last4: str | None = None
+    openrouter_model: str | None = None
+    effective_model: str | None = None
+
+
+class LessonAnnotationResponse(BaseModel):
+    id: str
+    page_no: int
+    anchor_quote: str
+    suggested_text: str | None = None
+    note: str | None = None
+
+
+class LessonResponse(BaseModel):
+    id: str
+    title: str
+    body: str
+    source_annotation_ids: list[str]
+
+
+class FeedbackRoundResponse(BaseModel):
+    handoff_id: str
+    document_name: str
+    reviewer_name: str | None = None
+    status: str
+    date: datetime
+    annotations: list[LessonAnnotationResponse]
+    lessons: list[LessonResponse]

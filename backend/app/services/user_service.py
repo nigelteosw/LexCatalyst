@@ -16,6 +16,13 @@ DUMMY_USERS = (
         "google_id": "dummy:jane-pereira",
         "firm_role": "associate",
     },
+    # Third respondent so wellbeing trends clear the minimum anonymity cohort (3).
+    {
+        "email": "marcus.webb@lexcatalyst.local",
+        "full_name": "Marcus Webb",
+        "google_id": "dummy:marcus-webb",
+        "firm_role": "associate",
+    },
 )
 
 

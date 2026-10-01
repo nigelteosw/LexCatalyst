@@ -12,6 +12,7 @@ from app.routers import (
     auth,
     birdie,
     chat,
+    demo,
     documents,
     knowledge_bank,
     memories,
@@ -20,6 +21,7 @@ from app.routers import (
     resource_metadata,
     surveys,
     system,
+    user_settings,
     wiki,
 )
 
@@ -37,4 +39,6 @@ all_routers: list[APIRouter] = [
     actions.router,
     review_handoffs.router,
     resource_metadata.router,
+    user_settings.router,
+    demo.router,
 ]

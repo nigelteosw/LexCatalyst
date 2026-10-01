@@ -74,6 +74,9 @@ class Settings(BaseModel):
         "http://127.0.0.1:5173,http://localhost:5173,https://lexcatalyst.pages.dev",
     ).split(",")
 
+    # Demo mode: lets an admin switch into seeded dummy users and load demo data. Off by default.
+    demo_mode: bool = getenv_bool("DEMO_MODE", False)
+
     admin_emails: list[str] = [
         e for e in getenv("ADMIN_EMAILS", "").split(",") if e.strip()
     ]

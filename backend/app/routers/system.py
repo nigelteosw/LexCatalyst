@@ -25,6 +25,7 @@ def config() -> dict[str, object]:
         "deepseek_model": settings.deepseek_model,
         "deepseek_base_url": settings.deepseek_base_url,
         "available_chat_models": list(SUPPORTED_CHAT_MODELS),
+        "demo_mode": settings.demo_mode,
     }
 
 

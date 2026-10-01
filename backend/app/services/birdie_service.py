@@ -2,8 +2,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import ActionItem, User
-from app.providers.deepseek import DeepSeekProvider
+from app.services.birdie_provider import get_birdie_provider
 from app.schemas import PageContext
+from app.services.lesson_service import format_feedback_context
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
 from app.services.memory_service import format_memory_context, list_memories
 
@@ -92,6 +93,7 @@ async def build_birdie_messages(
     memories = list_memories(db, user_id=user.id, limit=50)
     system_content += format_memory_context(memories)
     system_content += _format_workboard_context(db, user)
+    system_content += format_feedback_context(db, user=user)
     system_content += _format_page_context(page_context)
 
     if kb_context:
@@ -120,6 +122,6 @@ async def stream_birdie_response(
         matter_id=matter_id,
         page_context=page_context,
     )
-    provider = DeepSeekProvider()
-    async for chunk in provider.stream_chat(messages, model="deepseek-v4-flash"):
+    provider = get_birdie_provider(db, user)
+    async for chunk in provider.stream_chat(messages):
         yield chunk

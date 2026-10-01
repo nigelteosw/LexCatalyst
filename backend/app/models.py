@@ -1058,3 +1058,54 @@ class ReviewAnnotationReply(Base):
 
     annotation: Mapped[ReviewAnnotation] = relationship(back_populates="replies")
     author: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
+
+
+class ReviewLesson(Base):
+    """A general lesson distilled from a returned/completed review round's feedback."""
+
+    __tablename__ = "review_lessons"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    handoff_id: Mapped[str] = mapped_column(
+        ForeignKey("review_handoffs.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    source_annotation_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class UserSetting(Base):
+    """Per-user preferences. Currently the optional personal OpenRouter key powering Birdie."""
+
+    __tablename__ = "user_settings"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # Stored via field_encryption; never returned by the API.
+    _openrouter_api_key: Mapped[str | None] = mapped_column(
+        "openrouter_api_key", Text, nullable=True
+    )
+    openrouter_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    @property
+    def openrouter_api_key(self) -> str | None:
+        return decrypt_text(self._openrouter_api_key)
+
+    @openrouter_api_key.setter
+    def openrouter_api_key(self, value: str | None) -> None:
+        self._openrouter_api_key = encrypt_text(value)

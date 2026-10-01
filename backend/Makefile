@@ -1,4 +1,4 @@
-.PHONY: dev worker install migration migrate
+.PHONY: dev worker install migration migrate seed-demo
 
 PYTHON := $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else echo python; fi)
 PIP := $(shell if [ -x .venv/bin/pip ]; then echo .venv/bin/pip; else echo pip; fi)
@@ -19,3 +19,6 @@ migration:
 
 migrate:
 	$(ALEMBIC) upgrade head
+
+seed-demo:
+	$(PYTHON) -m app.demo_seed --presenter $(PRESENTER)
