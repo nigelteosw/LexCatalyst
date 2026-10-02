@@ -8,11 +8,9 @@ type DemoSwitcherProps = {
   onReturn: () => void
 }
 
-const RETURN_VALUE = '__return__'
-
 const roleLabels: Record<string, string> = {
   partner: 'Partner',
-  senior_associate: 'Senior associate',
+  senior_associate: 'Senior',
   associate: 'Associate',
   admin: 'Admin',
 }
@@ -32,38 +30,56 @@ export function DemoSwitcher({ isAdmin, currentUserId, onSwitch, onReturn }: Dem
 
   if (!enabled) return null
 
+  const users = usersQuery.data ?? []
+
   return (
-    <div className="shrink-0 border-t border-white/[0.08] px-2.5 pt-2.5">
-      <label className="block text-[9.5px] font-medium uppercase tracking-[0.08em] text-white/30" htmlFor="demo-switch">
+    <div className="shrink-0 border-t border-white/[0.08] px-2.5 py-2.5">
+      <div className="mb-1.5 px-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-white/40">
         Demo · switch user
-      </label>
-      <select
-        className="mt-1 h-8 w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 text-[11.5px] text-white/80 outline-none focus:border-white/30"
-        id="demo-switch"
-        onChange={(event) => {
-          const value = event.target.value
-          if (!value) return
-          if (value === RETURN_VALUE) onReturn()
-          else onSwitch(value)
-        }}
-        value=""
-      >
-        <option className="text-black" value="">
-          {usersQuery.isLoading ? 'Loading…' : 'Choose…'}
-        </option>
+      </div>
+      <ul className="space-y-0.5" aria-label="Demo users">
         {impersonating && (
-          <option className="text-black" value={RETURN_VALUE}>
-            Back to my account
-          </option>
+          <li>
+            <button
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-white/70 hover:bg-white/[0.07] hover:text-white"
+              onClick={onReturn}
+              type="button"
+            >
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-white/20 text-[9px]">↩</span>
+              <span className="min-w-0 flex-1 truncate">Back to my account</span>
+            </button>
+          </li>
         )}
-        {(usersQuery.data ?? [])
-          .filter((user) => user.id !== currentUserId)
-          .map((user) => (
-            <option className="text-black" key={user.id} value={user.id}>
-              {user.fullName ?? user.email} ({roleLabels[user.firmRole] ?? user.firmRole})
-            </option>
-          ))}
-      </select>
+        {usersQuery.isLoading && <li className="px-2 py-1.5 text-xs text-white/40">Loading…</li>}
+        {users.map((user) => {
+          const active = user.id === currentUserId
+          const name = user.fullName ?? user.email
+          return (
+            <li key={user.id}>
+              <button
+                aria-current={active ? 'true' : undefined}
+                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors ${
+                  active ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/[0.07] hover:text-white'
+                }`}
+                disabled={active}
+                onClick={() => onSwitch(user.id)}
+                title={`${name} · ${roleLabels[user.firmRole] ?? user.firmRole}`}
+                type="button"
+              >
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/10 text-[9px] font-semibold uppercase">
+                  {name
+                    .split(' ')
+                    .map((part) => part[0])
+                    .join('')
+                    .slice(0, 2)}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{name}</span>
+                <span className="shrink-0 text-[10.5px] text-white/40">{roleLabels[user.firmRole] ?? user.firmRole}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
