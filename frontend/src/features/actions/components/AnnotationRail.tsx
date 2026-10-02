@@ -95,7 +95,7 @@ export function AnnotationRail({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
         <Highlighter size={22} className="text-[#c4c3bc]" />
-        <p className="text-xs text-[#9a9a94]">
+        <p className="text-xs text-[#76766f]">
           {canEdit
             ? 'Select text in the PDF to add a highlight, strike, or suggestion.'
             : 'No annotations yet.'}
@@ -131,7 +131,7 @@ export function AnnotationRail({
           <button
             key={value}
             aria-pressed={filter === value}
-            className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
               filter === value ? 'bg-[#0f0f0f] text-white' : 'bg-white text-[#5a5a56] hover:bg-[#f4f3ef]'
             }`}
             onClick={() => setFilter(value)}
@@ -142,11 +142,11 @@ export function AnnotationRail({
         ))}
       </div>
       {pages.length === 0 && (
-        <p className="text-center text-[10.5px] text-[#9a9a94]">Nothing matches this filter.</p>
+        <p className="text-center text-[10.5px] text-[#76766f]">Nothing matches this filter.</p>
       )}
       {pages.map((pageNo) => (
         <div key={pageNo}>
-          <p className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-widest text-[#9a9a94]">
+          <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-widest text-[#76766f]">
             Page {pageNo}
           </p>
           <div className="flex flex-col gap-1.5">
@@ -260,7 +260,7 @@ function AnnotationCard({
           {/* Reply count + unread dot */}
           {annotation.replies.length > 0 && (
             <button
-              className="relative flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] text-[#9a9a94] hover:bg-black/5"
+              className="relative flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-[#76766f] hover:bg-black/5"
               onClick={toggleExpand}
               type="button"
             >
@@ -300,16 +300,16 @@ function AnnotationCard({
       {/* Content */}
       <div className="px-2.5 pb-2.5">
         {error && (
-          <p className="mb-1.5 rounded-md bg-red-50 px-1.5 py-0.5 text-[9.5px] text-red-600">{error}</p>
+          <p className="mb-1.5 rounded-md bg-red-50 px-1.5 py-0.5 text-[10.5px] text-red-600">{error}</p>
         )}
         {isUnanchored && annotation.previousAnnotationId && (
-          <p className="mb-1.5 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[9.5px] font-medium text-amber-700">
+          <p className="mb-1.5 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-medium text-amber-700">
             <RotateCcw size={9} />
             From previous round — locate in revised draft (was p. {annotation.pageNo})
           </p>
         )}
         <p
-          className={`leading-4 text-[#9a9a94] ${annotation.kind === 'suggestion' ? 'line-through opacity-60' : ''} ${!expanded ? 'line-clamp-2' : ''}`}
+          className={`leading-4 text-[#76766f] ${annotation.kind === 'suggestion' ? 'line-through opacity-60' : ''} ${!expanded ? 'line-clamp-2' : ''}`}
         >
           &ldquo;{annotation.anchorQuote}&rdquo;
         </p>
@@ -350,7 +350,7 @@ function AnnotationCard({
               active={annotation.status === 'rejected'}
               disabled={isUpdatingStatus}
               onClick={() => onUpdateStatus('rejected')}
-              className="border-[#ddd] text-[#9a9a94] hover:bg-[#f4f3ef] data-[active=true]:bg-[#e8e8e4]"
+              className="border-[#ddd] text-[#76766f] hover:bg-[#f4f3ef] data-[active=true]:bg-[#e8e8e4]"
               icon={<X size={9} />}
               label="Rejected"
             />
@@ -361,14 +361,14 @@ function AnnotationCard({
         {isReviewer && (
           <div className="mt-1.5">
             {annotation.promotedKbEntryId ? (
-              <span className="inline-flex items-center gap-1 text-[9.5px] font-medium text-[#1a6b4a]">
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-[#1a6b4a]">
                 <Sparkles size={9} />
                 Promoted to KB
                 <ArrowUpRight size={9} />
               </span>
             ) : (
               <button
-                className="inline-flex items-center gap-1 rounded-full border border-[#c8e6d7] px-1.5 py-0.5 text-[9.5px] font-medium text-[#1a6b4a] hover:bg-[#e8f5ee]"
+                className="inline-flex items-center gap-1 rounded-full border border-[#c8e6d7] px-1.5 py-0.5 text-[10.5px] font-medium text-[#1a6b4a] hover:bg-[#e8f5ee]"
                 onClick={() => setShowPromoteModal(true)}
                 type="button"
               >
@@ -382,7 +382,7 @@ function AnnotationCard({
         {/* Status pill when controls are hidden */}
         {!canEdit && annotation.status !== 'open' && (
           <span
-            className={`mt-1.5 inline-block rounded-full px-1.5 py-0.5 text-[9.5px] font-medium ${statusCls(annotation.status)}`}
+            className={`mt-1.5 inline-block rounded-full px-1.5 py-0.5 text-[10.5px] font-medium ${statusCls(annotation.status)}`}
           >
             {statusLabel(annotation.status)}
           </span>
@@ -439,7 +439,7 @@ function PreviousRoundsThread({
 
   if (historyQuery.isLoading) {
     return (
-      <div className="border-t border-black/5 px-2.5 py-1.5 text-[9.5px] text-[#9a9a94]">
+      <div className="border-t border-black/5 px-2.5 py-1.5 text-[10.5px] text-[#76766f]">
         Loading earlier discussion…
       </div>
     )
@@ -449,13 +449,13 @@ function PreviousRoundsThread({
 
   return (
     <div className="border-t border-black/5 bg-[#fafaf8] px-2.5 py-2">
-      <p className="mb-1 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-[#9a9a94]">
+      <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#76766f]">
         Earlier rounds
       </p>
       <div className="space-y-2">
         {rounds.map((prev, i) => (
           <div key={prev.id} className="rounded-md border border-black/5 bg-white p-2">
-            <p className="text-[9.5px] text-[#9a9a94]">
+            <p className="text-[10.5px] text-[#76766f]">
               {i === 0 ? 'Previous round' : `${i + 1} rounds ago`} · p. {prev.pageNo} ·{' '}
               {statusLabel(prev.status)}
             </p>
@@ -509,7 +509,7 @@ function StatusButton({
       disabled={disabled}
       onClick={onClick}
       type="button"
-      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9.5px] font-medium transition-colors disabled:opacity-40 ${className} ${active ? 'font-semibold' : ''}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10.5px] font-medium transition-colors disabled:opacity-40 ${className} ${active ? 'font-semibold' : ''}`}
     >
       {icon}
       {label}
@@ -600,7 +600,7 @@ function ReplyThread({
         </button>
       </div>
       {postMutation.isError && (
-        <p className="mt-1 text-[10px] text-red-600">{getErrorMessage(postMutation.error)}</p>
+        <p className="mt-1 text-[11px] text-red-600">{getErrorMessage(postMutation.error)}</p>
       )}
     </div>
   )
@@ -627,8 +627,8 @@ function ReplyRow({
     <div className="group flex items-start gap-1.5">
       <div className="flex-1">
         <div className="mb-0.5 flex items-baseline gap-1.5">
-          <span className="text-[10px] font-semibold text-[#0f0f0f]">{author}</span>
-          <span className="text-[9.5px] text-[#c4c3bc]">{ts}</span>
+          <span className="text-[11px] font-semibold text-[#0f0f0f]">{author}</span>
+          <span className="text-[10.5px] text-[#c4c3bc]">{ts}</span>
         </div>
         <div className="text-[10.5px] leading-[1.4] text-[#5a5a56]">
           <MarkdownContent markdown={reply.bodyMarkdown} />
@@ -691,14 +691,14 @@ function PromoteModal({
             <Sparkles size={14} className="text-[#1a6b4a]" />
             Promote to Knowledge Bank
           </div>
-          <button className="rounded p-1 text-[#9a9a94] hover:bg-[#f4f3ef]" onClick={onClose} type="button">
+          <button className="rounded p-1 text-[#76766f] hover:bg-[#f4f3ef]" onClick={onClose} type="button">
             <X size={13} />
           </button>
         </div>
 
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
               Title
             </label>
             <input
@@ -709,7 +709,7 @@ function PromoteModal({
             />
           </div>
           <div>
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
               Scope
             </label>
             <select
@@ -722,7 +722,7 @@ function PromoteModal({
               <option value="firm_wide">Firm-wide</option>
             </select>
           </div>
-          <p className="text-[9.5px] text-[#9a9a94]">
+          <p className="text-[10.5px] text-[#76766f]">
             Content will be pre-filled from the annotation's quote, suggested wording, and rationale.
             {scope !== 'matter' && ' PII review will run before publishing.'}
           </p>
@@ -794,7 +794,7 @@ function statusCls(status: ReviewAnnotation['status']) {
   switch (status) {
     case 'needs_rework': return 'bg-amber-100 text-amber-700'
     case 'resolved': return 'bg-[#e8f5ee] text-[#1a6b4a]'
-    case 'rejected': return 'bg-[#f4f3ef] text-[#9a9a94]'
-    default: return 'bg-[#f4f3ef] text-[#9a9a94]'
+    case 'rejected': return 'bg-[#f4f3ef] text-[#76766f]'
+    default: return 'bg-[#f4f3ef] text-[#76766f]'
   }
 }

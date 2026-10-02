@@ -309,7 +309,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
 
       {availableTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-black/10 bg-white px-5 py-2">
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             <Tag size={11} /> Tags
           </span>
           <button
@@ -362,7 +362,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
             <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72 sm:min-h-0">
               <div className="mb-3 flex items-center gap-2">
                 <h3 className="text-xs font-semibold text-[#5a5a56]">{col.label}</h3>
-                <span className="rounded-full bg-[#f4f3ef] px-1.5 py-0.5 text-[10px] text-[#9a9a94]">
+                <span className="rounded-full bg-[#f4f3ef] px-1.5 py-0.5 text-[11px] text-[#76766f]">
                   {grouped[col.id].length}
                 </span>
               </div>
@@ -380,7 +380,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
                   />
                 ))}
                 {grouped[col.id].length === 0 && (
-                  <div className="rounded-[10px] border border-dashed border-black/10 px-3 py-5 text-center text-[11px] text-[#aaa9a3]">
+                  <div className="rounded-[10px] border border-dashed border-black/10 px-3 py-5 text-center text-[11px] text-[#8a8a84]">
                     No {col.label.toLowerCase()} tickets
                   </div>
                 )}
@@ -504,7 +504,7 @@ function ActionCard({
         </p>
 
         {item.activeHandoffId && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
             {item.status === 'in_progress' ? 'Returned for rework' : 'Review ready'}
           </div>
@@ -521,7 +521,7 @@ function ActionCard({
             {item.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-md bg-[#eeecff] px-1.5 py-0.5 text-[10px] font-medium text-[#4a3db0]"
+                className="rounded-md bg-[#eeecff] px-1.5 py-0.5 text-[11px] font-medium text-[#4a3db0]"
               >
                 {tag}
               </span>
@@ -537,7 +537,7 @@ function ActionCard({
             {assigneeName}
           </span>
           {item.dueDate && (
-            <span className="shrink-0 text-[10px] text-[#9a9a94]">
+            <span className="shrink-0 text-[11px] text-[#76766f]">
               {new Date(item.dueDate).toLocaleDateString(undefined, {
                 month: 'short',
                 day: 'numeric',
@@ -549,7 +549,7 @@ function ActionCard({
 
       <button
         aria-label={`Delete ${item.title}`}
-        className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded text-[#aaa9a3] opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"
+        className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded text-[#8a8a84] opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"
         onClick={onDelete}
         title="Delete ticket"
         type="button"
@@ -585,7 +585,7 @@ function HandoffReviewPage({
           </button>
           <span className="text-sm font-semibold text-[#0f0f0f]">Review handoff</span>
         </header>
-        <div className="flex flex-1 items-center justify-center text-sm text-[#9a9a94]">
+        <div className="flex flex-1 items-center justify-center text-sm text-[#76766f]">
           Ticket not found.
         </div>
       </div>
@@ -604,7 +604,7 @@ function HandoffReviewPage({
           <ArrowLeft size={16} />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Review handoff
           </p>
           <p className="truncate text-sm font-semibold text-[#0f0f0f]">{item.title}</p>
@@ -637,13 +637,13 @@ function MatterSnapshot({ rows }: { rows: ResourceMetadata[] }) {
 
   return (
     <div className="flex items-center gap-3 border-b border-black/10 bg-[#fafaf8] px-5 py-1.5">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
         Matter
       </span>
       {Object.entries(counts).map(([type, count]) => (
         <span key={type} className="text-[10.5px] text-[#5a5a56]">
           <span className="font-medium">{count}</span>{' '}
-          <span className="text-[#9a9a94]">{RESOURCE_LABELS[type] ?? type}</span>
+          <span className="text-[#76766f]">{RESOURCE_LABELS[type] ?? type}</span>
         </span>
       ))}
     </div>

@@ -48,6 +48,7 @@ def clear_openrouter_key(db: Session, *, user_id: str) -> UserSetting | None:
     if setting is None:
         return None
     setting._openrouter_api_key = None
+    setting.openrouter_model = None  # a model without a key is meaningless
     db.commit()
     db.refresh(setting)
     return setting

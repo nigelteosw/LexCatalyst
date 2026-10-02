@@ -70,19 +70,19 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
     <div className="app-scroll-region h-full overflow-y-auto bg-white">
 
       {/* ------------------------------------------------------------------ */}
-      {/* Hero — dark, authoritative */}
+      {/* Hero */}
       {/* ------------------------------------------------------------------ */}
-      <div className="border-b border-black/[0.07] bg-[#0f0f0f] px-6 py-8 sm:px-10 lg:px-16">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-white/35">
+      <div className="border-b border-neutral-200 bg-neutral-50 px-6 py-8 sm:px-10 lg:px-16">
+        <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500">
           {getGreeting()} · {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 className="font-serif text-2xl italic tracking-tight text-white sm:text-3xl">
+        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
           {name}
         </h1>
-        <p className="mt-1 text-xs text-white/40">{roleLabel(currentUser)}</p>
+        <p className="mt-1 text-sm text-neutral-500">{roleLabel(currentUser)}</p>
 
         {/* Inline stat strip */}
-        <div className="mt-6 flex flex-wrap gap-x-10 gap-y-4">
+        <div className="mt-6 flex flex-wrap gap-3">
           <ReviewsStat currentUser={currentUser} onClick={() => nav.selectActions()} />
           <OpenTicketsStat currentUser={currentUser} onClick={() => nav.selectActions()} />
           {isPartnerOrAdmin && <WellbeingStat onClick={() => nav.selectWellbeing()} />}
@@ -104,7 +104,7 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
 
             {/* Feature list */}
             <section>
-              <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+              <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
                 Workspace
               </h2>
               <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
@@ -115,16 +115,16 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
                     onClick={() => navigate(navKey)}
                     type="button"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center text-neutral-400 transition group-hover:text-neutral-700">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center text-neutral-500 transition group-hover:text-neutral-700">
                       <Icon size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-neutral-900">{label}</span>
-                      <span className="block text-xs text-neutral-400">{description}</span>
+                      <span className="block text-xs text-neutral-500">{description}</span>
                     </div>
                     <ArrowRight
                       size={13}
-                      className="mr-1 shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-400"
+                      className="mr-1 shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-500"
                     />
                   </button>
                 ))}
@@ -135,10 +135,10 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
             {matters.length > 0 && (
               <section>
                 <div className="mb-4 flex items-baseline justify-between">
-                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
                     Matters
                   </h2>
-                  <span className="text-[11px] text-neutral-300">{matters.length}</span>
+                  <span className="text-[11px] text-neutral-400">{matters.length}</span>
                 </div>
                 <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
                   {matters.slice(0, 8).map((m) => (
@@ -148,13 +148,13 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
                       onClick={() => { onMatterChange(m.id); nav.selectKnowledgeBank() }}
                       type="button"
                     >
-                      <span className="w-14 shrink-0 truncate text-[10px] font-semibold uppercase tracking-wide text-neutral-300">
+                      <span className="w-14 shrink-0 truncate text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
                         {m.caseNumber ?? '—'}
                       </span>
                       <span className="min-w-0 flex-1 truncate text-sm text-neutral-700 group-hover:text-neutral-900">
                         {m.title}
                       </span>
-                      <ArrowRight size={12} className="shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-400" />
+                      <ArrowRight size={12} className="shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-500" />
                     </button>
                   ))}
                 </div>
@@ -194,14 +194,14 @@ function Stat({
 }) {
   return (
     <button
-      className="text-left transition-opacity hover:opacity-60"
+      className="min-w-36 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-neutral-300"
       onClick={onClick}
       type="button"
     >
-      <p className={`text-xl font-semibold tabular-nums leading-none ${active ? 'text-white' : 'text-white/50'}`}>
+      <p className={`text-xl font-semibold tabular-nums leading-none ${active ? 'text-neutral-900' : 'text-neutral-500'}`}>
         {value}
       </p>
-      <p className="mt-1.5 text-[10px] uppercase tracking-[0.1em] text-white/25">{label}</p>
+      <p className="mt-1.5 text-[11px] uppercase tracking-[0.08em] text-neutral-500">{label}</p>
     </button>
   )
 }
@@ -256,14 +256,14 @@ function RecentThreadsSection({ onClick }: { onClick: (threadId: string) => void
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
           Recent conversations
         </h2>
-        {q.isPending && <Loader2 size={12} className="animate-spin text-neutral-300" />}
+        {q.isPending && <Loader2 size={12} className="animate-spin text-neutral-400" />}
       </div>
 
       {threads.length === 0 && !q.isPending ? (
-        <p className="py-6 text-center text-xs text-neutral-300">No conversations yet</p>
+        <p className="py-6 text-center text-xs text-neutral-400">No conversations yet</p>
       ) : (
         <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
           {threads.map((t) => (
@@ -275,9 +275,9 @@ function RecentThreadsSection({ onClick }: { onClick: (threadId: string) => void
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-neutral-700 group-hover:text-neutral-900">{t.title}</p>
-                <p className="mt-0.5 text-[10px] text-neutral-300">{formatRelative(t.updatedAt)}</p>
+                <p className="mt-0.5 text-[11px] text-neutral-400">{formatRelative(t.updatedAt)}</p>
               </div>
-              <ArrowRight size={12} className="mt-1 shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-400" />
+              <ArrowRight size={12} className="mt-1 shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-500" />
             </button>
           ))}
         </div>
@@ -311,10 +311,10 @@ function AIContextSection({
 
   return (
     <section>
-      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
         AI context
       </h2>
-      <p className="mb-3 text-xs leading-relaxed text-neutral-400">
+      <p className="mb-3 text-xs leading-relaxed text-neutral-500">
         LexChat and Birdie automatically search these before every response — no need to paste anything in.
       </p>
       <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
@@ -323,18 +323,18 @@ function AIContextSection({
           onClick={onKbClick}
           type="button"
         >
-          <BookMarked size={14} className="shrink-0 text-neutral-300 transition group-hover:text-neutral-600" />
+          <BookMarked size={14} className="shrink-0 text-neutral-400 transition group-hover:text-neutral-600" />
           <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900">Knowledge Bank</span>
-          <span className="text-xs text-neutral-400">{kbQ.isPending ? '…' : `${kbCount} ${kbCount === 1 ? 'entry' : 'entries'}`}</span>
+          <span className="text-xs text-neutral-500">{kbQ.isPending ? '…' : `${kbCount} ${kbCount === 1 ? 'entry' : 'entries'}`}</span>
         </button>
         <button
           className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-neutral-50"
           onClick={onWorkboardClick}
           type="button"
         >
-          <CheckSquare size={14} className="shrink-0 text-neutral-300 transition group-hover:text-neutral-600" />
+          <CheckSquare size={14} className="shrink-0 text-neutral-400 transition group-hover:text-neutral-600" />
           <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900">Workboard</span>
-          <span className="text-xs text-neutral-400">{actionsQ.isPending ? '…' : `${openCount} open`}</span>
+          <span className="text-xs text-neutral-500">{actionsQ.isPending ? '…' : `${openCount} open`}</span>
         </button>
       </div>
     </section>

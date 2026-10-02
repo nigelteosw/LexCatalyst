@@ -150,7 +150,7 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
 
   if (handoffsQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center py-10 text-[#9a9a94]">
+      <div className="flex items-center justify-center py-10 text-[#76766f]">
         <Loader2 size={16} className="animate-spin" />
       </div>
     )
@@ -227,7 +227,7 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
         <div className="rounded-xl border border-dashed border-black/15 bg-[#f9f8f5] p-8 text-center">
           <FileText size={28} className="mx-auto mb-3 text-[#c4c3bc]" />
           <p className="mb-1 text-sm font-medium text-[#0f0f0f]">Upload your review PDF</p>
-          <p className="mb-4 text-xs text-[#9a9a94]">
+          <p className="mb-4 text-xs text-[#76766f]">
             Upload your completed review for the senior to annotate and redline.
           </p>
           {uploadControls}
@@ -263,7 +263,7 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
           {error && <span className="text-[10.5px] text-red-600">{error}</span>}
           {canResubmit && (
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-[10.5px] text-[#9a9a94]">Upload a revised PDF to start the next round.</span>
+              <span className="text-[10.5px] text-[#76766f]">Upload a revised PDF to start the next round.</span>
               {uploadControls}
             </div>
           )}
@@ -322,7 +322,7 @@ function DocumentCommentThread({ documentId }: { documentId: string }) {
 
   return (
     <div className="border-b border-black/10 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Document comments</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Document comments</p>
       {commentsQuery.isError && (
         <p className="mt-1 text-[10.5px] text-red-600">
           {getErrorMessage(commentsQuery.error, 'Could not load comments')}
@@ -338,7 +338,7 @@ function DocumentCommentThread({ documentId }: { documentId: string }) {
           </div>
         ))}
         {comments.length === 0 && !commentsQuery.isLoading && (
-          <p className="text-[10.5px] text-[#9a9a94]">No comments yet.</p>
+          <p className="text-[10.5px] text-[#76766f]">No comments yet.</p>
         )}
       </div>
       <div className="mt-2">
@@ -350,7 +350,7 @@ function DocumentCommentThread({ documentId }: { documentId: string }) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
         />
-        {error && <p className="mt-1 text-[10px] text-red-600">{error} — your draft is kept.</p>}
+        {error && <p className="mt-1 text-[11px] text-red-600">{error} — your draft is kept.</p>}
         <button
           className="mt-1 rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-[10.5px] font-medium text-white disabled:opacity-50"
           disabled={!draft.trim() || postMutation.isPending}
@@ -545,7 +545,7 @@ function HandoffViewer({
         style={popoverStyle(selectionRegion)}
       >
         {annotationError && (
-          <p className="max-w-56 px-1.5 text-[10px] text-red-600">{annotationError} — try again.</p>
+          <p className="max-w-56 px-1.5 text-[11px] text-red-600">{annotationError} — try again.</p>
         )}
         <div className="flex items-center gap-0.5">
         <ToolbarButton
@@ -567,7 +567,7 @@ function HandoffViewer({
           className="text-blue-600 hover:bg-blue-50"
           onClick={toggle}
         />
-        {createMutation.isPending && <Loader2 size={12} className="ml-1 animate-spin text-[#9a9a94]" />}
+        {createMutation.isPending && <Loader2 size={12} className="ml-1 animate-spin text-[#76766f]" />}
         </div>
       </div>
     )
@@ -724,7 +724,7 @@ function HandoffViewer({
           <p className="truncate text-sm font-medium text-[#0f0f0f]">
             {handoff.documentFilename ?? 'Review document'}
           </p>
-          <p className="text-[10.5px] text-[#9a9a94]">
+          <p className="text-[10.5px] text-[#76766f]">
             Submitted by {handoff.submitter?.fullName ?? handoff.submitter?.email ?? '—'}
           </p>
         </div>
@@ -732,7 +732,7 @@ function HandoffViewer({
           <HandoffStatusPill status={handoff.status} returnReason={handoff.returnReason} />
           {handoff.canRemove && (
             <button
-              className="rounded-lg px-2.5 py-1.5 text-[10.5px] text-[#9a9a94] hover:bg-[#f4f3ef] hover:text-red-600"
+              className="rounded-lg px-2.5 py-1.5 text-[10.5px] text-[#76766f] hover:bg-[#f4f3ef] hover:text-red-600"
               onClick={onDelete}
               type="button"
             >
@@ -746,7 +746,7 @@ function HandoffViewer({
       {(isReviewer && isActive) || annotations.length > 0 ? (
         <div className="flex flex-col gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-2 sm:flex-row sm:items-center">
           {annotations.length > 0 && isActive && (
-            <span className="text-[10.5px] text-[#9a9a94]">
+            <span className="text-[10.5px] text-[#76766f]">
               {addressedCount} / {annotations.length} addressed
             </span>
           )}
@@ -754,7 +754,7 @@ function HandoffViewer({
             <span className="inline-flex items-center gap-1.5 text-[10.5px] text-red-600">
               {actionError}
               <button
-                className="rounded px-1 text-[#9a9a94] hover:bg-black/5"
+                className="rounded px-1 text-[#76766f] hover:bg-black/5"
                 onClick={() => setActionError(null)}
                 type="button"
                 aria-label="Dismiss"
@@ -891,7 +891,7 @@ function HandoffViewer({
               </button>
             </div>
           ) : !fileUrl ? (
-            <div className="flex items-center justify-center p-8 text-[#9a9a94]">
+            <div className="flex items-center justify-center p-8 text-[#76766f]">
               <Loader2 size={16} className="animate-spin" />
             </div>
           ) : (
@@ -914,7 +914,7 @@ function HandoffViewer({
             : 'flex w-full flex-col sm:w-72 sm:shrink-0 sm:border-l'
         }`}>
           <div className="border-b border-black/10 px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
               Annotations
               {annotations.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-[#eeecff] px-1.5 py-0.5 text-[9px] text-[#4a3db0]">
@@ -923,12 +923,12 @@ function HandoffViewer({
               )}
             </p>
             {canAnnotate && hasTextLayer !== false && (
-              <p className="mt-0.5 text-[9.5px] text-[#9a9a94]">
+              <p className="mt-0.5 text-[10.5px] text-[#76766f]">
                 Select text in the PDF to annotate.
               </p>
             )}
             {hasTextLayer === false && (
-              <p className="mt-0.5 text-[9.5px] text-amber-700">
+              <p className="mt-0.5 text-[10.5px] text-amber-700">
                 Scanned PDF — no selectable text. Use document comments below.
               </p>
             )}
@@ -986,12 +986,12 @@ function RejectModal({
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-500" />
           <div>
             <p className="text-sm font-semibold text-[#0f0f0f]">Reject this draft?</p>
-            <p className="mt-0.5 text-xs text-[#9a9a94]">
+            <p className="mt-0.5 text-xs text-[#76766f]">
               The junior will see your reason and be asked to re-submit.
             </p>
           </div>
           <button
-            className="ml-auto shrink-0 rounded p-1 text-[#9a9a94] hover:bg-[#f4f3ef]"
+            className="ml-auto shrink-0 rounded p-1 text-[#76766f] hover:bg-[#f4f3ef]"
             onClick={onClose}
             type="button"
           >
@@ -1084,6 +1084,6 @@ function HandoffStatusPill({
   }
   const { label, cls } = map[status] ?? { label: status, cls: 'bg-[#f4f3ef] text-[#5a5a56]' }
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{label}</span>
   )
 }

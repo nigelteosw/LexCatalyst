@@ -74,7 +74,7 @@ export function FeatureHelp({ title, content, size = 'default' }: FeatureHelpPro
       ) : (
       <button
         aria-label={`How ${title} works`}
-        className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-400"
         onClick={() => setOpen(true)}
         type="button"
       >

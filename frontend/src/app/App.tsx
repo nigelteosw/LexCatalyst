@@ -179,7 +179,7 @@ function App() {
   const [composerAttachmentStatus, setComposerAttachmentStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [isBirdieOpen, setIsBirdieOpen] = useState(() => window.innerWidth >= 1024)
+  const [isBirdieOpen, setIsBirdieOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState<ChatModel>(getSavedChatModel)
   const [selectedMatterId, setSelectedMatterId] = useState<string | null>(
     () => localStorage.getItem('selectedMatterId'),

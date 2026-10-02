@@ -34,11 +34,11 @@ export function PanelHeader({
         )}
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="truncate font-serif text-base font-semibold text-neutral-900">{title}</h2>
+            <h2 className="truncate text-base font-semibold tracking-tight text-neutral-900">{title}</h2>
             {helpContent && <FeatureHelp title={title} content={helpContent} />}
           </div>
           {description && (
-            <p className="truncate text-xs text-neutral-500">{description}</p>
+            <p className="truncate text-xs text-neutral-600">{description}</p>
           )}
         </div>
       </div>

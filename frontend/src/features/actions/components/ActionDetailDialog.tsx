@@ -155,7 +155,7 @@ export function ActionDetailDialog({
       {manager && (
         <button
           aria-label="Edit title"
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#9a9a94] opacity-0 transition-opacity hover:bg-[#f4f3ef] hover:text-[#5a5a56] group-hover:opacity-100 focus:opacity-100"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#76766f] opacity-0 transition-opacity hover:bg-[#f4f3ef] hover:text-[#5a5a56] group-hover:opacity-100 focus:opacity-100"
           onClick={() => setEditingTitle(true)}
           type="button"
         >
@@ -181,12 +181,12 @@ export function ActionDetailDialog({
     <div className="space-y-4 p-5">
       <div>
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Description
           </span>
           {manager && !editingDescription && (
             <button
-              className="inline-flex items-center gap-1 text-[10px] font-medium text-[#5a5a56] hover:text-[#0f0f0f]"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#5a5a56] hover:text-[#0f0f0f]"
               onClick={() => setEditingDescription(true)}
               type="button"
             >
@@ -237,13 +237,13 @@ export function ActionDetailDialog({
             {item.description}
           </p>
         ) : (
-          <p className="text-xs text-[#aaa9a3]">No description.</p>
+          <p className="text-xs text-[#8a8a84]">No description.</p>
         )}
       </div>
 
       <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Assigned to</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Assigned to</div>
           {manager ? (
             <select
               className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs"
@@ -265,7 +265,7 @@ export function ActionDetailDialog({
           )}
         </div>
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Priority</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Priority</div>
           {manager ? (
             <select
               className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs capitalize"
@@ -279,14 +279,14 @@ export function ActionDetailDialog({
             </select>
           ) : (
             <div className="mt-1">
-              <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-medium capitalize ${priorityColors[item.priority]}`}>
+              <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium capitalize ${priorityColors[item.priority]}`}>
                 {item.priority}
               </span>
             </div>
           )}
         </div>
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Matter</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Matter</div>
           {manager ? (
             <select
               className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs"
@@ -311,7 +311,7 @@ export function ActionDetailDialog({
         </div>
         {item.dueDate && (
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Due date</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Due date</div>
             <div className="mt-1 text-[#0f0f0f]">
               {new Date(item.dueDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
@@ -321,7 +321,7 @@ export function ActionDetailDialog({
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <div className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             <Tag size={11} /> Tags
           </div>
         </div>
@@ -345,7 +345,7 @@ export function ActionDetailDialog({
             </span>
           ))}
           {item.tags.length === 0 && (
-            <span className="text-[11px] text-[#aaa9a3]">No tags yet</span>
+            <span className="text-[11px] text-[#8a8a84]">No tags yet</span>
           )}
         </div>
         {manager && (
@@ -375,7 +375,7 @@ export function ActionDetailDialog({
       </div>
 
       <div>
-        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Status</div>
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Status</div>
         <div className="flex flex-wrap gap-2">
           {statusColumns.map((col) => (
             <button
@@ -394,7 +394,7 @@ export function ActionDetailDialog({
           ))}
         </div>
         {!canMove && (
-          <p className="mt-2 text-[10.5px] text-[#9a9a94]">
+          <p className="mt-2 text-[10.5px] text-[#76766f]">
             Only the assignee or a senior+ can move this ticket.
           </p>
         )}
@@ -405,7 +405,7 @@ export function ActionDetailDialog({
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[#0f0f0f]">Submit work for review</p>
-              <p className="mt-0.5 text-[11px] text-[#9a9a94]">
+              <p className="mt-0.5 text-[11px] text-[#76766f]">
                 Upload your finished PDF so a reviewer can redline it.
               </p>
             </div>

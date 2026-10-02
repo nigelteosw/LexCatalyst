@@ -307,7 +307,7 @@ export function KnowledgeBankPanel({
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {isWriter && (
               <button
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs text-[#5a5a56] transition-colors hover:bg-[#f4f3ef] disabled:cursor-not-allowed disabled:text-[#aaa9a3]"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs text-[#5a5a56] transition-colors hover:bg-[#f4f3ef] disabled:cursor-not-allowed disabled:text-[#8a8a84]"
                 disabled={backfillMutation.isPending}
                 onClick={() => {
                   setBackfillMessage(null)
@@ -390,7 +390,7 @@ export function KnowledgeBankPanel({
             className={`border-b-2 px-3 py-2.5 text-xs ${
               activeTab === 'library'
                 ? 'border-[#0f0f0f] font-medium text-[#0f0f0f]'
-                : 'border-transparent text-[#9a9a94]'
+                : 'border-transparent text-[#76766f]'
             }`}
             onClick={() => setActiveTab('library')}
             type="button"
@@ -402,7 +402,7 @@ export function KnowledgeBankPanel({
               className={`border-b-2 px-3 py-2.5 text-xs ${
                 activeTab === 'audit'
                   ? 'border-[#0f0f0f] font-medium text-[#0f0f0f]'
-                  : 'border-transparent text-[#9a9a94]'
+                  : 'border-transparent text-[#76766f]'
               }`}
               onClick={() => setActiveTab('audit')}
               type="button"
@@ -411,7 +411,7 @@ export function KnowledgeBankPanel({
             </button>
           )}
           {currentUser && (
-            <div className="ml-auto flex items-center gap-1.5 text-[10px] text-[#9a9a94]">
+            <div className="ml-auto flex items-center gap-1.5 text-[10px] text-[#76766f]">
               <ShieldCheck size={12} />
               {currentUser.isAdmin ? 'Admin' : currentUser.firmRole.replace('_', ' ')}
             </div>
@@ -451,10 +451,10 @@ export function KnowledgeBankPanel({
                 <div className="relative min-w-0 flex-1">
                   <Search
                     size={14}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9a94]"
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#76766f]"
                   />
                   <input
-                    className="h-9 w-full rounded-[10px] border border-black/10 bg-white pl-9 pr-3 text-xs outline-none placeholder:text-[#aaa9a3] focus:border-black/25"
+                    className="h-9 w-full rounded-[10px] border border-black/10 bg-white pl-9 pr-3 text-xs outline-none placeholder:text-[#8a8a84] focus:border-black/25"
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search knowledge bank, style guides, and actions"
                     value={search}
@@ -976,14 +976,14 @@ function EntryCard({
               ? entry.errorMessage ?? 'Processing failed.'
               : entry.bodyMarkdown}
         </p>
-        <p className="mt-1 text-[10px] text-[#9a9a94]">
+        <p className="mt-1 text-[10px] text-[#76766f]">
           {scopeMeta}
           {entry.status === 'processing' && ' · processing'}
           {entry.status === 'failed' && ' · failed'}
           {entry.piiStatus !== 'clean' && ` · ${entry.piiStatus.replaceAll('_', ' ')}`}
         </p>
       </div>
-      <ChevronRight size={14} className="mt-1 shrink-0 text-[#aaa9a3]" />
+      <ChevronRight size={14} className="mt-1 shrink-0 text-[#8a8a84]" />
     </button>
   )
 }
@@ -1066,7 +1066,7 @@ function EntryContextPanel({
     return (
       <div className="grid flex-1 place-items-center p-6 text-center">
         <div>
-          <BookMarked size={24} className="mx-auto text-[#aaa9a3]" />
+          <BookMarked size={24} className="mx-auto text-[#8a8a84]" />
           <p className="mt-3 text-xs leading-5 text-[#8c8c86]">
             Select an entry to review its content, provenance, and sharing status.
           </p>
@@ -1088,7 +1088,7 @@ function EntryContextPanel({
           {canEdit && (
             <button
               aria-label="Delete entry"
-              className="grid h-8 w-8 place-items-center rounded-lg text-[#9a9a94] hover:bg-[#fdeeed] hover:text-[#8a1f1f]"
+              className="grid h-8 w-8 place-items-center rounded-lg text-[#76766f] hover:bg-[#fdeeed] hover:text-[#8a1f1f]"
               disabled={isDeleting}
               onClick={() => onDelete(entry)}
               type="button"
@@ -1160,7 +1160,7 @@ function EntryContextPanel({
             </div>
             {entry.tags.length > 0 && (
               <div className="mt-5 border-t border-black/10 pt-4">
-                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
                   <Tags size={12} />
                   Tags
                 </div>
@@ -1242,7 +1242,7 @@ function RedactionReview({
         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
         Lawyer review is required before this copy can cross its current boundary.
       </div>
-      <div className="mt-4 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+      <div className="mt-4 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
         Proposed substitutions
       </div>
       <div className="mt-2 space-y-2">
@@ -1259,7 +1259,7 @@ function RedactionReview({
         )}
       </div>
       <label className="mt-4 block">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
           Redacted content
         </span>
         <textarea
@@ -1310,11 +1310,11 @@ function AuditLogView({
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-medium text-[#0f0f0f]">Edit</div>
-                <div className="mt-0.5 truncate text-[10px] text-[#9a9a94]">
+                <div className="mt-0.5 truncate text-[10px] text-[#76766f]">
                   Entry {row.entryId ?? 'deleted'} · User {row.userId}
                 </div>
               </div>
-              <div className="text-[10px] text-[#9a9a94]">{formatDate(row.timestamp)}</div>
+              <div className="text-[10px] text-[#76766f]">{formatDate(row.timestamp)}</div>
             </div>
           ))}
         </div>
@@ -1359,7 +1359,7 @@ function EmptyState({
   return (
     <div className="grid min-h-56 place-items-center rounded-[14px] border border-dashed border-black/15 bg-white/50 p-6 text-center">
       <div>
-        <FileCheck2 size={24} className="mx-auto text-[#aaa9a3]" />
+        <FileCheck2 size={24} className="mx-auto text-[#8a8a84]" />
         <p className="mt-3 text-sm text-[#6f6f69]">{title}</p>
         {action && onAction && (
           <button

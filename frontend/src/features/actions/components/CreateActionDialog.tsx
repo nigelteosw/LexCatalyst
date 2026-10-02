@@ -72,7 +72,7 @@ export function CreateActionDialog({
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+              <span className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
                 <Users size={11} /> Assign to
               </span>
               <select
@@ -89,7 +89,7 @@ export function CreateActionDialog({
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
                 Priority
               </span>
               <select
@@ -104,7 +104,7 @@ export function CreateActionDialog({
             </label>
           </div>
           <label className="block">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
               Matter (optional)
             </span>
             <select
@@ -121,7 +121,7 @@ export function CreateActionDialog({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+            <span className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
               <Tag size={11} /> Tags (comma separated)
             </span>
             <input

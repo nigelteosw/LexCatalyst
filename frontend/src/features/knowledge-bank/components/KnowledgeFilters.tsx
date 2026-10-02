@@ -62,7 +62,7 @@ export function KnowledgeFilters({
 
 function FilterHeading({ children }: { children: string }) {
   return (
-    <div className="mb-1 mt-4 px-2 text-[9px] font-semibold uppercase tracking-[0.09em] text-[#9a9a94]">
+    <div className="mb-1 mt-4 px-2 text-[9px] font-semibold uppercase tracking-[0.09em] text-[#76766f]">
       {children}
     </div>
   )
@@ -88,7 +88,7 @@ function FilterButton({
       type="button"
     >
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {count !== undefined && <span className="text-[10px] text-[#aaa9a3]">{count}</span>}
+      {count !== undefined && <span className="text-[10px] text-[#8a8a84]">{count}</span>}
     </button>
   )
 }

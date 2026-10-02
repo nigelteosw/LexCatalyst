@@ -206,13 +206,13 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdieP
             <FeatureHelp title="Birdie" content={BIRDIE_HELP} size="compact" />
           </div>
         </div>
-        <div className="flex items-center gap-1 text-[10px] font-medium text-[#1a6b4a]">
+        <div className="flex items-center gap-1 text-[11px] font-medium text-[#1a6b4a]">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2d9e6b]" />
           Live
         </div>
         <button
           aria-label="Close Birdie"
-          className="grid h-6 w-6 place-items-center rounded-md text-[#9a9a94] hover:bg-[#f4f3ef]"
+          className="grid h-6 w-6 place-items-center rounded-md text-[#76766f] hover:bg-[#f4f3ef]"
           onClick={onToggle}
           type="button"
         >
@@ -260,7 +260,7 @@ function BirdiePanelBody({ matterId, pageContext }: { matterId: string | null; p
             className={`flex-1 border-b-2 py-1.5 text-[10.5px] font-medium capitalize transition-colors ${
               activeTab === tab
                 ? 'border-[#2d9e6b] text-[#0f0f0f]'
-                : 'border-transparent text-[#9a9a94] hover:text-[#5a5a56]'
+                : 'border-transparent text-[#76766f] hover:text-[#5a5a56]'
             }`}
             onClick={() => selectTab(tab)}
             type="button"
@@ -310,7 +310,7 @@ function ReviewTab({
 }) {
   return (
     <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-4">
-      {isLoading && <div className="text-xs text-[#9a9a94]">Loading feedback...</div>}
+      {isLoading && <div className="text-xs text-[#76766f]">Loading feedback...</div>}
       {error != null && (
         <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">
           {getErrorMessage(error, 'Could not load reviewer feedback.')}
@@ -367,16 +367,16 @@ function RoundGroup({ round, onExplain }: { round: FeedbackRound; onExplain: (pr
     <section>
       <div className="mb-2">
         <div className="truncate text-[11.5px] font-semibold text-[#0f0f0f]">{round.documentName}</div>
-        <div className="text-[10px] text-[#9a9a94]">{meta}</div>
+        <div className="text-[11px] text-[#76766f]">{meta}</div>
       </div>
 
-      <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Lessons</div>
+      <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Lessons</div>
       <div className="mb-3 space-y-2">
         {round.lessons.map((lesson) => (
           <LessonCard key={lesson.id} lesson={lesson} />
         ))}
         {needsLessons && distill.isPending && (
-          <div className="text-[11px] text-[#9a9a94]">Distilling lessons…</div>
+          <div className="text-[11px] text-[#76766f]">Distilling lessons…</div>
         )}
         {needsLessons && distill.isError && (
           <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">
@@ -388,7 +388,7 @@ function RoundGroup({ round, onExplain }: { round: FeedbackRound; onExplain: (pr
         )}
       </div>
 
-      <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">Comments</div>
+      <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Comments</div>
       <div className="space-y-2">
         {round.annotations.map((a) => (
           <CommentCard
@@ -430,7 +430,7 @@ function CommentCard({ annotation, onExplain }: { annotation: LessonAnnotation; 
         {annotation.note && <div className="text-[#5a5a56]">{annotation.note}</div>}
       </div>
       <div className="flex items-center justify-between border-t border-black/5 px-3 py-1.5">
-        <span className="text-[10px] text-[#9a9a94]">Page {annotation.pageNo}</span>
+        <span className="text-[11px] text-[#76766f]">Page {annotation.pageNo}</span>
         <button
           className="text-[10.5px] font-medium text-[#1a6b4a] hover:underline"
           onClick={onExplain}
@@ -455,7 +455,7 @@ function ReviewCard({ card }: { card: ReviewCard }) {
         {card.body}
       </div>
       {card.source && (
-        <div className="px-3 pb-2 text-[10px] text-[#9a9a94]">{card.source}</div>
+        <div className="px-3 pb-2 text-[11px] text-[#76766f]">{card.source}</div>
       )}
     </div>
   )
@@ -471,7 +471,7 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
   const knowledgeEntries = entries.filter((e) => e.entryType === 'knowledge_bank')
 
   if (isLoading) {
-    return <div className="p-3 text-xs text-[#9a9a94]">Loading examples...</div>
+    return <div className="p-3 text-xs text-[#76766f]">Loading examples...</div>
   }
 
   if (error) {
@@ -486,9 +486,9 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
     return (
       <div className="grid h-full place-items-center p-4 text-center">
         <div>
-          <BookMarked size={20} className="mx-auto text-[#aaa9a3]" />
+          <BookMarked size={20} className="mx-auto text-[#8a8a84]" />
           <p className="mt-2 text-xs text-[#8c8c86]">No Knowledge Bank entries yet.</p>
-          <p className="mt-1 text-[11px] text-[#9a9a94]">Upload documents and add them to the Knowledge Bank.</p>
+          <p className="mt-1 text-[11px] text-[#76766f]">Upload documents and add them to the Knowledge Bank.</p>
         </div>
       </div>
     )
@@ -498,7 +498,7 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
     <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-4">
       {styleGuides.length > 0 && (
         <section>
-          <div className="mb-2 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Style guides
           </div>
           <div className="space-y-2">
@@ -510,7 +510,7 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
       )}
       {knowledgeEntries.length > 0 && (
         <section>
-          <div className="mb-2 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Precedents & playbooks
           </div>
           <div className="space-y-2">
@@ -528,7 +528,7 @@ function KBEntryCard({ entry }: { entry: KnowledgeBankEntry }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <div className="overflow-hidden rounded-[10px] border border-[#4a3db0]/18 bg-[#eeecff]/30">
-      <div className="flex items-center gap-1.5 bg-[#eeecff] px-2.5 py-1.5 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-[#4a3db0]">
+      <div className="flex items-center gap-1.5 bg-[#eeecff] px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#4a3db0]">
         <Lightbulb size={10} />
         {entry.entryType.replace('_', ' ')}
       </div>
@@ -544,14 +544,14 @@ function KBEntryCard({ entry }: { entry: KnowledgeBankEntry }) {
           </div>
         )}
         <button
-          className="mt-1.5 text-[10px] text-[#4a3db0] hover:underline"
+          className="mt-1.5 text-[11px] text-[#4a3db0] hover:underline"
           onClick={() => setExpanded((e) => !e)}
           type="button"
         >
           {expanded ? 'Show less' : 'Show more'}
         </button>
       </div>
-      <div className="px-3 pb-2 text-[10px] text-[#9a9a94]">
+      <div className="px-3 pb-2 text-[11px] text-[#76766f]">
         {entry.scope.replace('_', '-')} · v{entry.version}
       </div>
     </div>
@@ -675,7 +675,7 @@ function AskTab({
       >
         {messages.length === 0 ? (
           <div className="space-y-2">
-            <div className="mb-1 text-[10px] text-[#9a9a94]">Try asking</div>
+            <div className="mb-1 text-[11px] text-[#76766f]">Try asking</div>
             {STARTERS.map((s) => (
               <button
                 key={s}
@@ -726,7 +726,7 @@ function AskTab({
           <textarea
             ref={textareaRef}
             aria-label="Ask Birdie"
-            className="min-h-8 max-h-20 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-[12px] leading-5 text-[#0f0f0f] outline-none placeholder:text-[#aaa9a3]"
+            className="min-h-8 max-h-20 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-[12px] leading-5 text-[#0f0f0f] outline-none placeholder:text-[#8a8a84]"
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -786,7 +786,7 @@ function ProgressTab() {
                 <div className="h-1 w-14 overflow-hidden rounded-full bg-[#dddcd8]">
                   <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.value}%` }} />
                 </div>
-                <span className="w-7 text-right text-[10px] text-[#9a9a94]">{item.value}%</span>
+                <span className="w-7 text-right text-[11px] text-[#76766f]">{item.value}%</span>
               </div>
             ))}
           </div>

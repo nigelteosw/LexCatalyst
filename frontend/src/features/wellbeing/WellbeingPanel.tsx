@@ -191,9 +191,9 @@ function SurveyTab() {
   if (questions.length === 0) {
     return (
       <div className="rounded-[14px] border border-dashed border-black/15 bg-white p-8 text-center">
-        <ClipboardList size={24} className="mx-auto text-[#aaa9a3]" />
+        <ClipboardList size={24} className="mx-auto text-[#8a8a84]" />
         <p className="mt-3 text-sm text-[#6f6f69]">No survey questions yet.</p>
-        <p className="mt-1 text-xs text-[#9a9a94]">A partner can add questions in the Manage tab.</p>
+        <p className="mt-1 text-xs text-[#76766f]">A partner can add questions in the Manage tab.</p>
       </div>
     )
   }
@@ -248,7 +248,7 @@ function SurveyTab() {
               <label key={q.id} className="block">
                 <span className="text-sm text-[#171717]">{q.text}</span>
                 <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-[#aaa9a3]">Strongly disagree</span>
+                  <span className="text-[10px] text-[#8a8a84]">Strongly disagree</span>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <button
@@ -264,7 +264,7 @@ function SurveyTab() {
                       />
                     ))}
                   </div>
-                  <span className="text-[10px] text-[#aaa9a3]">Strongly agree</span>
+                  <span className="text-[10px] text-[#8a8a84]">Strongly agree</span>
                 </div>
               </label>
             ))}
@@ -341,12 +341,12 @@ function ResultsTab() {
       )}
       {resultsQuery.data.questions.map((q) => (
         <section key={q.questionId} className="rounded-[14px] border border-black/10 bg-white p-5">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             {categoryLabels[q.category as SurveyCategory] ?? q.category}
           </div>
           <h3 className="mb-4 text-sm font-semibold text-[#0f0f0f]">{q.questionText}</h3>
           {q.weeks.length === 0 ? (
-            <p className="text-xs text-[#9a9a94]">No responses yet.</p>
+            <p className="text-xs text-[#76766f]">No responses yet.</p>
           ) : (
             <div className="space-y-3">
               {q.weeks.map((w) => (
@@ -455,7 +455,7 @@ function ManageQuestionsTab() {
 
       {isAdding && (
         <div className="rounded-[14px] border border-black/10 bg-white p-4 space-y-3 shadow-sm">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             New question
           </div>
           <input
@@ -583,7 +583,7 @@ function ManageQuestionsTab() {
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-[#0f0f0f]">{q.text}</p>
-                    <p className="mt-0.5 text-[10px] text-[#9a9a94]">
+                    <p className="mt-0.5 text-[10px] text-[#76766f]">
                       {categoryLabels[q.category as SurveyCategory] ?? q.category}
                       {' · '}
                       {q.reverseScored ? 'Reverse scored' : 'Direct scored'}

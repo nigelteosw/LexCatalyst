@@ -196,7 +196,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                     <div key={u.id} className="flex items-center justify-between gap-4 p-4">
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-medium text-[#0f0f0f]">{userLabel(u)}</div>
-                        <div className="truncate text-[10px] text-[#8c8c86]">{u.email}</div>
+                        <div className="truncate text-[11px] text-[#8c8c86]">{u.email}</div>
                       </div>
                       <select
                         className="rounded-lg border border-black/10 bg-[#f4f3ef] px-2 py-1 text-[11px] font-medium text-[#5a5a56] outline-none focus:border-black/25"

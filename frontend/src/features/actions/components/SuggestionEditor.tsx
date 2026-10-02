@@ -48,7 +48,7 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, err
           Suggest replacement
         </div>
         <button
-          className="rounded p-0.5 text-[#9a9a94] hover:bg-[#f4f3ef] hover:text-[#0f0f0f]"
+          className="rounded p-0.5 text-[#76766f] hover:bg-[#f4f3ef] hover:text-[#0f0f0f]"
           onClick={onCancel}
           type="button"
           aria-label="Cancel"
@@ -59,7 +59,7 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, err
 
       <div className="space-y-2.5 p-3">
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Suggested wording
           </label>
           <textarea
@@ -73,7 +73,7 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, err
         </div>
 
         <div>
-          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9a94]">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Rationale <span className="font-normal normal-case text-[#c4c3bc]">(optional)</span>
           </label>
           <textarea
@@ -86,11 +86,11 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, err
         </div>
 
         {error && (
-          <p className="rounded-md bg-red-50 px-2 py-1 text-[10px] text-red-600">{error} — your draft is kept; try again.</p>
+          <p className="rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-600">{error} — your draft is kept; try again.</p>
         )}
 
         <div className="flex items-center justify-between pt-0.5">
-          <span className="text-[9.5px] text-[#c4c3bc]">⌘ Enter to save</span>
+          <span className="text-[10.5px] text-[#c4c3bc]">⌘ Enter to save</span>
           <div className="flex gap-2">
             <button
               className="rounded-lg px-3 py-1.5 text-[11px] text-[#5a5a56] hover:bg-[#f4f3ef]"
