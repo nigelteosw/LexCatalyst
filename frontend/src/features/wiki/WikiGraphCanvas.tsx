@@ -81,7 +81,7 @@ export function WikiGraphCanvas({
       .selectAll<SVGLineElement, GraphLink>('line')
       .data(links)
       .join('line')
-      .attr('stroke', '#30363d')
+      .attr('stroke', '#d4d4d0')
       .attr('stroke-width', 1.2)
       .attr('stroke-opacity', 0.8)
 
@@ -116,19 +116,15 @@ export function WikiGraphCanvas({
       .append('circle')
       .attr('r', (d) => (d.id === currentActiveId ? 8 : 5))
       .attr('fill', (d) => (d.status === 'published' ? '#10b981' : '#f59e0b'))
-      .attr('stroke', (d) => (d.id === currentActiveId ? '#fff' : 'rgba(255,255,255,0.15)'))
+      .attr('stroke', (d) => (d.id === currentActiveId ? '#0f0f0f' : '#ffffff'))
       .attr('stroke-width', (d) => (d.id === currentActiveId ? 2 : 1))
-      .style('filter', (d) =>
-        d.id === currentActiveId
-          ? `drop-shadow(0 0 6px ${d.status === 'published' ? '#10b981' : '#f59e0b'})`
-          : 'none',
-      )
+      
 
     nodeSel
       .append('text')
       .text((d) => d.label)
       .attr('font-size', 9)
-      .attr('fill', (d) => (d.id === currentActiveId ? '#e5e7eb' : '#6b7280'))
+      .attr('fill', (d) => (d.id === currentActiveId ? '#0f0f0f' : '#5a5a56'))
       .attr('text-anchor', 'middle')
       .attr('dy', 17)
       .style('pointer-events', 'none')
@@ -160,22 +156,18 @@ export function WikiGraphCanvas({
     if (!nodeSel) return
     nodeSel.select<SVGCircleElement>('circle')
       .attr('r', (d) => (d.id === activePageId ? 8 : 5))
-      .attr('stroke', (d) => (d.id === activePageId ? '#fff' : 'rgba(255,255,255,0.15)'))
+      .attr('stroke', (d) => (d.id === activePageId ? '#0f0f0f' : '#ffffff'))
       .attr('stroke-width', (d) => (d.id === activePageId ? 2 : 1))
-      .style('filter', (d) =>
-        d.id === activePageId
-          ? `drop-shadow(0 0 6px ${d.status === 'published' ? '#10b981' : '#f59e0b'})`
-          : 'none',
-      )
+      
     nodeSel.select<SVGTextElement>('text')
-      .attr('fill', (d) => (d.id === activePageId ? '#e5e7eb' : '#6b7280'))
+      .attr('fill', (d) => (d.id === activePageId ? '#0f0f0f' : '#5a5a56'))
   }, [activePageId])
 
   if (graph.nodes.length === 0) {
     return (
       <div
-        className="flex h-72 items-center justify-center rounded-lg border border-neutral-800"
-        style={{ background: '#0d1117' }}
+        className="flex h-72 items-center justify-center rounded-lg border border-neutral-200"
+        style={{ background: '#fafaf8' }}
       >
         <p className="text-xs text-neutral-600">No pages yet</p>
       </div>
@@ -183,7 +175,7 @@ export function WikiGraphCanvas({
   }
 
   return (
-    <div className="h-72 overflow-hidden rounded-lg border border-neutral-800" style={{ background: '#0d1117' }}>
+    <div className="h-72 overflow-hidden rounded-lg border border-neutral-200" style={{ background: '#fafaf8' }}>
       <svg ref={svgRef} width="100%" height="100%" />
     </div>
   )

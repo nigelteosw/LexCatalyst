@@ -141,6 +141,16 @@ function canWrite(user: CurrentUser | null) {
   return user?.isAdmin || user?.firmRole === 'partner' || user?.firmRole === 'senior_associate'
 }
 
+/** One-line plain-text preview of markdown (headings, emphasis, list markers removed). */
+function markdownPreview(markdown: string): string {
+  return markdown
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[-*]\s+/gm, '')
+    .replace(/(\*\*|__|\*|_|`)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function KnowledgeBankPanel({
   matters,
   selectedMatterId,
@@ -974,7 +984,7 @@ function EntryCard({
             ? 'Processing document…'
             : entry.status === 'failed'
               ? entry.errorMessage ?? 'Processing failed.'
-              : entry.bodyMarkdown}
+              : markdownPreview(entry.bodyMarkdown)}
         </p>
         <p className="mt-1 text-[10px] text-[#76766f]">
           {scopeMeta}
@@ -1155,9 +1165,7 @@ function EntryContextPanel({
           />
         ) : (
           <>
-            <div className="whitespace-pre-wrap text-xs leading-6 text-[#4f4f49]">
-              {entry.bodyMarkdown}
-            </div>
+            <MarkdownContent markdown={entry.bodyMarkdown} className="text-[13px] leading-6 text-[#4f4f49]" />
             {entry.tags.length > 0 && (
               <div className="mt-5 border-t border-black/10 pt-4">
                 <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">

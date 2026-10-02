@@ -359,7 +359,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           </div>
         ) : (
           statusColumns.map((col) => (
-            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-72 sm:min-h-0">
+            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-64 sm:min-h-0 lg:w-auto lg:min-w-[15rem] lg:flex-1">
               <div className="mb-3 flex items-center gap-2">
                 <h3 className="text-xs font-semibold text-[#5a5a56]">{col.label}</h3>
                 <span className="rounded-full bg-[#f4f3ef] px-1.5 py-0.5 text-[11px] text-[#76766f]">
@@ -473,9 +473,9 @@ function ActionCard({
 }) {
   const priorityBorderColor =
     item.priority === 'high'
-      ? 'border-l-[#e05252]'
+      ? 'border-l-red-300'
       : item.priority === 'medium'
-        ? 'border-l-[#d97706]'
+        ? 'border-l-amber-300'
         : 'border-l-black/15'
 
   const assigneeInitials = item.assignee

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { AlertCircle, BookMarked, Brain, FileText, LoaderCircle, Paperclip, SendHorizontal, Sparkles, Square, Trash2 } from 'lucide-react'
+import { AlertCircle, BookMarked, Brain, FileText, LoaderCircle, MessageSquare, Paperclip, SendHorizontal, Sparkles, Square, Trash2 } from 'lucide-react'
 import { Button } from '../../shared/ui/Button'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
@@ -149,13 +149,8 @@ export function ChatPanel({
             </div>
           ) : (
             <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-6 text-center">
-              <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-3xl bg-sky-50 shadow-md ring-1 ring-sky-100">
-                <img
-                  alt=""
-                  aria-hidden="true"
-                  className="h-auto w-[155%] max-w-none"
-                  src={lexChatLogo}
-                />
+              <div className="grid h-14 w-14 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-700 shadow-sm">
+                <MessageSquare aria-hidden="true" size={24} />
               </div>
               <div className="space-y-3">
                 <h3 className="text-2xl font-semibold tracking-tight text-neutral-900">Welcome to LexChat</h3>

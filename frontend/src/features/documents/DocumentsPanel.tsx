@@ -403,7 +403,7 @@ export function DocumentsPanel({ currentUser }: { currentUser: CurrentUser | nul
                       </StatusBadge>
                     </div>
                     <div className="mt-1 text-xs text-neutral-500">
-                      {document.chunkCount} chunks · Uploaded {formatDate(document.createdAt)}
+                      {document.chunkCount} {document.chunkCount === 1 ? 'chunk' : 'chunks'} · Uploaded {formatDate(document.createdAt)}
                     </div>
                     {knowledgeEntry && (
                       <div className="mt-1 text-xs text-neutral-500">
