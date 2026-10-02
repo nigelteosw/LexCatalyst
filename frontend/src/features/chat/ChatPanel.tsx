@@ -47,6 +47,7 @@ export type ChatPanelProps = {
   attachmentStatus?: string | null
   error: string | null
   inputLabel: string
+  modelLabel?: string
   isLoading: boolean
   isResponding: boolean
   isUploadingFile: boolean
@@ -73,6 +74,7 @@ export function ChatPanel({
   attachmentStatus,
   error,
   inputLabel,
+  modelLabel,
   isLoading,
   isResponding,
   isUploadingFile,
@@ -295,6 +297,12 @@ export function ChatPanel({
             </div>
           </div>
           <p className="mt-3 text-center text-[11px] text-neutral-500">
+            {modelLabel && (
+              <>
+                <span className="font-medium text-neutral-700">{modelLabel}</span>
+                {' · '}
+              </>
+            )}
             Enter to send · Shift+Enter for a new line · LexChat can make mistakes, so check important information.
           </p>
         </form>

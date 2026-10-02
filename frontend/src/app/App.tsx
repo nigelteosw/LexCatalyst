@@ -750,6 +750,7 @@ function App() {
                 attachmentStatus={composerAttachmentStatus}
                 error={error ?? (workspaceError ? getErrorMessage(workspaceError) : null)}
                 inputLabel="Ask LexChat"
+                modelLabel={`DeepSeek V4 ${CHAT_MODELS.find((m) => m.id === selectedModel)?.label ?? ''}`.trim()}
                 isLoading={isLoading}
                 isResponding={isResponding}
                 isUploadingFile={isUploadingComposerFile}
