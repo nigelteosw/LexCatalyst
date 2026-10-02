@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.schemas import BirdieSettingsResponse, BirdieSettingsUpdate
+from app.schemas import BirdieSettingsResponse, BirdieSettingsUpdate, OpenRouterModelResponse
 from app.services import user_settings_service as svc
+from app.services.openrouter_models import list_openrouter_models
 
 router = APIRouter(tags=["settings"])
 
@@ -42,3 +43,9 @@ def delete_openrouter_key(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     return svc.birdie_settings_payload(svc.clear_openrouter_key(db, user_id=current_user.id))
+
+
+@router.get("/settings/birdie/models", response_model=list[OpenRouterModelResponse])
+def get_openrouter_models(_current_user: User = Depends(get_current_user)) -> list[dict]:
+    """Models offered in the Settings picker (OpenRouter's public list, cached for an hour)."""
+    return list_openrouter_models()

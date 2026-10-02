@@ -7,7 +7,7 @@ reviewer feedback) are sent to OpenRouter and the model provider behind the chos
 from openai import APIStatusError, AsyncOpenAI, OpenAIError
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4.5"
+DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-5.5"
 KEY_REJECTED_MESSAGE = (
     "Your OpenRouter key was rejected or ran out of credit — check Settings."
 )

@@ -87,7 +87,7 @@ Use any user; Jane is fine.
 |---|---|---|
 | 4.1 | Open the section with no key | "Birdie is using the firm default (DeepSeek)…". Save is disabled |
 | 4.2 | Type `abc` in the key field | "That key looks too short." Save stays disabled |
-| 4.3 | Enter a fake key (`sk-or-test-key-1234`) and **Save** | "Birdie settings saved." Status line: "…using your OpenRouter key (…1234) with anthropic/claude-sonnet-4.5". The field clears |
+| 4.3 | Enter a fake key (`sk-or-test-key-1234`) and **Save** | "Birdie settings saved." Status line: "…using your OpenRouter key (…1234) with anthropic/claude-sonnet-5.5". The field clears |
 | 4.4 | Ask Birdie anything | Error: "Your OpenRouter key was rejected or ran out of credit — check Settings." No silent fall back to DeepSeek |
 | 4.5 | Set the model to `openai/gpt-4o-mini` and **Save** | Status line shows the new model |
 | 4.6 | Reload Settings | Key never shown, only the last four characters |

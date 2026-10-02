@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { clearOpenrouterKey, getBirdieSettings, updateBirdieSettings } from '../../shared/api/api'
+import {
+  clearOpenrouterKey,
+  getBirdieSettings,
+  listOpenrouterModels,
+  updateBirdieSettings,
+} from '../../shared/api/api'
 import { getErrorMessage } from '../../shared/lib/errors'
 
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5'
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-5.5'
 
 export function BirdieSettingsSection() {
   const queryClient = useQueryClient()
@@ -13,6 +18,11 @@ export function BirdieSettingsSection() {
 
   const settingsQuery = useQuery({ queryKey: ['birdieSettings'], queryFn: getBirdieSettings })
   const settings = settingsQuery.data
+  const modelsQuery = useQuery({
+    queryKey: ['openrouterModels'],
+    queryFn: listOpenrouterModels,
+    staleTime: 60 * 60 * 1000,
+  })
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -76,13 +86,26 @@ export function BirdieSettingsSection() {
         <label className="block">
           <span className="text-xs font-medium text-[#0f0f0f]">Model</span>
           <input
+            autoComplete="off"
             className="mt-1 h-9 w-full rounded-lg border border-black/15 bg-white px-3 text-xs outline-none focus:border-black/40"
+            list="openrouter-models"
             onChange={(event) => setModel(event.target.value)}
-            placeholder={DEFAULT_MODEL}
+            placeholder={modelsQuery.isLoading ? 'Loading models…' : `Search models, e.g. ${DEFAULT_MODEL}`}
             spellCheck={false}
             type="text"
             value={model ?? settings?.openrouterModel ?? ''}
           />
+          <datalist id="openrouter-models">
+            {(modelsQuery.data ?? []).map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.promptPricePerMillion != null ? ` · $${m.promptPricePerMillion}/M in` : ''}
+              </option>
+            ))}
+          </datalist>
+          <span className="mt-1 block text-[11px] text-[#8c8c86]">
+            Start typing to search OpenRouter's models, or enter any model id. Leave blank for {DEFAULT_MODEL}.
+          </span>
         </label>
 
         <p className="text-[11px] leading-4 text-[#8c8c86]">

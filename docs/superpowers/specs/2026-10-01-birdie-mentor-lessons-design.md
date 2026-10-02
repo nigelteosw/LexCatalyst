@@ -126,7 +126,7 @@ New table `user_settings` (same migration):
 - `app/providers/openrouter.py`: `OpenRouterProvider(api_key, model)` using `AsyncOpenAI` with
   `base_url="https://openrouter.ai/api/v1"`. Exposes `stream_chat(messages)` and `chat(messages)`,
   the same shapes Birdie uses from `DeepSeekProvider`. Errors raise `OpenRouterError`.
-- Default model constant: `anthropic/claude-sonnet-4.5`.
+- Default model constant: `anthropic/claude-sonnet-5.5`.
 - `app/services/birdie_provider.py` (or a function in `birdie_service.py`):
   `get_birdie_provider(db, user)` returns an object with `stream_chat` / `chat`:
   - user has a key → `OpenRouterProvider(decrypted_key, model or default)`
@@ -152,7 +152,7 @@ Each route only reads or writes the current user's row.
 
 New "Birdie model" section in `SettingsPanel.tsx`:
 
-- Status line: "Using your OpenRouter key (…abcd) · anthropic/claude-sonnet-4.5" or "Using the
+- Status line: "Using your OpenRouter key (…abcd) · anthropic/claude-sonnet-5.5" or "Using the
   firm default (DeepSeek)".
 - Password input for the key (never pre-filled), text input for the model with the default as
   placeholder, **Save**, and **Remove key** when one exists.

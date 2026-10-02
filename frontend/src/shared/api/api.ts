@@ -2030,6 +2030,25 @@ export async function updateBirdieSettings(payload: {
   )
 }
 
+export type OpenrouterModel = {
+  id: string
+  name: string
+  contextLength: number | null
+  promptPricePerMillion: number | null
+}
+
+export async function listOpenrouterModels(): Promise<OpenrouterModel[]> {
+  const models = await request<
+    { id: string; name: string; context_length: number | null; prompt_price_per_million: number | null }[]
+  >('/settings/birdie/models')
+  return models.map((m) => ({
+    id: m.id,
+    name: m.name,
+    contextLength: m.context_length,
+    promptPricePerMillion: m.prompt_price_per_million,
+  }))
+}
+
 export async function clearOpenrouterKey(): Promise<BirdieSettings> {
   return mapBirdieSettings(
     await request<BackendBirdieSettings>('/settings/birdie/openrouter-key', { method: 'DELETE' }),

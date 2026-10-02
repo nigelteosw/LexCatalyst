@@ -812,3 +812,10 @@ class FeedbackRoundResponse(BaseModel):
     date: datetime
     annotations: list[LessonAnnotationResponse]
     lessons: list[LessonResponse]
+
+
+class OpenRouterModelResponse(BaseModel):
+    id: str
+    name: str
+    context_length: int | None = None
+    prompt_price_per_million: float | None = None
