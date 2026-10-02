@@ -3,8 +3,10 @@ import { ArrowUp, BookMarked, Lightbulb, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   distillBirdieLessons,
+  getBirdieSettings,
   listBirdieLessons,
   listKnowledgeBankEntries,
+  listOpenrouterModels,
   streamBirdieMessage,
 } from '../../shared/api/api'
 import { getErrorMessage } from '../../shared/lib/errors'
@@ -185,6 +187,23 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdieP
     queryClient.invalidateQueries({ queryKey: ['birdieLessons'] })
   }, [isOpen, queryClient])
 
+  // Show which model is answering, but only when the user's own OpenRouter key is active.
+  const settingsQuery = useQuery({ queryKey: ['birdieSettings'], queryFn: getBirdieSettings })
+  const hasKey = settingsQuery.data?.hasOpenrouterKey ?? false
+  const modelsQuery = useQuery({
+    queryKey: ['openrouterModels'],
+    queryFn: listOpenrouterModels,
+    staleTime: 60 * 60 * 1000,
+    enabled: hasKey,
+  })
+  const modelId = hasKey ? settingsQuery.data?.effectiveModel ?? null : null
+  const modelName = modelId
+    ? (modelsQuery.data?.find((m) => m.id === modelId)?.name.replace(/^[^:]+:\s*/, '') ?? modelId)
+    : null
+  useEffect(() => {
+    if (isOpen) queryClient.invalidateQueries({ queryKey: ['birdieSettings'] })
+  }, [isOpen, queryClient])
+
   // Stay mounted when closed (just hidden) so the conversation and any in-flight answer survive.
   return (
     <div
@@ -209,6 +228,11 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdieP
             <span className="text-xs font-semibold text-[#0f0f0f]">Birdie</span>
             <FeatureHelp title="Birdie" content={BIRDIE_HELP} size="compact" />
           </div>
+          {modelName && (
+            <div className="truncate text-[11px] text-[#76766f]" title={modelId ?? undefined}>
+              {modelName}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1 text-[11px] font-medium text-[#1a6b4a]">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2d9e6b]" />
