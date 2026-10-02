@@ -462,6 +462,7 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
             thread_id=thread.id,
             role="user",
             content="What are the key risks in the Meridian NDA?",
+            created_at=now - timedelta(minutes=1),
         )
     )
     db.add(
@@ -469,6 +470,7 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
             thread_id=thread.id,
             role="assistant",
             content="The main risks are the uncapped indemnity in clause 4 and the New York governing law in clause 6.",
+            created_at=now,
         )
     )
     db.commit()

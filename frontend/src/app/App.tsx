@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, Gauge, Menu, Sparkles } from 'lucide-react'
+import { Brain, Gauge, Menu, MessageSquare, Sparkles } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
@@ -35,7 +35,6 @@ import type {
 } from '../shared/types/workspace'
 import { useWorkspaceNavigation } from './routes'
 import { getErrorMessage, isAbortError } from '../shared/lib/errors'
-import lexChatLogo from '../assets/LexCatalyst.png'
 
 const MemoriesPanel = lazy(() =>
   import('../features/memories/MemoriesPanel').then((module) => ({ default: module.MemoriesPanel })),
@@ -666,16 +665,11 @@ function App() {
                   >
                     <Menu size={20} />
                   </Button>
-                  <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-xl bg-sky-50 ring-1 ring-sky-100">
-                    <img
-                      alt=""
-                      aria-hidden="true"
-                      className="h-auto w-[150%] max-w-none"
-                      src={lexChatLogo}
-                    />
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-neutral-950 text-white">
+                    <MessageSquare aria-hidden="true" size={16} />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-600">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-500">
                       LexChat
                     </div>
                     <h2 className="truncate text-sm font-semibold text-neutral-900">

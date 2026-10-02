@@ -250,7 +250,7 @@ export function Sidebar({
                   isBirdieOpen ? 'animate-pulse bg-[#2d9e6b]' : 'bg-white/25'
                 }`}
               />
-              <span className="text-[11px] font-normal text-current/70">
+              <span className="text-[10px] font-normal text-current/70">
                 {isBirdieOpen ? 'Close' : 'Open'}
               </span>
             </button>
@@ -335,7 +335,7 @@ export function Sidebar({
               {pendingTaskCount > 0 && (
                 <span
                   aria-label={`${pendingTaskCount} pending Workboard tasks`}
-                  className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#f0a000] px-1 text-[10.5px] font-semibold text-[#0f0f0f]"
+                  className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#f0a000] px-1 text-[9.5px] font-semibold text-[#0f0f0f]"
                 >
                   {pendingTaskCount}
                 </span>
@@ -373,7 +373,7 @@ export function Sidebar({
                         <span className="block truncate text-[11.5px] font-normal">
                           {matter.title}
                         </span>
-                        <span className="mt-0.5 block truncate text-[10.5px] text-white/25">
+                        <span className="mt-0.5 block truncate text-[9.5px] text-white/25">
                           {matter.caseNumber}
                         </span>
                       </span>
@@ -427,7 +427,7 @@ export function Sidebar({
                 <div className="truncate text-[11.5px] font-medium text-white/80">
                   {userFullName}
                 </div>
-                <div className="truncate text-[10.5px] text-white/30">Profile settings</div>
+                <div className="truncate text-[9.5px] text-white/30">Profile settings</div>
               </div>
               <Settings size={14} className="shrink-0 text-white/35" />
             </button>
@@ -569,7 +569,7 @@ function ThreadRow({
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[11.5px] font-normal">{thread.title}</span>
               <span
-                className={`mt-0.5 block text-[10.5px] ${
+                className={`mt-0.5 block text-[9.5px] ${
                   isActive ? 'text-white/45' : 'text-white/25 group-hover:text-white/40'
                 }`}
               >

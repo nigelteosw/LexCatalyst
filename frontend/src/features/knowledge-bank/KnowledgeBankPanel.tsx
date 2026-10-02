@@ -2,6 +2,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import {
@@ -9,20 +10,15 @@ import {
   ArrowLeft,
   BookMarked,
   Check,
-  ChevronRight,
   ExternalLink,
   FileCheck2,
-  FileText,
   History,
   LoaderCircle,
-  PanelRightClose,
-  PanelRightOpen,
+  MoreHorizontal,
   Plus,
 
-  RefreshCcw,
   Search,
   ShieldCheck,
-  SlidersHorizontal,
   Tags,
   Trash2,
   X,
@@ -122,12 +118,9 @@ import type {
 } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
-import { Button } from '../../shared/ui/Button'
-import { Dialog } from '../../shared/ui/Dialog'
-import { KnowledgeFilters } from './components/KnowledgeFilters'
 import { EntryFormDialog } from './components/EntryFormDialog'
 import { MatterFormDialog } from './components/MatterFormDialog'
-import { scopeDescriptions, scopeLabels } from './config'
+import { entryTypes, scopeDescriptions, scopeLabels } from './config'
 import { getErrorMessage } from '../../shared/lib/errors'
 
 type KnowledgeBankPanelProps = {
@@ -144,6 +137,7 @@ function canWrite(user: CurrentUser | null) {
 /** One-line plain-text preview of markdown (headings, emphasis, list markers removed). */
 function markdownPreview(markdown: string): string {
   return markdown
+    .replace(/<[^>]+>/g, '')
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/^[-*]\s+/gm, '')
     .replace(/(\*\*|__|\*|_|`)/g, '')
@@ -171,13 +165,11 @@ export function KnowledgeBankPanel({
   const [isCreatingEntry, setIsCreatingEntry] = useState(false)
   const [isCreatingMatter, setIsCreatingMatter] = useState(false)
 
-  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
-  const [isContextOpen, setIsContextOpen] = useState(true)
+  const [isContextOpen, setIsContextOpen] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [backfillMessage, setBackfillMessage] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const deferredSearch = useDeferredValue(search.trim())
-  const activeFilterCount = Number(typeFilter !== 'all') + Number(scopeFilter !== 'all')
 
   const entriesQuery = useInfiniteQuery({
     queryKey: [
@@ -300,42 +292,21 @@ export function KnowledgeBankPanel({
   return (
     <section className="flex h-full min-h-0 overflow-hidden bg-[#fafaf8]">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-black/10 bg-white px-4 py-2 lg:px-5">
-          <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0f0f0f] text-white">
+        <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 py-3 lg:px-6">
+          <div className="flex items-center gap-3">
+            <div className="grid h-8 w-8 place-items-center rounded-lg bg-neutral-950 text-white">
               <BookMarked size={16} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-[#0f0f0f]">Knowledge Bank</h2>
-                <FeatureHelp title="Knowledge Bank" content={KB_HELP} />
-              </div>
-              <p className="text-[10px] text-[#8c8c86]">Controlled legal knowledge and precedents</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold tracking-tight text-neutral-900">Knowledge Bank</h2>
+              <FeatureHelp title="Knowledge Bank" content={KB_HELP} />
             </div>
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            {isWriter && (
-              <button
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs text-[#5a5a56] transition-colors hover:bg-[#f4f3ef] disabled:cursor-not-allowed disabled:text-[#8a8a84]"
-                disabled={backfillMutation.isPending}
-                onClick={() => {
-                  setBackfillMessage(null)
-                  backfillMutation.mutate()
-                }}
-                title="Re-embed entries with missing or stale search vectors"
-                type="button"
-              >
-                <RefreshCcw
-                  size={13}
-                  className={backfillMutation.isPending ? 'animate-spin' : ''}
-                />
-                {backfillMutation.isPending ? 'Repairing...' : 'Repair search index'}
-              </button>
-            )}
             <select
               aria-label="Active matter"
-              className="h-8 max-w-56 rounded-lg border border-black/10 bg-[#f4f3ef] px-2.5 text-xs text-[#5a5a56] outline-none focus:border-black/25"
+              className="h-9 max-w-56 rounded-lg border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 outline-none focus:border-neutral-400"
               onChange={(event) => onMatterChange(event.target.value || null)}
               value={selectedMatterId ?? ''}
             >
@@ -348,34 +319,39 @@ export function KnowledgeBankPanel({
             </select>
             {isWriter && (
               <button
-                className="h-8 rounded-lg px-2.5 text-xs text-[#5a5a56] transition-colors hover:bg-[#f4f3ef]"
-                onClick={() => setIsCreatingMatter(true)}
-                type="button"
-              >
-                New matter
-              </button>
-            )}
-            {!selectedEntryId && (
-              <button
-                aria-label={isContextOpen ? 'Hide context panel' : 'Show context panel'}
-                className="hidden h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs text-[#5a5a56] transition-colors hover:bg-[#f4f3ef] xl:inline-flex"
-                onClick={() => setIsContextOpen((isOpen) => !isOpen)}
-                type="button"
-              >
-                {isContextOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
-                Context
-              </button>
-            )}
-            {isWriter && (
-              <button
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#0f0f0f] px-3 text-xs font-medium text-white transition-colors hover:bg-[#333]"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-neutral-950 px-3.5 text-xs font-medium text-white transition-colors hover:bg-neutral-800"
                 onClick={() => setIsCreatingEntry(true)}
                 type="button"
               >
-                <Plus size={13} />
+                <Plus size={14} />
                 New entry
               </button>
             )}
+            <OverflowMenu
+              items={[
+                ...(isWriter
+                  ? [
+                      {
+                        label: backfillMutation.isPending ? 'Repairing search index…' : 'Repair search index',
+                        disabled: backfillMutation.isPending,
+                        onSelect: () => {
+                          setBackfillMessage(null)
+                          backfillMutation.mutate()
+                        },
+                      },
+                      { label: 'New matter', onSelect: () => setIsCreatingMatter(true) },
+                    ]
+                  : []),
+                ...(!selectedEntryId
+                  ? [
+                      {
+                        label: isContextOpen ? 'Hide details panel' : 'Show details panel',
+                        onSelect: () => setIsContextOpen((isOpen) => !isOpen),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           </div>
         </header>
         {backfillMessage && (
@@ -420,12 +396,6 @@ export function KnowledgeBankPanel({
               Audit log
             </button>
           )}
-          {currentUser && (
-            <div className="ml-auto flex items-center gap-1.5 text-[10px] text-[#76766f]">
-              <ShieldCheck size={12} />
-              {currentUser.isAdmin ? 'Admin' : currentUser.firmRole.replace('_', ' ')}
-            </div>
-          )}
         </div>
 
         {activeTab === 'library' && selectedEntryId && selectedEntry ? (
@@ -446,16 +416,6 @@ export function KnowledgeBankPanel({
           />
         ) : activeTab === 'library' ? (
           <div className="flex min-h-0 flex-1">
-            <aside className="hidden w-48 shrink-0 overflow-y-auto border-r border-black/10 bg-[#f4f3ef] p-3 md:block">
-              <KnowledgeFilters
-                entries={entries}
-                scopeFilter={scopeFilter}
-                typeFilter={typeFilter}
-                onScopeChange={setScopeFilter}
-                onTypeChange={setTypeFilter}
-              />
-            </aside>
-
             <main className="min-w-0 flex-1 overflow-y-auto p-5 lg:p-6">
               <div className="mb-4 flex gap-2">
                 <div className="relative min-w-0 flex-1">
@@ -470,15 +430,32 @@ export function KnowledgeBankPanel({
                     value={search}
                   />
                 </div>
-                <Button
-                  className="shrink-0 md:hidden"
-                  onClick={() => setIsFiltersOpen(true)}
-                  size="sm"
-                  variant={typeFilter !== 'all' || scopeFilter !== 'all' ? 'selected' : 'secondary'}
+                <select
+                  aria-label="Filter by type"
+                  className="h-9 shrink-0 rounded-[10px] border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 outline-none focus:border-neutral-400"
+                  onChange={(event) => setTypeFilter(event.target.value as KnowledgeBankEntryType | 'all')}
+                  value={typeFilter}
                 >
-                  <SlidersHorizontal size={14} />
-                  Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-                </Button>
+                  <option value="all">All types</option>
+                  {entryTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Filter by scope"
+                  className="h-9 shrink-0 rounded-[10px] border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 outline-none focus:border-neutral-400"
+                  onChange={(event) => setScopeFilter(event.target.value as KnowledgeBankScope | 'all')}
+                  value={scopeFilter}
+                >
+                  <option value="all">All scopes</option>
+                  {(Object.keys(scopeLabels) as KnowledgeBankScope[]).map((scope) => (
+                    <option key={scope} value={scope}>
+                      {scopeLabels[scope]}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {entriesQuery.isLoading ? (
@@ -567,39 +544,6 @@ export function KnowledgeBankPanel({
         />
       )}
 
-      {isFiltersOpen && (
-        <Dialog
-          className="max-w-sm"
-          onClose={() => setIsFiltersOpen(false)}
-          title="Filter Knowledge Bank"
-        >
-          <div className="space-y-4">
-            <KnowledgeFilters
-              entries={entries}
-              scopeFilter={scopeFilter}
-              typeFilter={typeFilter}
-              onScopeChange={setScopeFilter}
-              onTypeChange={setTypeFilter}
-            />
-            <div className="flex justify-end gap-2 border-t border-black/10 pt-4">
-              <Button
-                disabled={activeFilterCount === 0}
-                onClick={() => {
-                  setTypeFilter('all')
-                  setScopeFilter('all')
-                }}
-                size="sm"
-                variant="secondary"
-              >
-                Clear
-              </Button>
-              <Button onClick={() => setIsFiltersOpen(false)} size="sm" variant="primary">
-                Done
-              </Button>
-            </div>
-          </div>
-        </Dialog>
-      )}
 
     </section>
   )
@@ -964,37 +908,98 @@ function EntryCard({
   isSelected: boolean
   onClick: () => void
 }) {
-  const scopeMeta = `${scopeLabels[entry.scope]} · ${entry.entryType.replaceAll('_', ' ')}`
+  const meta = [
+    scopeLabels[entry.scope],
+    entryTypes.find((type) => type.id === entry.entryType)?.label ?? entry.entryType.replaceAll('_', ' '),
+    entry.status === 'processing' ? 'processing' : null,
+    entry.status === 'failed' ? 'failed' : null,
+    entry.piiStatus !== 'clean' ? entry.piiStatus.replaceAll('_', ' ') : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <button
-      className={`flex w-full items-start gap-3 py-4 text-left transition-colors hover:bg-[#f7f6f3] ${
-        isSelected ? 'bg-[#f7f6f3]' : ''
+      className={`block w-full px-2 py-3.5 text-left transition-colors hover:bg-neutral-50 ${
+        isSelected ? 'bg-neutral-50' : ''
       }`}
       onClick={onClick}
       type="button"
     >
-      <div className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px] ${typeTone(entry.entryType)}`}>
-        <FileText size={15} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="line-clamp-1 text-sm font-semibold text-[#0f0f0f]">{entry.title}</h3>
-        <p className="mt-0.5 line-clamp-1 text-xs text-[#777770]">
-          {entry.status === 'processing'
-            ? 'Processing document…'
-            : entry.status === 'failed'
-              ? entry.errorMessage ?? 'Processing failed.'
-              : markdownPreview(entry.bodyMarkdown)}
-        </p>
-        <p className="mt-1 text-[10px] text-[#76766f]">
-          {scopeMeta}
-          {entry.status === 'processing' && ' · processing'}
-          {entry.status === 'failed' && ' · failed'}
-          {entry.piiStatus !== 'clean' && ` · ${entry.piiStatus.replaceAll('_', ' ')}`}
-        </p>
-      </div>
-      <ChevronRight size={14} className="mt-1 shrink-0 text-[#8a8a84]" />
+      <h3 className="line-clamp-1 text-sm font-medium text-neutral-900">{entry.title}</h3>
+      <p className="mt-0.5 line-clamp-1 text-[13px] text-neutral-600">
+        {entry.status === 'processing'
+          ? 'Processing document…'
+          : entry.status === 'failed'
+            ? entry.errorMessage ?? 'Processing failed.'
+            : markdownPreview(entry.bodyMarkdown)}
+      </p>
+      <p className="mt-1 text-xs text-neutral-500">{meta}</p>
     </button>
+  )
+}
+
+/** Small "more actions" menu so secondary actions don't crowd the header. */
+function OverflowMenu({
+  items,
+}: {
+  items: Array<{ label: string; onSelect: () => void; disabled?: boolean }>
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(event: MouseEvent) {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  if (items.length === 0) return null
+  return (
+    <div ref={ref} className="relative">
+      <button
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label="More actions"
+        className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
+        onClick={() => setOpen((value) => !value)}
+        type="button"
+      >
+        <MoreHorizontal size={16} />
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 z-20 mt-1.5 w-52 rounded-lg border border-neutral-200 bg-white py-1 shadow-lg"
+          role="menu"
+        >
+          {items.map((item) => (
+            <button
+              key={item.label}
+              className="block w-full px-3 py-2 text-left text-xs text-neutral-700 hover:bg-neutral-50 disabled:text-neutral-400"
+              disabled={item.disabled}
+              onClick={() => {
+                setOpen(false)
+                item.onSelect()
+              }}
+              role="menuitem"
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1092,8 +1097,7 @@ function EntryContextPanel({
       <header className="border-b border-black/10 p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <Pill label={entry.entryType.replaceAll('_', ' ')} tone="neutral" />
-            <h3 className="mt-2 text-sm font-semibold leading-5 text-[#0f0f0f]">{entry.title}</h3>
+            <h3 className="text-base font-semibold leading-6 text-neutral-900">{entry.title}</h3>
           </div>
           {canEdit && (
             <button
@@ -1107,11 +1111,20 @@ function EntryContextPanel({
             </button>
           )}
         </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <Pill label={scopeLabels[entry.scope]} tone={scopeTone(entry.scope)} />
-          <Pill label={entry.piiStatus.replaceAll('_', ' ')} tone={piiTone(entry.piiStatus)} />
-          <Pill label={`v${entry.version}`} tone="neutral" />
-        </div>
+        <p className="mt-1.5 text-xs capitalize text-neutral-500">
+          {[
+            scopeLabels[entry.scope],
+            entry.entryType.replaceAll('_', ' '),
+            entry.version > 1 ? `v${entry.version}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        {entry.piiStatus !== 'clean' && (
+          <div className="mt-2">
+            <Pill label={entry.piiStatus.replaceAll('_', ' ')} tone={piiTone(entry.piiStatus)} />
+          </div>
+        )}
         {canChangeScope && (
           <div className="mt-3">
             <ScopeAccessEditor
@@ -1381,13 +1394,6 @@ function EmptyState({
       </div>
     </div>
   )
-}
-
-function typeTone(type: KnowledgeBankEntryType) {
-  if (type === 'knowledge_bank') return 'bg-[#e8f0fe] text-[#1a4a8a]'
-  if (type === 'style_guide') return 'bg-[#eeecff] text-[#4a3db0]'
-  if (type === 'action') return 'bg-[#e8f5ee] text-[#1a6b4a]'
-  return 'bg-[#f4f3ef] text-[#5a5a56]'
 }
 
 function scopeTone(scope: KnowledgeBankScope): 'green' | 'blue' | 'purple' | 'neutral' {
