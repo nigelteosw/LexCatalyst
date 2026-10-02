@@ -584,6 +584,7 @@ function App() {
       {/* Birdie floating PiP — outside layout flow */}
       <Suspense fallback={null}>
         <BirdiePanel
+          key={currentUser?.id ?? user?.id ?? 'anonymous'}
           isOpen={isBirdieOpen}
           onToggle={() => setIsBirdieOpen((o) => !o)}
           matterId={selectedMatterId}

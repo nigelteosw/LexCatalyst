@@ -177,15 +177,19 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdieP
     }
   }, [])
 
+  const queryClient = useQueryClient()
   useEffect(() => {
-    if (isOpen) playTweet()
-  }, [isOpen])
+    if (!isOpen) return
+    playTweet()
+    // Feedback may have arrived while Birdie was closed.
+    queryClient.invalidateQueries({ queryKey: ['birdieLessons'] })
+  }, [isOpen, queryClient])
 
-  if (!isOpen) return null
-
+  // Stay mounted when closed (just hidden) so the conversation and any in-flight answer survive.
   return (
     <div
-      className="birdie-enter fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[60] flex h-[min(75dvh,34rem)] max-h-[calc(100dvh-1rem)] select-none flex-col overflow-hidden overscroll-none rounded-2xl border border-black/10 bg-white shadow-2xl max-sm:!left-2 max-sm:!right-2 max-sm:!top-auto sm:inset-auto sm:h-[480px] sm:w-[320px]"
+      aria-hidden={!isOpen}
+      className={`${isOpen ? '' : 'hidden '}birdie-enter fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[60] flex h-[min(75dvh,34rem)] max-h-[calc(100dvh-1rem)] select-none flex-col overflow-hidden overscroll-none rounded-2xl border border-black/10 bg-white shadow-2xl max-sm:!left-2 max-sm:!right-2 max-sm:!top-auto sm:inset-auto sm:h-[480px] sm:w-[320px]`}
       style={{ left: pos.x, top: pos.y }}
     >
       <header
