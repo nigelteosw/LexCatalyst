@@ -20,7 +20,6 @@ import {
   MoreHorizontal,
   Plus,
 
-  Search,
   ShieldCheck,
   Tags,
   Trash2,

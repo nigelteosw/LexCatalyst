@@ -1,16 +1,16 @@
 import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import {
   BookMarked,
-  BriefcaseBusiness,
   CheckSquare,
-  Clock,
-  FileText,
+  ChevronsLeft,
+  ChevronsRight,
+  FolderInput,
   HeartPulse,
   Home,
   LogOut,
+  MessageSquare,
   MoreHorizontal,
   Pencil,
-  Plus,
   Settings,
   Trash2,
   X,
@@ -18,15 +18,17 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteChatThread,
-  listDocuments,
   listKnowledgeBankEntryPage,
   listActionItems,
   listSurveyQuestions,
+  moveChatThread,
   renameChatThread,
 } from '../../shared/api/api'
 import type { ChatThread, Matter } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
 import birdieLogo from '../../assets/Birdie.png'
+import { MatterSelect } from '../../shared/ui/MatterSelect'
+import { ChatsByMatter } from './ChatsByMatter'
 
 export type SidebarProps = {
   threads: ChatThread[]
@@ -42,6 +44,17 @@ export type SidebarProps = {
   userFullName: string
   userInitials: string
   footerExtra?: ReactNode
+}
+
+const COLLAPSED_WIDTH = 64
+const COLLAPSED_KEY = 'lc.sidebar.collapsed'
+
+function readCollapsed() {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
 }
 
 const MIN_WIDTH = 200
@@ -75,7 +88,6 @@ export function Sidebar({
     current,
     selectHome,
     selectThread,
-    selectDocuments,
     selectKnowledgeBank,
     selectWellbeing,
     selectActions,
@@ -84,6 +96,10 @@ export function Sidebar({
 
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  // Collapse is a desktop affordance; the mobile drawer always shows labels.
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
+  const isCollapsed = collapsed && isDesktop
   const sidebarRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -129,15 +145,30 @@ export function Sidebar({
     }
   }, [isResizing, resize, stopResizing])
 
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = () => setIsDesktop(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0')
+      } catch {
+        // per-viewer convenience only
+      }
+      return next
+    })
+  }
+
   function closeMobile() {
     if (window.innerWidth < 1024) onClose()
   }
 
-  function prefetchWorkspace(view: 'documents' | 'knowledge_bank' | 'wellbeing' | 'actions') {
-    if (view === 'documents') {
-      queryClient.prefetchQuery({ queryKey: ['documents'], queryFn: listDocuments })
-      return
-    }
+  function prefetchWorkspace(view: 'knowledge_bank' | 'wellbeing' | 'actions') {
     if (view === 'knowledge_bank') {
       queryClient.prefetchInfiniteQuery({
         queryKey: [
@@ -166,6 +197,8 @@ export function Sidebar({
     queryClient.prefetchQuery({ queryKey: ['actions'], queryFn: listActionItems })
   }
 
+  const kbActive = ['knowledge_bank', 'documents', 'matters', 'matter'].includes(current.view)
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -179,15 +212,21 @@ export function Sidebar({
       {/* Sidebar Container */}
       <aside
         ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-[#0f0f0f] text-[#fafaf8] transition-transform duration-300 lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-[#0f0f0f] text-[#fafaf8] transition-[transform,width] duration-300 lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ width: `${width}px` }}
+        style={{ width: `${isCollapsed ? COLLAPSED_WIDTH : width}px` }}
       >
         <div className="flex h-full min-h-0 flex-col">
           {/* Sidebar Header */}
-          <div className="border-b border-white/[0.08] px-3.5 pb-3.5 pt-[18px]">
-            <div className="mb-4 flex items-center justify-between">
+          <div
+            className={`border-b border-white/[0.08] pb-3 pt-[18px] ${isCollapsed ? 'px-2' : 'px-3.5'}`}
+          >
+            <div
+              className={`flex items-center ${
+                isCollapsed ? 'flex-col gap-2' : 'justify-between'
+              }`}
+            >
               <button
                 aria-label="Go to home dashboard"
                 className="flex items-center gap-2.5 text-white transition-opacity hover:opacity-80"
@@ -195,35 +234,58 @@ export function Sidebar({
                 type="button"
               >
                 <img alt="" className="h-[30px] w-[30px] rounded-lg" src="/favicon.svg" />
-                <span className="text-[15px] font-semibold tracking-[-0.02em]">
-                  LexCatalyst
-                </span>
+                {!isCollapsed && (
+                  <span className="text-[15px] font-semibold tracking-[-0.02em]">
+                    LexCatalyst
+                  </span>
+                )}
               </button>
-              <button
-                onClick={onClose}
-                aria-label="Close sidebar"
-                className="grid h-8 w-8 place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 lg:hidden"
-                type="button"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center">
+                <button
+                  onClick={toggleCollapsed}
+                  aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  className="hidden h-8 w-8 place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 lg:grid"
+                  type="button"
+                >
+                  {isCollapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+                </button>
+                <button
+                  onClick={onClose}
+                  aria-label="Close sidebar"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 lg:hidden"
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
+          </div>
 
-            <button
-              onClick={() => {
-                onNewChat()
-                closeMobile()
-              }}
-              className="flex w-full items-center justify-center gap-1.5 rounded-[9px] border border-white/10 bg-white/[0.07] px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.13] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-              type="button"
-            >
-              <Plus size={13} strokeWidth={2.25} />
-              New LexChat
-            </button>
+          <nav
+            aria-label="Workspace"
+            className="flex flex-col gap-0.5 border-b border-white/[0.08] px-1.5 py-2"
+          >
+            <NavItem icon={Home} label="Home" collapsed={isCollapsed} active={current.view === 'home'}
+              onClick={() => { selectHome(); closeMobile() }} />
+            <NavItem icon={MessageSquare} label="LexChat" collapsed={isCollapsed} active={current.view === 'chat'}
+              onClick={() => { onNewChat(); closeMobile() }} />
+            <NavItem icon={BookMarked} label="Knowledge Bank" collapsed={isCollapsed} active={kbActive}
+              onPrefetch={() => prefetchWorkspace('knowledge_bank')}
+              onClick={() => { selectKnowledgeBank(); closeMobile() }} />
+            <NavItem icon={HeartPulse} label="Wellbeing" collapsed={isCollapsed} active={current.view === 'wellbeing'}
+              onPrefetch={() => prefetchWorkspace('wellbeing')}
+              onClick={() => { selectWellbeing(); closeMobile() }} />
+            <NavItem icon={CheckSquare} label="Workboard" collapsed={isCollapsed} active={current.view === 'actions'}
+              badge={pendingTaskCount} onPrefetch={() => prefetchWorkspace('actions')}
+              onClick={() => { selectActions(); closeMobile() }} />
             <button
               aria-label={isBirdieOpen ? 'Close Birdie' : 'Open Birdie'}
               aria-pressed={isBirdieOpen}
-              className={`mt-2 flex w-full items-center gap-2 rounded-[9px] border px-3 py-2 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+              title={isCollapsed ? 'Birdie' : undefined}
+              className={`mt-1 flex min-h-10 w-full items-center gap-3 rounded-[9px] border px-3 py-2 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                isCollapsed ? 'justify-center px-0' : ''
+              } ${
                 isBirdieOpen
                   ? 'border-[#2d9e6b]/55 bg-[#2d9e6b]/15 text-[#6ed6a4]'
                   : 'border-white/10 bg-white/[0.04] text-white/65 hover:bg-white/[0.1] hover:text-white'
@@ -235,183 +297,67 @@ export function Sidebar({
               type="button"
             >
               <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full border border-[#2d9e6b]/45 bg-[#fff8d8]">
-                <img
-                  alt=""
-                  aria-hidden="true"
-                  className="h-auto w-[250%] max-w-none"
-                  src={birdieLogo}
-                />
+                <img alt="" aria-hidden="true" className="h-auto w-[250%] max-w-none" src={birdieLogo} />
               </span>
-              <span className="flex-1">Birdie</span>
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  isBirdieOpen ? 'animate-pulse bg-[#2d9e6b]' : 'bg-white/25'
-                }`}
-              />
-              <span className="text-[10px] font-normal text-current/70">
-                {isBirdieOpen ? 'Close' : 'Open'}
-              </span>
-            </button>
-          </div>
-
-          <nav
-            aria-label="Workspace"
-            className="flex flex-col gap-0.5 border-b border-white/[0.08] px-1.5 py-2"
-          >
-            <button
-              onClick={() => {
-                selectHome()
-                closeMobile()
-              }}
-              className={`${sidebarActionClass} ${
-                current.view === 'home' ? sidebarNavActiveClass : sidebarNavClass
-              }`}
-              type="button"
-            >
-              <Home size={14} />
-              Home
-            </button>
-            <button
-              onClick={() => {
-                selectKnowledgeBank()
-                closeMobile()
-              }}
-              onFocus={() => prefetchWorkspace('knowledge_bank')}
-              onMouseEnter={() => prefetchWorkspace('knowledge_bank')}
-              className={`${sidebarActionClass} ${
-                current.view === 'knowledge_bank' ? sidebarNavActiveClass : sidebarNavClass
-              }`}
-              type="button"
-            >
-              <BookMarked size={14} />
-              Knowledge Bank
-            </button>
-            <button
-              onClick={() => {
-                selectDocuments()
-                closeMobile()
-              }}
-              onFocus={() => prefetchWorkspace('documents')}
-              onMouseEnter={() => prefetchWorkspace('documents')}
-              className={`${sidebarActionClass} ${
-                current.view === 'documents' ? sidebarNavActiveClass : sidebarNavClass
-              }`}
-              type="button"
-            >
-              <FileText size={14} />
-              Documents
-            </button>
-            <button
-              onClick={() => {
-                selectWellbeing()
-                closeMobile()
-              }}
-              onFocus={() => prefetchWorkspace('wellbeing')}
-              onMouseEnter={() => prefetchWorkspace('wellbeing')}
-              className={`${sidebarActionClass} ${
-                current.view === 'wellbeing' ? sidebarNavActiveClass : sidebarNavClass
-              }`}
-              type="button"
-            >
-              <HeartPulse size={14} />
-              Wellbeing
-            </button>
-            <button
-              onClick={() => {
-                selectActions()
-                closeMobile()
-              }}
-              onFocus={() => prefetchWorkspace('actions')}
-              onMouseEnter={() => prefetchWorkspace('actions')}
-              className={`${sidebarActionClass} ${
-                current.view === 'actions' ? sidebarNavActiveClass : sidebarNavClass
-              }`}
-              type="button"
-            >
-              <CheckSquare size={14} />
-              <span className="flex-1 text-left">Workboard</span>
-              {pendingTaskCount > 0 && (
-                <span
-                  aria-label={`${pendingTaskCount} pending Workboard tasks`}
-                  className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#f0a000] px-1 text-[9.5px] font-semibold text-[#0f0f0f]"
-                >
-                  {pendingTaskCount}
-                </span>
+              {!isCollapsed && (
+                <>
+                  <span className="flex-1">Birdie</span>
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      isBirdieOpen ? 'animate-pulse bg-[#2d9e6b]' : 'bg-white/25'
+                    }`}
+                  />
+                </>
               )}
             </button>
           </nav>
 
-          {/* Past Chats List */}
-          <nav
-            aria-label="Recent LexChat conversations"
-            className="app-scroll-region lex-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-2"
-          >
-            {matters.length > 0 && (
-              <>
-                <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.09em] text-white/30">
-                  <BriefcaseBusiness size={12} />
-                  Recent matters
-                </div>
-                <div className="mb-3 space-y-0.5">
-                  {matters.slice(0, 4).map((matter) => (
-                    <button
-                      key={matter.id}
-                      className={`${sidebarActionClass} py-1.5 ${
-                        selectedMatterId === matter.id ? sidebarNavActiveClass : sidebarNavClass
-                      }`}
-                      onClick={() => {
-                        onMatterChange(matter.id)
-                        selectKnowledgeBank()
-                        closeMobile()
-                      }}
-                      type="button"
-                    >
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11.5px] font-normal">
-                          {matter.title}
-                        </span>
-                        <span className="mt-0.5 block truncate text-[9.5px] text-white/25">
-                          {matter.caseNumber}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            <div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.09em] text-white/30">
-              <Clock size={12} />
-              Recent LexChats
-            </div>
-            {threads.length > 0 ? (
-              <div className="space-y-0.5">
-                {threads.map((thread, index) => (
+          {/* Chats by matter: only on the LexChat page */}
+          {current.view === 'chat' && !isCollapsed ? (
+            <nav
+              aria-label="LexChat conversations by matter"
+              className="app-scroll-region lex-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-3"
+            >
+              <ChatsByMatter
+                threads={threads}
+                matters={matters}
+                onSelectMatter={(id) => {
+                  onMatterChange(id)
+                  onNewChat()
+                  closeMobile()
+                }}
+                renderThread={(thread) => (
                   <ThreadRow
                     key={thread.id}
                     thread={thread}
-                    isActive={
-                      current.view === 'chat' && thread.id === current.threadId
-                    }
-                    dotClass={threadDotClass(index)}
+                    matters={matters}
+                    isActive={current.view === 'chat' && thread.id === current.threadId}
                     onSelect={() => {
                       selectThread(thread.id)
                       closeMobile()
                     }}
                   />
-                ))}
-              </div>
-            ) : (
-              <div className="px-2.5 py-3 text-[11px] text-white/30">No recent LexChats</div>
-            )}
-          </nav>
+                )}
+              />
+            </nav>
+          ) : (
+            <div className="min-h-0 flex-1" />
+          )}
 
-          {footerExtra}
+          {!isCollapsed && footerExtra}
 
           {/* Sidebar Footer */}
-          <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.08] px-2.5 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+          <div
+            className={`flex shrink-0 border-t border-white/[0.08] py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] ${
+              isCollapsed ? 'flex-col items-center gap-2 px-2' : 'items-center gap-2 px-2.5'
+            }`}
+          >
             <button
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              className={`flex items-center gap-2 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                isCollapsed ? '' : 'min-w-0 flex-1'
+              }`}
+              aria-label="Profile settings"
+              title={isCollapsed ? `${userFullName} · Profile settings` : undefined}
               onClick={() => {
                 selectSettings()
                 closeMobile()
@@ -421,13 +367,17 @@ export function Sidebar({
               <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-[9px] font-semibold uppercase text-white">
                 {userInitials}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[11.5px] font-medium text-white/80">
-                  {userFullName}
-                </div>
-                <div className="truncate text-[9.5px] text-white/30">Profile settings</div>
-              </div>
-              <Settings size={14} className="shrink-0 text-white/35" />
+              {!isCollapsed && (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[11.5px] font-medium text-white/80">
+                      {userFullName}
+                    </div>
+                    <div className="truncate text-[9.5px] text-white/30">Profile settings</div>
+                  </div>
+                  <Settings size={14} className="shrink-0 text-white/35" />
+                </>
+              )}
             </button>
             <button
               onClick={onLogout}
@@ -442,32 +392,85 @@ export function Sidebar({
         </div>
 
         {/* Resize Handle */}
-        <div
-          onMouseDown={startResizing}
-          className={`absolute bottom-0 right-0 top-0 hidden w-1 cursor-col-resize transition-colors hover:bg-white/15 lg:block ${
-            isResizing ? 'w-1.5 bg-white/20' : 'bg-transparent'
-          }`}
-        />
+        {!isCollapsed && (
+          <div
+            onMouseDown={startResizing}
+            className={`absolute bottom-0 right-0 top-0 hidden w-1 cursor-col-resize transition-colors hover:bg-white/15 lg:block ${
+              isResizing ? 'w-1.5 bg-white/20' : 'bg-transparent'
+            }`}
+          />
+        )}
       </aside>
     </>
   )
 }
 
+function NavItem({
+  icon: Icon,
+  label,
+  active,
+  collapsed,
+  onClick,
+  onPrefetch,
+  badge,
+}: {
+  icon: typeof Home
+  label: string
+  active: boolean
+  collapsed: boolean
+  onClick: () => void
+  onPrefetch?: () => void
+  badge?: number
+}) {
+  return (
+    <button
+      aria-label={label}
+      title={collapsed ? label : undefined}
+      onClick={onClick}
+      onFocus={onPrefetch}
+      onMouseEnter={onPrefetch}
+      className={`${sidebarActionClass} relative min-h-10 gap-3 text-[13px] ${
+        collapsed ? 'justify-center px-0' : ''
+      } ${active ? sidebarNavActiveClass : sidebarNavClass}`}
+      type="button"
+    >
+      <Icon size={20} className="shrink-0" />
+      {!collapsed && <span className="flex-1 text-left">{label}</span>}
+      {badge ? (
+        collapsed ? (
+          <span
+            aria-label={`${badge} pending`}
+            className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-[#f0a000]"
+          />
+        ) : (
+          <span
+            aria-label={`${badge} pending ${label} tasks`}
+            className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#f0a000] px-1 text-[9.5px] font-semibold text-[#0f0f0f]"
+          >
+            {badge}
+          </span>
+        )
+      ) : null}
+    </button>
+  )
+}
+
 function ThreadRow({
   thread,
+  matters,
   isActive,
-  dotClass,
   onSelect,
 }: {
   thread: ChatThread
+  matters: Matter[]
   isActive: boolean
-  dotClass: string
   onSelect: () => void
 }) {
   const queryClient = useQueryClient()
   const { current, startNewChat } = useWorkspaceNavigation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
+  const [isMoving, setIsMoving] = useState(false)
   const [draftTitle, setDraftTitle] = useState(thread.title)
   const menuRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -490,8 +493,8 @@ function ThreadRow({
   const renameMutation = useMutation({
     mutationFn: (title: string) => renameChatThread(thread.id, title),
     onSuccess: (updated) => {
-      queryClient.setQueryData<ChatThread[]>(['threads'], (old) =>
-        old?.map((t) => (t.id === updated.id ? updated : t)) ?? [],
+      queryClient.setQueriesData<ChatThread[]>({ queryKey: ['threads'] }, (old) =>
+        old?.map((t) => (t.id === updated.id ? updated : t)),
       )
       setIsRenaming(false)
     },
@@ -501,14 +504,22 @@ function ThreadRow({
   const deleteMutation = useMutation({
     mutationFn: () => deleteChatThread(thread.id),
     onSuccess: () => {
-      queryClient.setQueryData<ChatThread[]>(['threads'], (old) =>
-        old?.filter((t) => t.id !== thread.id) ?? [],
+      queryClient.setQueriesData<ChatThread[]>({ queryKey: ['threads'] }, (old) =>
+        old?.filter((t) => t.id !== thread.id),
       )
       queryClient.removeQueries({ queryKey: ['messages', thread.id] })
       // If the deleted thread was the active one, drop the user to a new chat
       if (current.view === 'chat' && current.threadId === thread.id) {
         startNewChat({ replace: true })
       }
+    },
+  })
+
+  const moveMutation = useMutation({
+    mutationFn: (matterId: string | null) => moveChatThread(thread.id, matterId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
+      setIsMoving(false)
     },
   })
 
@@ -537,7 +548,6 @@ function ThreadRow({
     >
       {isRenaming ? (
         <div className="flex w-full items-center gap-2 px-3 py-1.5">
-          <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
           <input
             ref={inputRef}
             className="min-w-0 flex-1 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[11.5px] text-white outline-none focus:border-white/45"
@@ -563,17 +573,7 @@ function ThreadRow({
             }`}
             type="button"
           >
-            <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[11.5px] font-normal">{thread.title}</span>
-              <span
-                className={`mt-0.5 block text-[9.5px] ${
-                  isActive ? 'text-white/45' : 'text-white/25 group-hover:text-white/40'
-                }`}
-              >
-                {formatThreadDate(thread.updatedAt)}
-              </span>
-            </span>
+            <span className="min-w-0 flex-1 truncate text-[12px] font-normal">{thread.title}</span>
           </button>
           <button
             aria-label={`Options for ${thread.title}`}
@@ -589,6 +589,25 @@ function ThreadRow({
             <MoreHorizontal size={13} />
           </button>
         </>
+      )}
+
+      {isMoving && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-white/10 bg-[#1a1a1a] p-2 shadow-xl">
+          <MatterSelect
+            tone="dark"
+            label={`Move "${thread.title}" to matter`}
+            matters={matters}
+            value={thread.matterId}
+            onChange={(id) => moveMutation.mutate(id)}
+          />
+          <button
+            className="mt-1.5 text-[11px] text-white/50 hover:text-white"
+            onClick={() => setIsMoving(false)}
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
       )}
 
       {menuOpen && (
@@ -609,6 +628,17 @@ function ThreadRow({
             Rename
           </button>
           <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11.5px] text-white/80 hover:bg-white/[0.08] hover:text-white"
+            onClick={() => {
+              setMenuOpen(false)
+              setIsMoving(true)
+            }}
+            type="button"
+          >
+            <FolderInput size={12} />
+            Move to matter…
+          </button>
+          <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11.5px] text-red-300 hover:bg-red-500/15 hover:text-red-200"
             onClick={handleDelete}
             disabled={deleteMutation.isPending}
@@ -621,25 +651,4 @@ function ThreadRow({
       )}
     </div>
   )
-}
-
-function threadDotClass(index: number) {
-  const colors = ['bg-emerald-300', 'bg-violet-300', 'bg-amber-300', 'bg-sky-300']
-  return colors[index % colors.length]
-}
-
-function formatThreadDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Saved'
-
-  const now = new Date()
-  const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 3600 * 24))
-
-  if (diffInDays === 0) {
-    return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)
-  }
-  if (diffInDays < 7) {
-    return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date)
-  }
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)
 }

@@ -4,6 +4,8 @@ import { Brain, Menu, MessageSquare } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
+import { MatterSelect } from '../shared/ui/MatterSelect'
+import { KnowledgeBankSections } from '../features/knowledge-bank/KnowledgeBankSections'
 import { ModelPicker } from '../shared/ui/ModelPicker'
 import { MISSING_KEY_MESSAGE, useModelChoice } from '../shared/lib/llm'
 import { PanelErrorBoundary } from '../shared/ui/PanelErrorBoundary'
@@ -16,6 +18,7 @@ import {
   getCurrentUser,
   listChatThreads,
   listMatters,
+  moveChatThread,
   listMemories,
   listThreadMessages,
   streamChatMessage,
@@ -42,6 +45,12 @@ const MemoriesPanel = lazy(() =>
 )
 const DocumentsPanel = lazy(() =>
   import('../features/documents/DocumentsPanel').then((module) => ({ default: module.DocumentsPanel })),
+)
+const MattersPanel = lazy(() =>
+  import('../features/knowledge-bank/MattersPanel').then((module) => ({ default: module.MattersPanel })),
+)
+const MatterPage = lazy(() =>
+  import('../features/knowledge-bank/MatterPage').then((module) => ({ default: module.MatterPage })),
 )
 const WikiPanel = lazy(() =>
   import('../features/wiki/WikiPanel').then((module) => ({ default: module.WikiPanel })),
@@ -130,6 +139,12 @@ function App() {
     enabled: isAuthenticated,
   })
   const threads = useMemo(() => threadsQuery.data ?? [], [threadsQuery.data])
+  // Keep the selected matter in step with the open thread.
+  useEffect(() => {
+    const thread = threads.find((t) => t.id === threadId)
+    if (thread && thread.matterId !== selectedMatterId) handleMatterChange(thread.matterId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, threads])
   const mattersQuery = useQuery({
     queryKey: ['matters'],
     queryFn: () => listMatters('active'),
@@ -510,6 +525,25 @@ function App() {
     }
   }
 
+  // In a chat, changing the matter re-files the open thread; before the first
+  // message it only sets where the next thread will be created.
+  async function handleChatMatterChange(matterId: string | null) {
+    handleMatterChange(matterId)
+    if (!threadId) return
+    try {
+      await moveChatThread(threadId, matterId)
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError))
+    }
+  }
+
+  // Library / Documents / Matters share one frame so the section bar does not remount.
+  const panelKey =
+    current.view === 'documents' || current.view === 'matters' || current.view === 'matter'
+      ? 'knowledge_bank'
+      : current.view
+
   const userInitials = useMemo(() => {
     const name = currentUser?.fullName || user?.fullName
     if (!name) return 'LC'
@@ -599,10 +633,10 @@ function App() {
           </div>
         )}
 
-        <PanelErrorBoundary key={current.view}>
+        <PanelErrorBoundary key={panelKey}>
           <Suspense fallback={<PanelLoading />}>
             <div
-              key={current.view}
+              key={panelKey}
               className="workspace-panel-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
             >
               {current.view === 'home' ? (
@@ -613,19 +647,31 @@ function App() {
                 />
               ) : current.view === 'memories' ? (
                 <MemoriesPanel />
-              ) : current.view === 'documents' ? (
-                <DocumentsPanel currentUser={currentUser} />
               ) : current.view === 'wiki' ? (
                 <WikiPanel currentUser={currentUser} />
               ) : current.view === 'wellbeing' ? (
                 <WellbeingPanel currentUser={currentUser} />
-              ) : current.view === 'knowledge_bank' ? (
-                <KnowledgeBankPanel
-                  matters={matters}
-                  selectedMatterId={selectedMatterId}
-                  onMatterChange={handleMatterChange}
-                  currentUser={currentUser}
-                />
+              ) : current.view === 'knowledge_bank' ||
+                current.view === 'documents' ||
+                current.view === 'matters' ||
+                current.view === 'matter' ? (
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <KnowledgeBankSections />
+                  {current.view === 'documents' ? (
+                    <DocumentsPanel currentUser={currentUser} />
+                  ) : current.view === 'matters' ? (
+                    <MattersPanel currentUser={currentUser} onMatterChange={handleMatterChange} />
+                  ) : current.view === 'matter' ? (
+                    <MatterPage matterId={current.matterId} onMatterChange={handleMatterChange} />
+                  ) : (
+                    <KnowledgeBankPanel
+                      matters={matters}
+                      selectedMatterId={selectedMatterId}
+                      onMatterChange={handleMatterChange}
+                      currentUser={currentUser}
+                    />
+                  )}
+                </div>
               ) : current.view === 'actions' || current.view === 'handoff_review' ? (
                 <ActionsPanel matters={matters} currentUser={currentUser} />
               ) : current.view === 'settings' ? (
@@ -656,19 +702,14 @@ function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <select
-                    aria-label="Active matter"
-                    className="hidden h-8 max-w-56 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs text-neutral-600 outline-none focus:border-neutral-400 md:block"
-                    onChange={(event) => handleMatterChange(event.target.value || null)}
-                    value={selectedMatterId ?? ''}
-                  >
-                    <option value="">No matter selected</option>
-                    {matters.map((matter) => (
-                      <option key={matter.id} value={matter.id}>
-                        {matter.caseNumber} · {matter.title}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="hidden w-56 md:block">
+                    <MatterSelect
+                      label="Active matter"
+                      matters={matters}
+                      onChange={handleChatMatterChange}
+                      value={selectedMatterId}
+                    />
+                  </div>
                   <Button
                     aria-label="Memories"
                     aria-pressed={false}
@@ -682,19 +723,14 @@ function App() {
                     <Brain size={18} />
                   </Button>
                 </div>
-                <select
-                  aria-label="Active matter on mobile"
-                  className="h-8 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs text-neutral-600 outline-none focus:border-neutral-400 md:hidden"
-                  onChange={(event) => handleMatterChange(event.target.value || null)}
-                  value={selectedMatterId ?? ''}
-                >
-                  <option value="">No matter selected</option>
-                  {matters.map((matter) => (
-                    <option key={matter.id} value={matter.id}>
-                      {matter.caseNumber} · {matter.title}
-                    </option>
-                  ))}
-                </select>
+                <div className="w-full md:hidden">
+                  <MatterSelect
+                    label="Active matter on mobile"
+                    matters={matters}
+                    onChange={handleChatMatterChange}
+                    value={selectedMatterId}
+                  />
+                </div>
               </header>
 
               <ChatPanel

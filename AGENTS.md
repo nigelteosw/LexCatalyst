@@ -54,10 +54,10 @@ frontend/
       auth/           # LoginPage
       birdie/         # Birdie AI mentor panel
       chat/           # ChatPanel
-      documents/      # Documents panel
-      knowledge-bank/ # KB panel + filters + dialogs
+      documents/      # Documents panel (shown under Knowledge Bank at /knowledge/documents)
+      knowledge-bank/ # KB panel + filters + dialogs; section bar; Matters list (CRUD) and per-matter page
       memories/       # Memories panel + async Dream consolidation
-      navigation/     # Sidebar
+      navigation/     # Collapsible sidebar; chats grouped by matter (chat page only)
       settings/       # Settings panel
       wellbeing/      # Wellbeing survey panel
       wiki/           # Wiki panel + graph canvas
@@ -65,7 +65,7 @@ frontend/
       api/api.ts      # All fetch calls; snake_case↔camelCase mapping here
       lib/            # errors.ts, async.ts
       types/workspace.ts
-      ui/             # Button, Dialog, ErrorBanner, MarkdownContent, StatusBadge
+      ui/             # Button, Dialog, ErrorBanner, MarkdownContent, MatterSelect, StatusBadge
 
 extension/            # Birdie Chrome extension (MV3 side panel); bun run build -> extension/dist
   public/manifest.json
@@ -255,6 +255,10 @@ Keep the provider interface minimal:
 generate_chat_response(messages, *, temperature=0.2)
 embed_texts(texts)
 ```
+
+## Matters
+
+Everything is grouped by matter: documents, Knowledge Bank entries, LexChats and Workboard items each carry an optional `matter_id`; no matter means "General". Matters are managed under Knowledge Bank → Matters, and each has a page at `/knowledge/matters/:id`. `DELETE /matters/{id}` is a hard delete (partner/admin): linked records fall back to General, and matter-scoped KB entries become private. Chats and documents are reassigned with `PATCH` and `matter_id` (`null` = General).
 
 ## Frontend Guidance
 

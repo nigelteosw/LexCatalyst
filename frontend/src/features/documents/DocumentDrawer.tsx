@@ -6,10 +6,13 @@ import {
   deleteDocumentComment,
   fetchDocumentFile,
   listDocumentComments,
+  listMatters,
+  moveDocument,
 } from '../../shared/api/api'
 import { getErrorMessage } from '../../shared/lib/errors'
 import type { CurrentUser, DocumentComment, WorkspaceDocument } from '../../shared/types/workspace'
 import { Button } from '../../shared/ui/Button'
+import { MatterSelect } from '../../shared/ui/MatterSelect'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { StatusBadge } from '../../shared/ui/StatusBadge'
 
@@ -57,6 +60,17 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
+
+  const mattersQuery = useQuery({
+    queryKey: ['matters'],
+    queryFn: () => listMatters('active'),
+    enabled: document.canManage,
+  })
+  const moveMutation = useMutation({
+    mutationFn: (matterId: string | null) => moveDocument(document.id, matterId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
+    onError: (error) => setMutationError(getErrorMessage(error)),
+  })
 
   const commentsQuery = useQuery({
     queryKey,
@@ -180,6 +194,16 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
             {document.chunkCount} searchable chunks
           </p>
         </div>
+        {document.canManage && (
+          <div className="hidden w-52 sm:block">
+            <MatterSelect
+              label="Matter"
+              matters={mattersQuery.data ?? []}
+              value={document.matterId ?? null}
+              onChange={(id) => moveMutation.mutate(id)}
+            />
+          </div>
+        )}
         <Button
           disabled={isDownloading}
           onClick={() => void downloadDocument()}

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 type HomeView = { view: 'home' }
@@ -11,6 +11,8 @@ type KnowledgeBankView = { view: 'knowledge_bank'; entryId: string | null }
 type ActionsView = { view: 'actions'; actionId: string | null }
 type HandoffReviewView = { view: 'handoff_review'; actionId: string }
 type SettingsView = { view: 'settings' }
+type MattersView = { view: 'matters' }
+type MatterView = { view: 'matter'; matterId: string }
 
 export type AppView =
   | HomeView
@@ -23,6 +25,8 @@ export type AppView =
   | ActionsView
   | HandoffReviewView
   | SettingsView
+  | MattersView
+  | MatterView
 
 type NavigationOptions = {
   replace?: boolean
@@ -41,6 +45,19 @@ function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute:
   const segments = pathname.split('/').filter(Boolean)
   const [section, rawId] = segments
   const id = decodeSegment(rawId)
+  if (section === 'knowledge' && rawId === 'documents' && segments.length <= 3) {
+    return {
+      current: { view: 'documents', documentId: decodeSegment(segments[2]) },
+      isKnownRoute: true,
+    }
+  }
+  if (section === 'knowledge' && rawId === 'matters' && segments.length <= 3) {
+    const matterId = decodeSegment(segments[2])
+    return {
+      current: matterId ? { view: 'matter', matterId } : { view: 'matters' },
+      isKnownRoute: true,
+    }
+  }
   if (segments.length > 2) {
     // Only allowed 3-segment path: /actions/[id]/review
     if (section === 'actions' && rawId && segments[2] === 'review') {
@@ -94,6 +111,13 @@ export function useWorkspaceNavigation() {
     [location.pathname],
   )
 
+  // Documents moved under Knowledge Bank; keep old /documents links working.
+  useEffect(() => {
+    if (location.pathname === '/documents' || location.pathname.startsWith('/documents/')) {
+      navigate(`/knowledge${location.pathname}`, { replace: true })
+    }
+  }, [location.pathname, navigate])
+
   const go = useCallback(
     (path: string, options?: NavigationOptions) => navigate(path, { replace: options?.replace }),
     [navigate],
@@ -122,7 +146,16 @@ export function useWorkspaceNavigation() {
     ),
     selectDocuments: useCallback(
       (documentId?: string | null, options?: NavigationOptions) =>
-        go(routeWithId('/documents', documentId), options),
+        go(routeWithId('/knowledge/documents', documentId), options),
+      [go],
+    ),
+    selectMatters: useCallback(
+      (options?: NavigationOptions) => go('/knowledge/matters', options),
+      [go],
+    ),
+    selectMatter: useCallback(
+      (matterId: string, options?: NavigationOptions) =>
+        go(`/knowledge/matters/${encodeURIComponent(matterId)}`, options),
       [go],
     ),
     selectMemories: useCallback(
