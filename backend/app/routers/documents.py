@@ -1,6 +1,5 @@
 """Document upload, viewing, comments, rename, and delete."""
 
-from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 from fastapi import (
@@ -51,7 +50,6 @@ router = APIRouter(tags=["documents"])
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 _MAX_DOCS = 50
-_MAX_DOCS_PER_DAY = 10
 _MAX_BYTES = 1 * 1024 * 1024 * 1024  # 1 GB
 
 
@@ -64,19 +62,6 @@ def _check_upload_limits(db: Session, user: User, incoming_bytes: int) -> None:
         raise HTTPException(
             status_code=429,
             detail=f"Document limit reached ({_MAX_DOCS} max). Delete some documents to upload more.",
-        )
-
-    since = datetime.now(UTC) - timedelta(hours=24)
-    daily = db.scalar(
-        select(func.count(Document.id)).where(
-            Document.user_id == user.id,
-            Document.created_at >= since,
-        )
-    ) or 0
-    if daily >= _MAX_DOCS_PER_DAY:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Upload rate limit reached ({_MAX_DOCS_PER_DAY} per day). Try again later.",
         )
 
     used_bytes = db.scalar(
