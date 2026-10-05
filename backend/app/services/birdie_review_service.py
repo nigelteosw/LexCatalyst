@@ -6,6 +6,7 @@ anchors must exist verbatim in the draft, sources must be ones we supplied, and 
 until the lawyer accepts it.
 """
 
+import asyncio
 import json
 import re
 from datetime import UTC, datetime, timedelta
@@ -184,6 +185,61 @@ def build_suggestions(
     return accepted, stats
 
 
+# ---------------------------------------------------------------- retrieval
+
+_HEADING = re.compile(r"(?m)^\s*(\d{1,2})\.\s+([A-Z][A-Z0-9 ,'&/()-]{3,})\s*$")
+MAX_CLAUSE_QUERIES = 14
+MIN_CLAUSE_CHARS = 80
+CLAUSE_QUERY_CHARS = 700
+SOURCES_PER_CLAUSE = 3
+MAX_SOURCES = 24
+STYLE_GUIDE_QUERY = "style guide drafting conventions and buyer-side or seller-side positions"
+
+
+def split_clauses(text: str) -> list[tuple[str, str]]:
+    """Top-level numbered, upper-case headings -> [(heading, body)]. Used to search per clause."""
+    marks = list(_HEADING.finditer(text))
+    clauses = []
+    for i, m in enumerate(marks):
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
+        body = text[m.end():end].strip()
+        if len(body) >= MIN_CLAUSE_CHARS:
+            clauses.append((f"{m.group(1)}. {m.group(2).title()}", body))
+    return clauses
+
+
+def _same_document(title: str, review_title: str | None) -> bool:
+    """The draft under review is often uploaded too; it must not cite itself."""
+    def norm(value: str) -> str:
+        value = re.sub(r"\s*-\s*google docs$", "", value.strip().lower())
+        return re.sub(r"\.(docx?|pdf)$", "", value)
+
+    return bool(review_title) and norm(title) == norm(review_title)
+
+
+async def gather_firm_sources(db: Session, *, user: User, review: BirdieReview):
+    """Per-clause precedent search plus the style guide, deduplicated, excluding the draft itself."""
+    text = review.source_text
+    clauses = split_clauses(text)[:MAX_CLAUSE_QUERIES] or [("Draft", text[:QUERY_CHARS])]
+    searches = [
+        search_precedents(db, user=user, text=f"{head}\n{body[:CLAUSE_QUERY_CHARS]}", limit=SOURCES_PER_CLAUSE)
+        for head, body in clauses
+    ]
+    style = search_kb_for_chat(
+        db, user_id=user.id, query=STYLE_GUIDE_QUERY, matter_id=review.matter_id, limit=4
+    )
+    *per_clause, style_entries = await asyncio.gather(*searches, style)
+    seen: set[str] = set()
+    precedents = []
+    for _clause_type, results in per_clause:
+        for r in results:
+            if r.id in seen or _same_document(r.document_title, review.title):
+                continue
+            seen.add(r.id)
+            precedents.append(r)
+    return precedents[:MAX_SOURCES], list(style_entries)
+
+
 # ---------------------------------------------------------------- sources
 
 
@@ -261,13 +317,7 @@ async def run_review(review_id: str) -> None:
         user = db.get(User, review.user_id)
         try:
             text = review.source_text
-            query = text[:QUERY_CHARS]
-            _clause, precedents = await search_precedents(db, user=user, text=query)
-            kb_entries = (
-                await search_kb_for_chat(db, user_id=user.id, query=query, matter_id=review.matter_id, limit=6)
-                if review.matter_id
-                else []
-            )
+            precedents, kb_entries = await gather_firm_sources(db, user=user, review=review)
             llm = get_llm(db, user.id, feature="birdie_review", model=review.model)
             cases = await find_case_sources(
                 db, user=user, provider=llm,

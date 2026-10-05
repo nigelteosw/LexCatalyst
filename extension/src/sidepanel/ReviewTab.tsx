@@ -282,7 +282,12 @@ export function ReviewTab({ browser, model, needsKey, onError }: Props) {
     setError(null)
     setStarting(true)
     try {
-      const page = await readTabText(tab) // full text, not the 20,000-char chat context
+      // A shared selection (e.g. ⌘A then ⌘C in Google Docs) wins; otherwise read the whole page,
+      // not the 20,000-char chat context.
+      const shared = browser.selection
+      const page = shared
+        ? { url: tab.url, title: tab.title, text: shared.text }
+        : await readTabText(tab)
       if (!page.text.trim()) throw new Error('No text found on this page')
       setReview(await startBirdieReview({ url: page.url, title: page.title, text: page.text, model }))
     } catch (err) {

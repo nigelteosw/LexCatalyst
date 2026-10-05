@@ -175,5 +175,34 @@ class SourceTests(unittest.TestCase):
         self.assertIn("[S1] (document) Meranti SPA", block)
 
 
+SPA = """THIS AGREEMENT is dated [●] 2026.
+1. DEFINITIONS AND INTERPRETATION
+1.1  In this Agreement the terms below have the meanings given to them in this clause one.
+2. SALE AND PURCHASE
+2.1  The Seller shall sell, and the Buyer shall purchase, the Sale Shares free from all Encumbrances.
+7. LIMITATION OF SELLER'S LIABILITY
+[JUNIOR TO DRAFT: Limitation of Seller's liability. We act for the Buyer. Cover: time limits for Claims.]
+13. GOVERNING LAW AND DISPUTE RESOLUTION
+13.1  This Agreement shall be governed by the laws of Singapore and the parties submit to its courts.
+"""
+
+
+class RetrievalTests(unittest.TestCase):
+    def test_splits_top_level_clauses_and_skips_stubs(self) -> None:
+        heads = [h for h, _ in r.split_clauses(SPA)]
+        self.assertEqual(heads[0], "1. Definitions And Interpretation")
+        self.assertIn("7. Limitation Of Seller'S Liability", heads)
+        self.assertIn("13. Governing Law And Dispute Resolution", heads)
+
+    def test_no_headings_gives_no_clauses(self) -> None:
+        self.assertEqual(r.split_clauses("Just a paragraph of text."), [])
+
+    def test_draft_does_not_cite_itself(self) -> None:
+        self.assertTrue(r._same_document("04_SPA_Tidewater_WIP.docx", "04_SPA_Tidewater_WIP.docx - Google Docs"))
+        self.assertTrue(r._same_document("04_SPA_Tidewater_WIP", "04_SPA_Tidewater_WIP.DOCX"))
+        self.assertFalse(r._same_document("Meranti SPA", "04_SPA_Tidewater_WIP.docx"))
+        self.assertFalse(r._same_document("Meranti SPA", None))
+
+
 if __name__ == "__main__":
     unittest.main()
