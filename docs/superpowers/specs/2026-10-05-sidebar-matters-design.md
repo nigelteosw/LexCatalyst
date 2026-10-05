@@ -52,10 +52,11 @@ Date: 2026-10-05
 ### Frontend
 
 - `shared/api/api.ts`: `updateMatter`, `deleteMatter`, and `listChatThreads(matterId: string | null)`. `null` = General.
-- Sidebar:
-  - "Recent LexChats" renders only when `current.view === 'chat'`.
-  - Above it, a matter switcher (`<select>`): "General" plus the user's matters.
-  - Thread query key: `['threads', matterId ?? 'general']`. Existing optimistic updates switch to this key.
+- Sidebar (per mockup):
+  - Nav order: Home, LexChat, Knowledge Bank, Wellbeing, Workboard (with count).
+  - Below the nav, a **Chats by matter** section renders only when `current.view === 'chat'` and the sidebar is expanded. Each matter is a folder row (`caseNumber · title`) with its threads indented under a left rule. Matters are ordered by most recent thread; matters without threads are hidden; **General** is always last.
+  - Clicking a folder selects that matter and starts a new chat in it.
+  - One threads cache: `['threads', 'all']`.
   - The "Recent matters" block is removed.
 - Selected matter follows context: opening a thread sets `selectedMatterId` to the thread's matter (or General); New LexChat creates the thread under the selected matter.
 - Knowledge Bank → Matters tab (`features/knowledge-bank/MattersTab.tsx`):
@@ -73,6 +74,13 @@ Date: 2026-10-05
 - Sidebar thread row menu: "Move to matter…" opens a small dialog with MatterSelect.
 - Documents list rows: a MatterSelect in the document drawer (owner only).
 - Knowledge Bank entry edit form: confirm a matter field exists; add MatterSelect if not.
+
+### Matter page (per mockup)
+
+- Route `/knowledge/matters/:id`; the matter title in the Matters list links here.
+- Header: breadcrumb `Knowledge Bank / Matters / <caseNumber>`, serif title, meta line `caseNumber · client`. Actions: **Upload** (uploads, then files the document into this matter via `PATCH /documents/{id}`) and **New LexChat in matter**.
+- Tabs with counts: **Documents** (documents in the matter), **Cases** (Knowledge Bank entries in the matter), **LexChats** (`GET /chat/threads?matter_id=`), **Pending** (Workboard items in the matter that are not done).
+- No "Lead" field. The schema has none, so it's left out.
 
 ## Error handling
 

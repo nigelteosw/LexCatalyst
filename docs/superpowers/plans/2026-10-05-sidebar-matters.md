@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Collapsible icon sidebar, Documents and Matters living inside Knowledge Bank, LexChat history scoped per matter, matter CRUD, and moving chats/documents between matters.
+**Goal:** Collapsible icon sidebar with chats grouped by matter, a page per matter, Documents and Matters living inside Knowledge Bank, LexChat history scoped per matter, matter CRUD, and moving chats/documents between matters.
 
 **Architecture:** Backend adds `DELETE /matters/{id}`, a `matter_id` filter on `GET /chat/threads`, and `matter_id` on the thread and document PATCH bodies. Frontend reuses the existing `documents` view under `/knowledge/documents`, adds a `matters` view, and keeps the threads cache keyed per matter.
 
@@ -38,6 +38,8 @@ Spec: `docs/superpowers/specs/2026-10-05-sidebar-matters-design.md`
 | `frontend/src/app/App.tsx` | section bar, matters view, thread query keys, matter sync |
 | `frontend/src/features/knowledge-bank/KnowledgeBankSections.tsx` | new |
 | `frontend/src/features/knowledge-bank/MattersPanel.tsx` | new |
+| `frontend/src/features/knowledge-bank/MatterPage.tsx` | new |
+| `frontend/src/features/navigation/ChatsByMatter.tsx` | new |
 | `frontend/src/shared/ui/MatterSelect.tsx` | new |
 | `frontend/src/shared/api/api.ts` | matter + thread + document functions |
 | `frontend/src/shared/types/workspace.ts` | `ChatThread.matterId` |
@@ -761,19 +763,26 @@ Check that `request` handles a 204 empty body (look at its implementation; if it
 
 ---
 
-### Task 7: Frontend — matter-scoped LexChats in the sidebar
+### Task 7: Frontend — "Chats by matter" sidebar
+
+Layout (from the mockup): nav at the top (Home, LexChat, Knowledge Bank, Wellbeing, Workboard with count), then a **Chats by matter** section. Each matter is a folder row (`Folder` icon, `caseNumber · title`, truncated) with its threads indented under a left rule. **General** is always last. The section only renders when `current.view === 'chat'` and the sidebar is expanded.
 
 **Files:**
 - Create: `frontend/src/shared/ui/MatterSelect.tsx`
+- Create: `frontend/src/features/navigation/ChatsByMatter.tsx`
 - Modify: `frontend/src/features/navigation/Sidebar.tsx`
 - Modify: `frontend/src/app/App.tsx`
 - Modify: `frontend/src/features/home/HomePanel.tsx:253`
 
 **Interfaces:**
-- Consumes: Task 6 functions.
-- Produces: `<MatterSelect matters value onChange tone?: 'dark' | 'light' label />`; query keys `['threads', 'all']` and `['threads', threadScopeKey(matterId)]`.
+- Consumes: Task 6 functions; `ChatThread.matterId`.
+- Produces:
+  - `<MatterSelect matters value onChange label? tone?: 'dark' | 'light' className? />`
+  - `groupThreadsByMatter(threads: ChatThread[], matters: Matter[]): Array<{ matter: Matter | null; threads: ChatThread[] }>`
+  - `<ChatsByMatter threads matters activeThreadId onSelectThread onSelectMatter />`
+  - one threads cache, key `['threads', 'all']`
 
-- [ ] **Step 1: MatterSelect**
+- [ ] **Step 1: MatterSelect** (used for "Move to…", the chat header and the document drawer)
 
 ```tsx
 // frontend/src/shared/ui/MatterSelect.tsx
@@ -808,7 +817,7 @@ export function MatterSelect({
       <option value="">General</option>
       {matters.map((m) => (
         <option key={m.id} value={m.id}>
-          {m.title} · {m.caseNumber}
+          {m.caseNumber} · {m.title}
         </option>
       ))}
     </select>
@@ -816,56 +825,87 @@ export function MatterSelect({
 }
 ```
 
-- [ ] **Step 2: App queries.** Replace the threads query:
+- [ ] **Step 2: Grouping (pure function first)**
 
 ```tsx
-const threadsQuery = useQuery({
-  queryKey: ['threads', threadScopeKey(selectedMatterId)],
-  queryFn: () => listChatThreads(threadScopeKey(selectedMatterId)),
-  enabled: isAuthenticated && current.view === 'chat',
-})
+// frontend/src/features/navigation/ChatsByMatter.tsx
+import { Folder } from 'lucide-react'
+import type { ChatThread, Matter } from '../../shared/types/workspace'
+
+export type MatterGroup = { matter: Matter | null; threads: ChatThread[] }
+
+/** Matters ordered by their most recent thread; matters with no threads are hidden; General last. */
+export function groupThreadsByMatter(threads: ChatThread[], matters: Matter[]): MatterGroup[] {
+  const byId = new Map(matters.map((m) => [m.id, m]))
+  const groups = new Map<string, MatterGroup>()
+  const general: MatterGroup = { matter: null, threads: [] }
+  // threads arrive newest first, so insertion order = recency order
+  for (const thread of threads) {
+    const matter = thread.matterId ? byId.get(thread.matterId) : undefined
+    if (!matter) {
+      general.threads.push(thread)
+      continue
+    }
+    const group = groups.get(matter.id) ?? { matter, threads: [] }
+    group.threads.push(thread)
+    groups.set(matter.id, group)
+  }
+  return [...groups.values(), general]
+}
 ```
 
-In `onThread` (`App.tsx:323`), use `queryClient.setQueryData(['threads', threadScopeKey(selectedMatterId)], …)`. `invalidateQueries({ queryKey: ['threads'] })` at :398 already matches by prefix. HomePanel: `queryKey: ['threads', 'all'], queryFn: () => listChatThreads()`.
+A thread whose matter isn't in the active `matters` list (closed, or no longer a member) falls into General for display. That's intentional, and it doesn't change the thread.
 
-Keep the selected matter in sync with the open thread:
+- [ ] **Step 3: Component** (same file)
 
 ```tsx
-const openThreadQuery = useQuery({
-  queryKey: ['threads', 'all'],
-  queryFn: () => listChatThreads(),
-  enabled: isAuthenticated && !!threadId,
-  staleTime: 30_000,
-})
-useEffect(() => {
-  const thread = openThreadQuery.data?.find((t) => t.id === threadId)
-  if (thread && thread.matterId !== selectedMatterId) handleMatterChange(thread.matterId)
-}, [threadId, openThreadQuery.data]) // eslint-disable-line react-hooks/exhaustive-deps
+export function ChatsByMatter({
+  threads,
+  matters,
+  renderThread,
+  onSelectMatter,
+}: {
+  threads: ChatThread[]
+  matters: Matter[]
+  renderThread: (thread: ChatThread) => React.ReactNode
+  onSelectMatter: (matterId: string | null) => void
+}) {
+  const groups = groupThreadsByMatter(threads, matters)
+  return (
+    <div className="space-y-3">
+      <div className="px-2.5 text-[11px] font-medium text-white/35">Chats by matter</div>
+      {groups.map(({ matter, threads: groupThreads }) => (
+        <section key={matter?.id ?? 'general'} aria-label={matter ? matter.title : 'General'}>
+          <button
+            type="button"
+            onClick={() => onSelectMatter(matter?.id ?? null)}
+            title={matter ? `${matter.caseNumber} · ${matter.title}` : 'General'}
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] font-semibold text-white/85 hover:bg-white/[0.07]"
+          >
+            <Folder size={14} className="shrink-0 text-white/45" />
+            <span className="truncate">{matter ? `${matter.caseNumber} · ${matter.title}` : 'General'}</span>
+          </button>
+          <div className="ml-[17px] space-y-0.5 border-l border-white/10 pl-2">
+            {groupThreads.length > 0 ? (
+              groupThreads.map(renderThread)
+            ) : (
+              <div className="px-2 py-1 text-[11px] text-white/30">No LexChats yet</div>
+            )}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
 ```
 
-Also stop rendering the existing header matter selects at `App.tsx:663/689` if they duplicate the sidebar picker. Keep the chat-header one and swap it for `MatterSelect` bound to the thread (Step 4).
+Clicking a folder header selects that matter and starts a new chat in it (`onMatterChange(id); startNewChat()`). The matter page link lives on the KB Matters list (Task 10).
 
-- [ ] **Step 3: Sidebar chats.** Delete the "Recent matters" block. Render the chats `<nav>` only when `current.view === 'chat' && !isCollapsed`:
-
-```tsx
-<div className="px-2.5 pb-2">
-  <MatterSelect
-    tone="dark"
-    label="LexChat matter"
-    matters={matters}
-    value={selectedMatterId}
-    onChange={(id) => { onMatterChange(id); startNewChat() }}
-  />
-</div>
-<div className="mb-1 flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.09em] text-white/30">
-  <Clock size={12} />
-  {selectedMatterId ? 'Matter LexChats' : 'General LexChats'}
-</div>
-```
-
-followed by the existing threads list (empty text: `No LexChats yet`). Drop the `BriefcaseBusiness` import.
-
-In `ThreadRow`, change both `setQueryData<ChatThread[]>(['threads'], …)` calls to `queryClient.setQueriesData<ChatThread[]>({ queryKey: ['threads'] }, …)`. Add a "Move to…" menu item that opens an inline `MatterSelect` (pass `matters` down to `ThreadRow`):
+- [ ] **Step 4: Sidebar wiring.**
+  - Add a **LexChat** nav item (`MessageSquare` icon, active when `current.view === 'chat'`, onClick `startNewChat()`) between Home and Knowledge Bank. Final nav order: Home, LexChat, Knowledge Bank, Wellbeing, Workboard. The collapsed rail shows the same five icons.
+  - Delete the "Recent matters" block and the old "Recent LexChats" heading.
+  - Render `<ChatsByMatter …>` inside the chats `<nav>` only when `current.view === 'chat' && !isCollapsed`, using `renderThread={(t) => <ThreadRow key={t.id} thread={t} matters={matters} … />}`. Drop the per-index `dotClass` (the left rule replaces it).
+  - In `ThreadRow`, change both `setQueryData<ChatThread[]>(['threads'], …)` calls to `queryClient.setQueriesData<ChatThread[]>({ queryKey: ['threads'] }, …)`. Add a "Move to…" menu item that toggles `isMoving` and shows:
 
 ```tsx
 const moveMutation = useMutation({
@@ -889,10 +929,39 @@ const moveMutation = useMutation({
 )}
 ```
 
-- [ ] **Step 4: Chat header picker.** In `App.tsx`'s chat header, when `threadId` is set, render `MatterSelect` with `value={selectedMatterId}`. On change, `moveChatThread(threadId, id)`, then `handleMatterChange(id)` and invalidate `['threads']`. With no thread yet, changing it just calls `handleMatterChange(id)` (the next message creates the thread under that matter).
+- [ ] **Step 5: App queries.** One cache for the sidebar and Home:
 
-- [ ] **Step 5: Verify** — tsc. Manual: outside `/chat` no thread list. On `/chat`, switching matter changes the list and starts a fresh chat. A message sent under matter A shows only under A. Opening a General thread from Home flips the picker to General. "Move to…" moves a thread and it disappears from the current list. A non-member gets 403 for `GET /chat/threads?matter_id=<other>` (curl).
-- [ ] **Step 6: Commit** — `feat(frontend): matter-scoped LexChats with move-to-matter`
+```tsx
+const threadsQuery = useQuery({
+  queryKey: ['threads', 'all'],
+  queryFn: () => listChatThreads(),
+  enabled: isAuthenticated,
+})
+```
+
+In `onThread` (`App.tsx:323`), call `queryClient.setQueryData(['threads', 'all'], …)` and include `matterId: selectedMatterId` in the optimistic thread. HomePanel uses `queryKey: ['threads', 'all'], queryFn: () => listChatThreads()`.
+
+Keep the selected matter in sync with the open thread:
+
+```tsx
+useEffect(() => {
+  const thread = threads.find((t) => t.id === threadId)
+  if (thread && thread.matterId !== selectedMatterId) handleMatterChange(thread.matterId)
+}, [threadId, threads]) // eslint-disable-line react-hooks/exhaustive-deps
+```
+
+- [ ] **Step 6: Chat header picker.** Replace the existing header matter selects (`App.tsx:663`, `:689`) with one `MatterSelect` bound to `selectedMatterId`. With an open thread, a change calls `moveChatThread(threadId, id)`, then `handleMatterChange(id)` and invalidates `['threads']`. Without a thread, it only calls `handleMatterChange(id)`, so the next message creates the thread in that matter.
+
+- [ ] **Step 7: Verify.** tsc. Manual:
+  - Off `/chat`, there are no chat groups.
+  - On `/chat`, folders are ordered by recency and General is last.
+  - Clicking a folder starts a new chat in that matter.
+  - The first message lands under that folder.
+  - "Move to…" re-files a thread.
+  - Opening a General thread flips the header picker to General.
+  - A non-member gets 403 for `GET /chat/threads?matter_id=<other>` (curl).
+
+- [ ] **Step 8: Commit** — `feat(frontend): chats grouped by matter in the sidebar`
 
 ---
 
@@ -935,7 +1004,7 @@ export function MattersPanel({
 }) {
   const canManage = currentUser?.isAdmin === true || currentUser?.firmRole === 'partner'
   const queryClient = useQueryClient()
-  const { startNewChat } = useWorkspaceNavigation()
+  const { startNewChat, selectMatter } = useWorkspaceNavigation()
   const [draft, setDraft] = useState<Draft | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Matter | null>(null)
 
@@ -995,7 +1064,11 @@ export function MattersPanel({
         <tbody>
           {matters.map((m) => (
             <tr key={m.id} className="border-b border-neutral-100">
-              <td className="py-2 pr-3 font-medium text-neutral-900">{m.title}</td>
+              <td className="py-2 pr-3 font-medium text-neutral-900">
+                <button type="button" className="hover:underline" onClick={() => selectMatter(m.id)}>
+                  {m.title}
+                </button>
+              </td>
               <td className="py-2 pr-3 text-neutral-600">{m.caseNumber}</td>
               <td className="py-2 pr-3 text-neutral-600">{m.clientName ?? '—'}</td>
               <td className="py-2 pr-3 capitalize text-neutral-600">{m.status}</td>
@@ -1135,6 +1208,257 @@ const moveMutation = useMutation({
 
 - [ ] **Step 3: Verify** — move a document from General to a matter and back; the list reflects it after refresh. Move a KB entry between matters.
 - [ ] **Step 4: Commit** — `feat(frontend): move documents and KB entries between matters`
+
+---
+
+### Task 10: Frontend — Matter page
+
+Layout (from the mockup):
+- A breadcrumb `Knowledge Bank / <caseNumber>`, then a serif title, then a meta line `caseNumber · client`.
+- **Upload** (secondary) and **New LexChat in matter** (primary) buttons on the right.
+- Tabs with counts: **Documents · Cases · LexChats · Pending**.
+- Each row shows an icon tile, a name, meta below it, and the date on the right.
+
+Tab sources (no new backend routes):
+- **Documents**: `listDocuments()` filtered to `matterId === id`.
+- **Cases**: `listKnowledgeBankEntryPage({ matterId: id, limit: 100 })` (Knowledge Bank entries for this matter).
+- **LexChats**: `listChatThreads(id)`, which uses the Task 2 backend filter.
+- **Pending**: `listActionItems()` filtered to `matterId === id && status !== 'done'`.
+
+The mockup's "Lead" field doesn't exist in the schema. It's left out (YAGNI).
+
+**Files:**
+- Modify: `frontend/src/app/routes.ts`
+- Create: `frontend/src/features/knowledge-bank/MatterPage.tsx`
+- Modify: `frontend/src/app/App.tsx`
+- Modify: `frontend/src/features/knowledge-bank/KnowledgeBankSections.tsx` (Matters is active on the matter page too)
+
+**Interfaces:**
+- Consumes: `listDocuments`, `uploadDocument`, `moveDocument`, `listKnowledgeBankEntryPage`, `listChatThreads`, `listActionItems`, `selectThread`, `selectDocuments`, `selectKnowledgeBank`, `selectActions`.
+- Produces: `AppView` member `{ view: 'matter'; matterId: string }`; `selectMatter(matterId: string, options?)`; route `/knowledge/matters/:id`.
+
+- [ ] **Step 1: Route.** In `parseWorkspacePath`, next to the Task 5 matters rule:
+
+```ts
+if (section === 'knowledge' && rawId === 'matters' && segments.length === 3) {
+  return { current: { view: 'matter', matterId: decodeSegment(segments[2])! }, isKnownRoute: true }
+}
+```
+
+Add `type MatterView = { view: 'matter'; matterId: string }` to `AppView`, and:
+
+```ts
+selectMatter: useCallback(
+  (matterId: string, options?: NavigationOptions) =>
+    go(`/knowledge/matters/${encodeURIComponent(matterId)}`, options),
+  [go],
+),
+```
+
+Add `'matter'` to the KB-family view checks: the sidebar active state (Task 4), the App branch and panel key (Task 5), and `KnowledgeBankSections` (Matters active when `current.view === 'matter'`).
+
+- [ ] **Step 2: Page**
+
+```tsx
+// frontend/src/features/knowledge-bank/MatterPage.tsx
+import { useRef, useState, type ReactNode } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckSquare, FileText, MessageSquare, Scale } from 'lucide-react'
+import {
+  listActionItems,
+  listChatThreads,
+  listDocuments,
+  listKnowledgeBankEntryPage,
+  moveDocument,
+  uploadDocument,
+} from '../../shared/api/api'
+import type { Matter } from '../../shared/types/workspace'
+import { useWorkspaceNavigation } from '../../app/routes'
+import { Button } from '../../shared/ui/Button'
+import { ErrorBanner } from '../../shared/ui/ErrorBanner'
+import { getErrorMessage } from '../../shared/lib/errors'
+
+type Tab = 'documents' | 'cases' | 'chats' | 'pending'
+
+function shortDate(iso: string) {
+  const d = new Date(iso)
+  const today = new Date()
+  if (d.toDateString() === today.toDateString()) return 'Today'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
+function Row({ icon, title, meta, date, onClick }: {
+  icon: ReactNode
+  title: string
+  meta?: string
+  date: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-start gap-4 border-b border-neutral-100 px-1 py-4 text-left hover:bg-neutral-50"
+    >
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium text-neutral-900">{title}</span>
+        {meta && <span className="mt-0.5 block truncate text-sm text-neutral-500">{meta}</span>}
+      </span>
+      <span className="shrink-0 text-sm text-neutral-500">{shortDate(date)}</span>
+    </button>
+  )
+}
+
+export function MatterPage({
+  matterId,
+  matters,
+  onMatterChange,
+}: {
+  matterId: string
+  matters: Matter[]
+  onMatterChange: (matterId: string | null) => void
+}) {
+  const matter = matters.find((m) => m.id === matterId)
+  const [tab, setTab] = useState<Tab>('documents')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const queryClient = useQueryClient()
+  const { selectKnowledgeBank, selectMatters, selectDocuments, selectThread, selectActions, startNewChat } =
+    useWorkspaceNavigation()
+
+  const docs = useQuery({ queryKey: ['documents'], queryFn: listDocuments })
+  const cases = useQuery({
+    queryKey: ['kbEntries', 'matter', matterId],
+    queryFn: () => listKnowledgeBankEntryPage({ matterId, limit: 100, offset: 0 }),
+  })
+  const chats = useQuery({ queryKey: ['threads', matterId], queryFn: () => listChatThreads(matterId) })
+  const actions = useQuery({ queryKey: ['actions'], queryFn: listActionItems })
+
+  const matterDocs = (docs.data ?? []).filter((d) => d.matterId === matterId)
+  const matterCases = cases.data?.items ?? []
+  const matterChats = chats.data ?? []
+  const pending = (actions.data ?? []).filter((a) => a.matterId === matterId && a.status !== 'done')
+
+  const upload = useMutation({
+    // Upload has no matter field; file it into this matter right after.
+    mutationFn: async (file: File) => moveDocument((await uploadDocument(file)).id, matterId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
+  })
+
+  if (!matter) {
+    return <div className="p-6 text-sm text-neutral-500">Matter not found or you don't have access.</div>
+  }
+
+  const tabs: Array<{ id: Tab; label: string; count: number }> = [
+    { id: 'documents', label: 'Documents', count: matterDocs.length },
+    { id: 'cases', label: 'Cases', count: matterCases.length },
+    { id: 'chats', label: 'LexChats', count: matterChats.length },
+    { id: 'pending', label: 'Pending', count: pending.length },
+  ]
+
+  return (
+    <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto px-4 py-6 lg:px-8">
+      <nav aria-label="Breadcrumb" className="text-sm text-neutral-500">
+        <button type="button" className="underline" onClick={() => selectKnowledgeBank()}>Knowledge Bank</button>
+        {' / '}
+        <button type="button" className="hover:underline" onClick={() => selectMatters()}>Matters</button>
+        {' / '}
+        <span>{matter.caseNumber}</span>
+      </nav>
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-serif text-3xl text-neutral-900 lg:text-4xl">{matter.title}</h1>
+          <p className="mt-2 text-sm text-neutral-500">
+            {[matter.caseNumber, matter.clientName].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.docx"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) upload.mutate(file)
+              e.target.value = ''
+            }}
+          />
+          <Button variant="secondary" disabled={upload.isPending} onClick={() => fileRef.current?.click()}>
+            {upload.isPending ? 'Uploading…' : 'Upload'}
+          </Button>
+          <Button onClick={() => { onMatterChange(matterId); startNewChat() }}>New LexChat in matter</Button>
+        </div>
+      </div>
+      {upload.error && <ErrorBanner message={getErrorMessage(upload.error)} />}
+
+      <div role="tablist" className="mt-8 flex gap-6 border-b border-neutral-200">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`-mb-px border-b-2 pb-3 text-sm ${
+              tab === t.id ? 'border-slate-900 text-slate-900' : 'border-transparent text-neutral-500 hover:text-neutral-800'
+            }`}
+          >
+            {t.label} <span className="text-neutral-400">{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      <div role="tabpanel">
+        {tab === 'documents' &&
+          matterDocs.map((d) => (
+            <Row key={d.id} icon={<FileText size={18} />} title={d.filename}
+              meta={`${d.contentType.includes('pdf') ? 'PDF' : 'DOCX'} · ${d.status}`}
+              date={d.updatedAt} onClick={() => selectDocuments(d.id)} />
+          ))}
+        {tab === 'cases' &&
+          matterCases.map((e) => (
+            <Row key={e.id} icon={<Scale size={18} />} title={e.title} meta={e.entryType}
+              date={e.updatedAt} onClick={() => selectKnowledgeBank(e.id)} />
+          ))}
+        {tab === 'chats' &&
+          matterChats.map((c) => (
+            <Row key={c.id} icon={<MessageSquare size={18} />} title={c.title}
+              date={c.updatedAt} onClick={() => selectThread(c.id)} />
+          ))}
+        {tab === 'pending' &&
+          pending.map((a) => (
+            <Row key={a.id} icon={<CheckSquare size={18} />} title={a.title} meta={a.status}
+              date={a.updatedAt} onClick={() => selectActions(a.id)} />
+          ))}
+        {tabs.find((t) => t.id === tab)?.count === 0 && (
+          <p className="py-8 text-center text-sm text-neutral-500">Nothing here yet.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+Confirm the field names against the types before relying on them (tsc flags any mismatch):
+- the page shape returned by `listKnowledgeBankEntryPage` (`items`?);
+- `KnowledgeBankEntry.title`, `entryType` and `updatedAt`;
+- `ActionItem.title`, `status` and `updatedAt`;
+- the `Button` variant names.
+
+If `listKnowledgeBankEntryPage` with `matterId` 403s for non-members, `cases.error` shows nothing. That's acceptable, because a non-member wouldn't see the matter in `matters` in the first place.
+
+- [ ] **Step 3: Wire into App** — in the KB-family branch, add `current.view === 'matter' ? <MatterPage matterId={current.matterId} matters={allMatters} onMatterChange={handleMatterChange} />`. Use the `['matters', 'all']` list from Task 8 so closed matters still open.
+
+- [ ] **Step 4: Verify.** tsc. Manual:
+  - The Matters list title opens `/knowledge/matters/<id>`.
+  - The breadcrumb goes back.
+  - Upload lands in the Documents tab and the count increments.
+  - New LexChat in matter → the first message appears in that matter's sidebar folder and in the LexChats tab.
+  - The Pending tab matches the Workboard items for that matter.
+  - Refreshing on the URL works.
+
+- [ ] **Step 5: Commit** — `feat(frontend): matter page with documents, cases, LexChats and pending`
 
 ---
 
