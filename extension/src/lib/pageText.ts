@@ -7,12 +7,22 @@ const GOOGLE_DOC_URL = /^https:\/\/docs\.google\.com\/document\/d\/([^/]+)/
 
 // Google Docs paints the body on a canvas, so innerText only returns the toolbar and tab list.
 // The plain-text export, fetched with the user's own Google session, has the real content.
+// Relative to docs.google.com: it must be built here, not from `location` (this runs in the side panel).
+export function exportPath(docId: string, format: 'txt' | 'docx', tab: string | null): string {
+  return `/document/d/${docId}/export?format=${format}${tab ? `&tab=${encodeURIComponent(tab)}` : ''}`
+}
+
 // Runs inside the Docs tab. The export redirects to *.googleusercontent.com, which answers with
 // `Access-Control-Allow-Origin: *`; Chrome rejects that for a credentialed request, and an
 // extension page has no host permission for googleusercontent.com. From the docs.google.com page
 // a default (same-origin credentials) fetch works: cookies go to docs.google.com only, and the
 // redirect target is authorised by the `dat` token in its URL.
-async function fetchExportInTab(tabId: number, format: 'txt' | 'docx', tab: string | null): Promise<string | null> {
+async function fetchExportInTab(
+  tabId: number,
+  docId: string,
+  format: 'txt' | 'docx',
+  tab: string | null,
+): Promise<string | null> {
   try {
     const [result] = await chrome.scripting.executeScript({
       target: { tabId },
@@ -32,9 +42,7 @@ async function fetchExportInTab(tabId: number, format: 'txt' | 'docx', tab: stri
         }
       },
       args: [
-        `${new URL(location.href).pathname.replace(/\/(edit|view|preview).*$/, '')}/export?format=${format}${
-          tab ? `&tab=${encodeURIComponent(tab)}` : ''
-        }`,
+        exportPath(docId, format, tab),
         format === 'docx',
       ],
     })
@@ -46,11 +54,12 @@ async function fetchExportInTab(tabId: number, format: 'txt' | 'docx', tab: stri
 
 // Tries the plain-text export, then the .docx export (parsed here).
 async function readGoogleDoc(current: { id: number; url: string }): Promise<string | null> {
-  if (!GOOGLE_DOC_URL.test(current.url)) return null
+  const docId = GOOGLE_DOC_URL.exec(current.url)?.[1]
+  if (!docId) return null
   const tab = new URL(current.url).searchParams.get('tab')
-  const txt = await fetchExportInTab(current.id, 'txt', tab)
+  const txt = await fetchExportInTab(current.id, docId, 'txt', tab)
   if (txt && !txt.trimStart().startsWith('<')) return txt // HTML means a login page, not the doc
-  const docx = await fetchExportInTab(current.id, 'docx', tab)
+  const docx = await fetchExportInTab(current.id, docId, 'docx', tab)
   if (docx) {
     try {
       const text = await docxToText(base64ToArrayBuffer(docx))
