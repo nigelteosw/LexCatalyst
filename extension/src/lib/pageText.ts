@@ -20,23 +20,28 @@ async function readGoogleDoc(url: string): Promise<string | null> {
   }
 }
 
-// Must be called directly from a click handler: chrome.permissions.request needs a user gesture.
-export async function readActiveTabText(): Promise<{ url: string; title: string; text: string }> {
-  const granted = await chrome.permissions.request({ origins: ['<all_urls>'] })
-  if (!granted) throw new Error(`${CANT_READ} without permission`)
+export type ActiveTab = { id: number; url: string; title: string }
 
+export function isGoogleDoc(url: string): boolean {
+  return GOOGLE_DOC_URL.test(url)
+}
+
+export async function getActiveTab(): Promise<ActiveTab | null> {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
-  if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) throw new Error(CANT_READ)
+  if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) return null
+  return { id: tab.id, url: tab.url, title: tab.title ?? tab.url }
+}
 
+// Needs host permission for the tab's origin (see sites.ts); never prompts.
+export async function readTabText(tab: ActiveTab): Promise<{ url: string; title: string; text: string }> {
   const docText = await readGoogleDoc(tab.url)
-  if (docText) return { url: tab.url, title: tab.title ?? tab.url, text: docText }
-
+  if (docText) return { url: tab.url, title: tab.title, text: docText }
   try {
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => document.body?.innerText ?? '',
     })
-    return { url: tab.url, title: tab.title ?? tab.url, text: String(result?.result ?? '') }
+    return { url: tab.url, title: tab.title, text: String(result?.result ?? '') }
   } catch {
     throw new Error(CANT_READ)
   }

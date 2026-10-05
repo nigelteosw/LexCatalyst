@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { type BirdieTurn, type ExtensionUser, fetchMe, signIn, streamBirdie, UnauthorizedError } from '../lib/api'
 import { clearToken, getToken } from '../lib/auth'
-import { readActiveTabText } from '../lib/pageText'
+import { getActiveTab, readTabText } from '../lib/pageText'
+import { enableSite } from '../lib/sites'
 import { buildWebContext, PENDING_CONTEXT_KEY, type WebContext } from '../lib/webContext'
 import { MarkdownContent } from './MarkdownContent'
 
@@ -66,7 +67,10 @@ export function BirdieSidePanel() {
   async function handleReadPage() {
     setError(null)
     try {
-      const page = await readActiveTabText()
+      const tab = await getActiveTab()
+      if (!tab) throw new Error("Birdie can't read this page")
+      if (!(await enableSite(tab.url))) throw new Error("Birdie can't read this page without permission")
+      const page = await readTabText(tab)
       const ctx = buildWebContext({ ...page, source: 'page' })
       if (!ctx) throw new Error('This page has no readable text')
       setContext(ctx)

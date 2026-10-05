@@ -1,11 +1,18 @@
+import { syncContentScripts } from './lib/sites'
 import { buildWebContext, PENDING_CONTEXT_KEY } from './lib/webContext'
 
 const MENU_ID = 'ask-birdie'
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error)
 
+const resync = () => syncContentScripts().catch(console.error)
+chrome.runtime.onStartup.addListener(resync)
+chrome.permissions.onAdded.addListener(resync)
+chrome.permissions.onRemoved.addListener(resync)
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: MENU_ID, title: 'Ask Birdie about this', contexts: ['selection'] })
+  resync()
 })
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
