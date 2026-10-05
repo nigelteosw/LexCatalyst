@@ -381,6 +381,9 @@ embedded worker claims it from the durable Postgres queue.
 | `GET /settings/birdie` | signed-in user | `{has_openrouter_key, key_last4, openrouter_model, effective_model}`; never the key |
 | `PUT /settings/birdie` | signed-in user | save `openrouter_api_key` and/or `openrouter_model` |
 | `DELETE /settings/birdie/openrouter-key` | signed-in user | remove the key; Birdie returns to DeepSeek |
+| `POST /precedent/search` | signed-in user | classify the highlighted clause and return the firm's past versions from the user's own/matter documents and clean or redacted KB entries, with source, matter ref, date, author and draft/executed status; logged to `retrieval_audit_events` |
+
+`POST /birdie/stream` may first emit `event: sources` with `{"cases": [{citation, title, decision_date, url}]}`. Birdie only cites judgments from eLitigation (https://www.elitigation.sg): it searches eLitigation with a short phrase (no document or client text is sent there) and appends a warning if its answer contains a neutral citation that was not in the results. Each lookup is logged to `retrieval_audit_events`.
 
 ---
 

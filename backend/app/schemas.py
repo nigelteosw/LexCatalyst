@@ -828,3 +828,38 @@ class OpenRouterModelResponse(BaseModel):
     name: str
     context_length: int | None = None
     prompt_price_per_million: float | None = None
+
+
+class PrecedentSearchRequest(BaseModel):
+    text: str = Field(min_length=3, max_length=5000)
+    url: str | None = Field(default=None, max_length=2048)
+
+
+class PrecedentTermResponse(BaseModel):
+    kind: str
+    value: str
+    label: str
+
+
+class PrecedentTermCount(BaseModel):
+    label: str
+    count: int
+
+
+class PrecedentResultResponse(BaseModel):
+    id: str
+    source_type: Literal["document", "knowledge_bank"]
+    excerpt: str
+    document_title: str
+    matter_ref: str | None = None
+    date: str | None = None
+    author: str | None = None
+    status: str | None = None
+    document_id: str | None = None
+    term: PrecedentTermResponse | None = None
+
+
+class PrecedentSearchResponse(BaseModel):
+    clause_type: str
+    terms_summary: list[PrecedentTermCount]
+    results: list[PrecedentResultResponse]
