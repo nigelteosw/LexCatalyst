@@ -67,24 +67,27 @@ Reuses existing backend routes (no backend change):
 ### Backend
 
 - `app/services/precedent_service.py`:
-  - `classify_clause(text) -> str` — DeepSeek flash, constrained to a fixed list
-    (`option_period`, `governing_law`, `limitation_of_liability`, `termination`, `confidentiality`,
-    `payment_terms`, `notice`, `other`). Input is redacted first (see below).
+  - `classify_clause(text) -> str` — keyword rules (no LLM, so no text leaves for classification), over a
+    fixed list (`option_period`, `governing_law`, `limitation_of_liability`, `termination`,
+    `confidentiality`, `payment_terms`, `notice`, `other`).
   - `search_precedents(db, user, text, clause_type, limit=8)` — calls existing
     `rag_service.search_documents` (permission-scoped) and `knowledge_bank_service.search_kb_for_chat`
     (scoped + already redacted); merges, de-duplicates by chunk/entry id.
   - `extract_terms(results)` — regex first (days, %, currency amounts, jurisdiction names); returns
     `{kind, value, unit}` per result. No LLM.
   - `summarise_terms(results) -> list[{value, unit, count}]` — pure function, sorted by count.
-  - Redaction: results from matters the user is not a `MatterMember` of have client/party names replaced
-    using the existing `_propose_redactions` fallback rules plus the matter's `client_name`; text sent to
-    the LLM is the redacted form.
+  - Redaction: document chunks come only from `document_access_filter` (the user's own documents or
+    matters they are a member of), so they never cross a matter boundary. Cross-matter precedent comes
+    only from the Knowledge Bank, whose search already returns only `clean`/`redacted` entries outside
+    the user's matters; for those, `matter_ref` is shown as `[MATTER]`. Precedent sends no text to an LLM.
 - `app/routers/precedent.py`: `POST /precedent/search` body `{text, url?}`; auth required
   (`get_current_user`). Response:
   `{clause_type, terms_summary: [...], results: [{id, source_type, excerpt, document_title, matter_ref,
   date, author, status, open_url|null, term}]}`. Results with no resolvable source are dropped.
-- Audit: each call writes a `KnowledgeBankAccessLog` row (`action='precedent_search'`) listing returned ids.
-- Migration: add nullable `Document.execution_status` (`draft`/`executed`); executed results rank first.
+- Audit: new table `retrieval_audit_events` (`id, user_id, kind, query, returned_ids JSON, created_at`),
+  written for every precedent search and eLitigation lookup. (`kb_access_log` is constrained to
+  `action='edit'`, so it is not reused.)
+- Migration (same revision as the audit table): add nullable `Document.execution_status` (`draft`/`executed`); executed results rank first.
   Update "Current head" in `AGENTS.md`.
 - Document the route in `README.md`.
 
