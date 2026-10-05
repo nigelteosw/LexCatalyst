@@ -25,18 +25,9 @@ class UploadGuardTests(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 429)
         self.assertIn("50 max", ctx.exception.detail)
 
-    def test_daily_rate_limit_raises_429(self) -> None:
-        db = MagicMock()
-        db.scalar.side_effect = [5, 10]
-        user = SimpleNamespace(is_admin=False, id="u1")
-        with self.assertRaises(HTTPException) as ctx:
-            _check_upload_limits(db, user, 1)
-        self.assertEqual(ctx.exception.status_code, 429)
-        self.assertIn("10 per day", ctx.exception.detail)
-
     def test_storage_limit_raises_429(self) -> None:
         db = MagicMock()
-        db.scalar.side_effect = [5, 3, _ONE_GB - 100]
+        db.scalar.side_effect = [5, _ONE_GB - 100]
         user = SimpleNamespace(is_admin=False, id="u1")
         with self.assertRaises(HTTPException) as ctx:
             _check_upload_limits(db, user, 200)
@@ -45,13 +36,13 @@ class UploadGuardTests(unittest.TestCase):
 
     def test_under_all_limits_passes(self) -> None:
         db = MagicMock()
-        db.scalar.side_effect = [5, 3, 100 * 1024 * 1024]
+        db.scalar.side_effect = [5, 100 * 1024 * 1024]
         user = SimpleNamespace(is_admin=False, id="u1")
         _check_upload_limits(db, user, 1 * 1024 * 1024)
 
     def test_storage_null_used_treated_as_zero(self) -> None:
         db = MagicMock()
-        db.scalar.side_effect = [0, 0, None]
+        db.scalar.side_effect = [0, None]
         user = SimpleNamespace(is_admin=False, id="u1")
         _check_upload_limits(db, user, 1 * 1024 * 1024)
 
