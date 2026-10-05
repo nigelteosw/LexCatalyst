@@ -15,6 +15,11 @@ describe('splitSseBuffer', () => {
     expect(rest).toBe('event: done\ndata: {"con')
   })
 
+  it('keeps structured data such as arrays', () => {
+    const buffer = 'event: sources\ndata: {"cases":[{"citation":"[2011] SGCA 1"}]}\n\n'
+    expect(splitSseBuffer(buffer).events[0].data).toEqual({ cases: [{ citation: '[2011] SGCA 1' }] })
+  })
+
   it('skips blocks without event or data lines', () => {
     expect(splitSseBuffer(': ping\n\n').events).toEqual([])
   })

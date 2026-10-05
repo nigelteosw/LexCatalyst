@@ -4,7 +4,8 @@ import { splitSseBuffer } from './sse'
 import type { WebContext } from './webContext'
 
 export type ExtensionUser = { id: string; email: string; fullName: string | null }
-export type BirdieTurn = { role: 'user' | 'assistant'; content: string }
+export type CaseLink = { citation: string; title: string; decisionDate: string | null; url: string }
+export type BirdieTurn = { role: 'user' | 'assistant'; content: string; cases?: CaseLink[] }
 
 export class UnauthorizedError extends Error {}
 
@@ -27,6 +28,16 @@ async function checkAuth(response: Response): Promise<void> {
   }
 }
 
+async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, { ...init, headers: await authHeaders() })
+  await checkAuth(response)
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(typeof payload?.detail === 'string' ? payload.detail : `Request failed (${response.status})`)
+  }
+  return payload as T
+}
+
 export async function signIn(): Promise<ExtensionUser> {
   const credential = await getGoogleIdToken()
   const response = await fetch(`${API_URL}/auth/google`, {
@@ -41,10 +52,7 @@ export async function signIn(): Promise<ExtensionUser> {
 }
 
 export async function fetchMe(): Promise<ExtensionUser> {
-  const response = await fetch(`${API_URL}/me`, { headers: await authHeaders() })
-  await checkAuth(response)
-  if (!response.ok) throw new Error(`Could not load your account (${response.status})`)
-  return toUser((await response.json()) as ApiUser)
+  return toUser(await apiJson<ApiUser>('/me'))
 }
 
 export async function streamBirdie(opts: {
@@ -52,6 +60,7 @@ export async function streamBirdie(opts: {
   history: BirdieTurn[]
   webContext: WebContext | null
   signal?: AbortSignal
+  onSources?: (cases: CaseLink[]) => void
   onToken: (token: string) => void
 }): Promise<string> {
   const webContext = opts.webContext && {
@@ -63,7 +72,7 @@ export async function streamBirdie(opts: {
   const response = await fetch(`${API_URL}/birdie/stream`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ message: opts.message, history: opts.history.slice(-40), web_context: webContext }),
+    body: JSON.stringify({ message: opts.message, history: opts.history.slice(-40).map(({ role, content }) => ({ role, content })), web_context: webContext }),
     signal: opts.signal,
   })
   await checkAuth(response)
@@ -82,10 +91,152 @@ export async function streamBirdie(opts: {
     const { events, rest } = splitSseBuffer(buffer)
     buffer = rest
     for (const { event, data } of events) {
-      if (event === 'token') opts.onToken(data.content)
-      else if (event === 'done') return data.content
-      else if (event === 'error') throw new Error(data.detail)
+      if (event === 'sources') opts.onSources?.(toCaseLinks(data.cases))
+      else if (event === 'token') opts.onToken(String(data.content ?? ''))
+      else if (event === 'done') return String(data.content ?? '')
+      else if (event === 'error') throw new Error(String(data.detail ?? 'Birdie failed'))
     }
   }
   throw new Error('Birdie stopped responding')
+}
+
+const ELITIGATION_PREFIX = 'https://www.elitigation.sg/gd/s/'
+
+export function toCaseLinks(raw: unknown): CaseLink[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    const c = item as Record<string, unknown>
+    if (typeof c.citation !== 'string' || typeof c.title !== 'string' || typeof c.url !== 'string') return []
+    if (!c.url.startsWith(ELITIGATION_PREFIX)) return []
+    const decisionDate = typeof c.decision_date === 'string' ? c.decision_date : null
+    return [{ citation: c.citation, title: c.title, decisionDate, url: c.url }]
+  })
+}
+
+export type BirdieSettings = {
+  hasOpenRouterKey: boolean
+  keyLast4: string | null
+  openRouterModel: string | null
+  effectiveModel: string | null
+}
+export type OpenRouterModel = {
+  id: string
+  name: string
+  contextLength: number | null
+  promptPricePerMillion: number | null
+}
+
+type ApiBirdieSettings = {
+  has_openrouter_key: boolean
+  key_last4: string | null
+  openrouter_model: string | null
+  effective_model: string | null
+}
+type ApiOpenRouterModel = {
+  id: string
+  name: string
+  context_length: number | null
+  prompt_price_per_million: number | null
+}
+
+export function toBirdieSettings(raw: ApiBirdieSettings): BirdieSettings {
+  return {
+    hasOpenRouterKey: raw.has_openrouter_key,
+    keyLast4: raw.key_last4 ?? null,
+    openRouterModel: raw.openrouter_model ?? null,
+    effectiveModel: raw.effective_model ?? null,
+  }
+}
+
+export function toOpenRouterModel(raw: ApiOpenRouterModel): OpenRouterModel {
+  return {
+    id: raw.id,
+    name: raw.name,
+    contextLength: raw.context_length ?? null,
+    promptPricePerMillion: raw.prompt_price_per_million ?? null,
+  }
+}
+
+export async function getBirdieSettings(): Promise<BirdieSettings> {
+  return toBirdieSettings(await apiJson<ApiBirdieSettings>('/settings/birdie'))
+}
+
+export async function saveBirdieSettings(update: { apiKey?: string; model?: string | null }): Promise<BirdieSettings> {
+  const body: Record<string, string | null> = {}
+  if (update.apiKey) body.openrouter_api_key = update.apiKey
+  if (update.model !== undefined) body.openrouter_model = update.model
+  return toBirdieSettings(
+    await apiJson<ApiBirdieSettings>('/settings/birdie', { method: 'PUT', body: JSON.stringify(body) }),
+  )
+}
+
+export async function removeOpenRouterKey(): Promise<BirdieSettings> {
+  return toBirdieSettings(await apiJson<ApiBirdieSettings>('/settings/birdie/openrouter-key', { method: 'DELETE' }))
+}
+
+export async function listOpenRouterModels(): Promise<OpenRouterModel[]> {
+  return (await apiJson<ApiOpenRouterModel[]>('/settings/birdie/models')).map(toOpenRouterModel)
+}
+
+export type PrecedentResult = {
+  id: string
+  sourceType: 'document' | 'knowledge_bank'
+  excerpt: string
+  documentTitle: string
+  matterRef: string | null
+  date: string | null
+  author: string | null
+  status: string | null
+  documentId: string | null
+  termLabel: string | null
+}
+export type PrecedentResponse = {
+  clauseType: string
+  termsSummary: { label: string; count: number }[]
+  results: PrecedentResult[]
+}
+
+type ApiPrecedentResult = {
+  id: string
+  source_type: 'document' | 'knowledge_bank'
+  excerpt: string
+  document_title: string
+  matter_ref: string | null
+  date: string | null
+  author: string | null
+  status: string | null
+  document_id: string | null
+  term: { kind: string; value: string; label: string } | null
+}
+type ApiPrecedentResponse = {
+  clause_type: string
+  terms_summary: { label: string; count: number }[]
+  results: ApiPrecedentResult[]
+}
+
+export function toPrecedentResponse(raw: ApiPrecedentResponse): PrecedentResponse {
+  return {
+    clauseType: raw.clause_type,
+    termsSummary: raw.terms_summary,
+    results: raw.results.map((r) => ({
+      id: r.id,
+      sourceType: r.source_type,
+      excerpt: r.excerpt,
+      documentTitle: r.document_title,
+      matterRef: r.matter_ref,
+      date: r.date,
+      author: r.author,
+      status: r.status,
+      documentId: r.document_id,
+      termLabel: r.term?.label ?? null,
+    })),
+  }
+}
+
+export async function searchPrecedent(text: string, url?: string): Promise<PrecedentResponse> {
+  const raw = await apiJson<ApiPrecedentResponse>('/precedent/search', {
+    method: 'POST',
+    body: JSON.stringify({ text: text.slice(0, 5000), url: url ?? null }),
+  })
+  return toPrecedentResponse(raw)
 }
