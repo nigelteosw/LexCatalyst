@@ -14,6 +14,8 @@ from app.providers.deepseek import DeepSeekError
 from app.providers.openrouter import OpenRouterError
 from app.schemas import FeedbackRoundResponse, LessonResponse, PageContext, WebContext
 from app.services import lesson_service
+from app.services.birdie_provider import get_birdie_provider
+from app.services.case_law_service import case_source_payload, find_case_sources, validate_case_citations
 from app.services.birdie_service import stream_birdie_response
 
 router = APIRouter(tags=["birdie"])
@@ -44,6 +46,16 @@ async def birdie_stream(
 
     async def stream():
         try:
+            case_sources = await find_case_sources(
+                db,
+                user=current_user,
+                provider=get_birdie_provider(db, current_user),
+                user_message=request.message,
+                web_text=request.web_context.text if request.web_context else "",
+            )
+            if case_sources:
+                yield event("sources", {"cases": [case_source_payload(s) for s in case_sources]})
+
             chunks: list[str] = []
             async for token in stream_birdie_response(
                 db,
@@ -53,6 +65,7 @@ async def birdie_stream(
                 matter_id=request.matter_id,
                 page_context=request.page_context,
                 web_context=request.web_context,
+                case_sources=case_sources,
             ):
                 chunks.append(token)
                 yield event("token", {"content": token})
@@ -61,6 +74,10 @@ async def birdie_stream(
             if not full_response:
                 yield event("error", {"detail": "Birdie returned an empty response"})
                 return
+            warning = validate_case_citations(full_response, case_sources)
+            if warning:
+                yield event("token", {"content": warning})
+                full_response += warning
             yield event("done", {"content": full_response})
         except (DeepSeekError, OpenRouterError) as exc:
             yield event("error", {"detail": str(exc)})

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ActionItem, User
 from app.services.birdie_provider import get_birdie_provider
+from app.services.case_law_service import CASE_LAW_RULE, CaseSource, format_case_sources
 from app.schemas import PageContext, WebContext
 from app.services.lesson_service import format_feedback_context
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
@@ -21,7 +22,9 @@ Rules:
 - Be a mentor, not a search engine. If the question has a human element (workload, relationships, fear), address it as a person would.
 - Never lecture. One point at a time.
 
-If firm knowledge is provided in the context below, use it. If not, draw on general best practice and flag it as such."""
+If firm knowledge is provided in the context below, use it. If not, draw on general best practice and flag it as such.
+
+""" + CASE_LAW_RULE
 
 _VIEW_LABELS = {
     "home": "the Home page",
@@ -100,6 +103,7 @@ async def build_birdie_messages(
     matter_id: str | None,
     page_context: PageContext | None = None,
     web_context: WebContext | None = None,
+    case_sources: list[CaseSource] | None = None,
 ) -> list[dict[str, str]]:
     kb_entries = await search_kb_for_chat(
         db,
@@ -118,6 +122,7 @@ async def build_birdie_messages(
     system_content += format_feedback_context(db, user=user)
     system_content += _format_page_context(page_context)
     system_content += _format_web_context(web_context)
+    system_content += format_case_sources(case_sources or [])
 
     if kb_context:
         system_content += f"\n\n---\nFirm knowledge relevant to this question:\n{kb_context}"
@@ -137,6 +142,7 @@ async def stream_birdie_response(
     matter_id: str | None,
     page_context: PageContext | None = None,
     web_context: WebContext | None = None,
+    case_sources: list[CaseSource] | None = None,
 ):
     messages = await build_birdie_messages(
         db,
@@ -146,6 +152,7 @@ async def stream_birdie_response(
         matter_id=matter_id,
         page_context=page_context,
         web_context=web_context,
+        case_sources=case_sources,
     )
     provider = get_birdie_provider(db, user)
     async for chunk in provider.stream_chat(messages):
