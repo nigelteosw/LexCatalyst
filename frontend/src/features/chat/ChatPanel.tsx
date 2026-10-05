@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { AlertCircle, ArrowDown, BookMarked, Brain, Check, ChevronDown, Copy, FileText, LoaderCircle, MessageSquare, Paperclip, SendHorizontal, Sparkles, Square, Trash2 } from 'lucide-react'
+import { AlertCircle, ArrowDown, BookMarked, Brain, Check, ChevronDown, Copy, FileText, LoaderCircle, MessageSquare, Paperclip, Sparkles, Square, Trash2 } from 'lucide-react'
 import { Button } from '../../shared/ui/Button'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
@@ -48,6 +48,8 @@ export type ChatPanelProps = {
   error: string | null
   inputLabel: string
   modelPicker?: ReactNode
+  /** Matter chip rendered at the start of the composer's action row. */
+  composerLeading?: ReactNode
   sendDisabledReason?: string
   isLoading: boolean
   isResponding: boolean
@@ -76,6 +78,7 @@ export function ChatPanel({
   error,
   inputLabel,
   modelPicker,
+  composerLeading,
   sendDisabledReason,
   isLoading,
   isResponding,
@@ -224,16 +227,43 @@ export function ChatPanel({
                 <span className="truncate">{attachmentStatus}</span>
               </div>
             )}
-            <div className="flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
+              aria-label={inputLabel}
+              rows={1}
+              className="min-h-[48px] max-h-48 w-full resize-none overflow-y-auto bg-transparent px-1 py-3 text-sm leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  if (isLoading) {
+                    return
+                  }
+                  // Fallback for browsers that don't support requestSubmit.
+                  if (event.currentTarget.form) {
+                    if (typeof event.currentTarget.form.requestSubmit === 'function') {
+                      event.currentTarget.form.requestSubmit()
+                    } else {
+                      const submitEvent = new Event('submit', { cancelable: true, bubbles: true })
+                      event.currentTarget.form.dispatchEvent(submitEvent)
+                    }
+                  }
+                }
+              }}
+              onChange={(event) => onPromptChange(event.target.value)}
+              placeholder={placeholder}
+              value={prompt}
+            />
+            <div className="flex flex-wrap items-center gap-2 pb-1">
+              {composerLeading}
               <Button
-                aria-label="Upload PDF or DOCX"
-                className="mb-1 shrink-0"
+                aria-label="Attach PDF or DOCX"
                 disabled={!canUpload}
                 onClick={() => fileInputRef.current?.click()}
-                size="icon"
+                size="md"
                 variant="ghost"
               >
-                {isUploadingFile ? <LoaderCircle size={18} className="animate-spin" /> : <Paperclip size={18} />}
+                {isUploadingFile ? <LoaderCircle size={16} className="animate-spin" /> : <Paperclip size={16} />}
+                Attach
               </Button>
               <input
                 ref={fileInputRef}
@@ -248,60 +278,30 @@ export function ChatPanel({
                   event.currentTarget.value = ''
                 }}
               />
-              <textarea
-                ref={textareaRef}
-                aria-label={inputLabel}
-                rows={1}
-                className="min-h-[48px] max-h-48 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-3 text-sm leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault()
-                    if (isLoading) {
-                      return
-                    }
-                    // Fallback for browsers that don't support requestSubmit.
-                    if (event.currentTarget.form) {
-                      if (typeof event.currentTarget.form.requestSubmit === 'function') {
-                        event.currentTarget.form.requestSubmit()
-                      } else {
-                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true })
-                        event.currentTarget.form.dispatchEvent(submitEvent)
-                      }
-                    }
-                  }
-                }}
-                onChange={(event) => onPromptChange(event.target.value)}
-                placeholder={placeholder}
-                value={prompt}
-              />
-              {isResponding ? (
-                <Button
-                  aria-label="Stop response"
-                  className="mb-1 shrink-0"
-                  onClick={onStop}
-                  size="icon"
-                  variant="secondary"
-                >
-                  <Square size={15} fill="currentColor" />
-                </Button>
-              ) : (
-                <Button
-                  aria-label={sendLabel}
-                  className="mb-1 shrink-0"
-                  disabled={!canSubmit}
-                  size="icon"
-                  type="submit"
-                  variant="primary"
-                >
-                  <SendHorizontal size={18} />
-                </Button>
-              )}
+              {modelPicker}
+              <div className="ml-auto">
+                {isResponding ? (
+                  <Button aria-label="Stop response" onClick={onStop} variant="secondary" className="border border-neutral-200">
+                    <Square size={14} fill="currentColor" />
+                    Stop
+                  </Button>
+                ) : (
+                  <Button
+                    aria-label={sendLabel}
+                    className="bg-[#16224f] px-5 hover:bg-[#1f2f6b]"
+                    disabled={!canSubmit}
+                    type="submit"
+                    variant="primary"
+                  >
+                    {sendLabel}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
-          <div className="mt-2 flex items-center justify-center gap-2">
-            {modelPicker}
-            {sendDisabledReason && <span className="text-[11px] text-amber-700">{sendDisabledReason}</span>}
-          </div>
+          {sendDisabledReason && (
+            <div className="mt-2 text-center text-[11px] text-amber-700">{sendDisabledReason}</div>
+          )}
           <p className="mt-2 text-center text-[11px] text-neutral-500">
             Enter to send · Shift+Enter for a new line · LexChat can make mistakes, so check important information.
           </p>
@@ -366,9 +366,17 @@ function ChatMessage({ message, userInitials, onDelete }: ChatMessageProps) {
 
   if (isUser) {
     return (
-      <article aria-label={`Message from ${userInitials}`} className="group flex flex-col items-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-neutral-100 px-4 py-2.5 text-[15px] leading-relaxed text-neutral-900">
-          {message.body}
+      <article aria-label={`Message from ${userInitials}`} className="group">
+        <div className="flex items-center gap-4 rounded-xl bg-neutral-100 px-5 py-4">
+          <span
+            aria-hidden="true"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#16224f] text-xs font-semibold text-white"
+          >
+            {userInitials}
+          </span>
+          <div className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-relaxed text-neutral-900">
+            {message.body}
+          </div>
         </div>
         {actions}
       </article>
@@ -376,18 +384,24 @@ function ChatMessage({ message, userInitials, onDelete }: ChatMessageProps) {
   }
 
   return (
-    <article className="group flex gap-3.5">
-      <div
-        aria-hidden="true"
-        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-neutral-950 text-white"
-      >
-        <Sparkles size={13} />
-      </div>
-      <div className="min-w-0 flex-1">
-        {message.steps && message.steps.length > 0 && <ToolSteps steps={message.steps} />}
-        {message.meta && (
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-neutral-500">{message.meta}</p>
+    <article className="group">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span
+          aria-hidden="true"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-neutral-950 font-serif text-sm text-white"
+        >
+          L
+        </span>
+        <span className="text-sm text-neutral-500">LexChat</span>
+        {message.steps && message.steps.length > 0 && (
+          <>
+            <span aria-hidden="true" className="text-neutral-300">·</span>
+            <ToolSteps steps={message.steps} />
+          </>
         )}
+        {message.meta && <span className="text-xs text-neutral-400">{message.meta}</span>}
+      </div>
+      <div className="mt-3 min-w-0">
         {!message.body && !message.steps?.length ? (
           <span className="flex items-center gap-1 py-2" role="status" aria-label="LexChat is thinking">
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:0ms]" />
@@ -395,7 +409,9 @@ function ChatMessage({ message, userInitials, onDelete }: ChatMessageProps) {
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:300ms]" />
           </span>
         ) : (
-          message.body && <MarkdownContent markdown={message.body} className="text-[15px] leading-7 text-neutral-900" />
+          message.body && (
+            <MarkdownContent markdown={message.body} className="font-serif text-[17px] leading-8 text-neutral-900" />
+          )
         )}
         {actions}
       </div>
@@ -411,26 +427,26 @@ function ToolSteps({ steps }: { steps: ToolStep[] }) {
   const current = steps.find((step) => step.status === 'running')
 
   return (
-    <div className="mb-3">
+    <div className={expanded ? 'basis-full' : 'min-w-0'}>
       <button
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100"
+        className="inline-flex items-center gap-1.5 rounded-md py-0.5 text-sm text-neutral-500 hover:text-neutral-800"
         disabled={running}
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
-        {running ? <LoaderCircle size={12} className="animate-spin" /> : <Sparkles size={12} />}
-        <span className="font-medium">
+        {running && <LoaderCircle size={12} className="animate-spin" />}
+        <span>
           {running
             ? `${TOOL_LABELS[current?.tool ?? ''] ?? 'Working'}…`
-            : `Searched ${steps.length} ${steps.length === 1 ? 'source' : 'sources'}`}
+            : `Reviewed ${steps.length} ${steps.length === 1 ? 'source' : 'sources'}`}
         </span>
         {!running && (
           <ChevronDown size={12} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
         )}
       </button>
       {expanded && (
-        <div className="mt-1.5 flex flex-col gap-1 border-l-2 border-neutral-200 pl-3">
+        <div className="mt-1.5 flex basis-full flex-col gap-1 border-l-2 border-neutral-200 pl-3">
           {steps.map((step, i) => (
             <ToolStepRow key={step.id ?? `${step.tool}-${i}`} step={step} />
           ))}

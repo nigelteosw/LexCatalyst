@@ -4,7 +4,8 @@ import { Brain, Menu, MessageSquare } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
-import { MatterSelect } from '../shared/ui/MatterSelect'
+import { ChatHeader } from '../features/chat/ChatHeader'
+import { MatterChip } from '../features/chat/MatterChip'
 import { KnowledgeBankSections } from '../features/knowledge-bank/KnowledgeBankSections'
 import { ModelPicker } from '../shared/ui/ModelPicker'
 import { MISSING_KEY_MESSAGE, useModelChoice } from '../shared/lib/llm'
@@ -120,6 +121,7 @@ function App() {
     current,
     isKnownRoute,
     selectHome,
+    selectMatter,
     selectMemories,
     selectSettings,
     selectThread,
@@ -678,38 +680,8 @@ function App() {
                 <SettingsPanel currentUser={currentUser} />
               ) : (
                 <>
-              <header className="z-30 flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-neutral-100 bg-white/80 px-4 py-2 backdrop-blur-md lg:px-6">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <Button
-                    aria-label="Open menu"
-                    className="-ml-2 lg:hidden"
-                    onClick={() => setIsSidebarOpen(true)}
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Menu size={20} />
-                  </Button>
-                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-neutral-950 text-white">
-                    <MessageSquare aria-hidden="true" size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-500">
-                      LexChat
-                    </div>
-                    <h2 className="truncate text-sm font-semibold text-neutral-900">
-                      {activeThread?.title ?? 'New conversation'}
-                    </h2>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="hidden w-56 md:block">
-                    <MatterSelect
-                      label="Active matter"
-                      matters={matters}
-                      onChange={handleChatMatterChange}
-                      value={selectedMatterId}
-                    />
-                  </div>
+              <ChatHeader
+                actions={
                   <Button
                     aria-label="Memories"
                     aria-pressed={false}
@@ -722,21 +694,34 @@ function App() {
                   >
                     <Brain size={18} />
                   </Button>
-                </div>
-                <div className="w-full md:hidden">
-                  <MatterSelect
-                    label="Active matter on mobile"
-                    matters={matters}
-                    onChange={handleChatMatterChange}
-                    value={selectedMatterId}
-                  />
-                </div>
-              </header>
+                }
+                leading={
+                  <Button
+                    aria-label="Open menu"
+                    className="-ml-2 lg:hidden"
+                    onClick={() => setIsSidebarOpen(true)}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <Menu size={20} />
+                  </Button>
+                }
+                matter={matters.find((m) => m.id === selectedMatterId) ?? null}
+                onOpenMatter={() => selectMatter(selectedMatterId ?? 'general')}
+                title={activeThread?.title ?? 'New conversation'}
+              />
 
               <ChatPanel
                 attachmentStatus={composerAttachmentStatus}
                 error={error ?? (workspaceError ? getErrorMessage(workspaceError) : null)}
                 inputLabel="Ask LexChat"
+                composerLeading={
+                  <MatterChip
+                    matters={matters}
+                    onChange={handleChatMatterChange}
+                    value={selectedMatterId}
+                  />
+                }
                 modelPicker={
                   <ModelPicker
                     choice={modelChoice}
@@ -755,7 +740,7 @@ function App() {
                 onStop={handleStopResponse}
                 onSubmit={handleSubmit}
                 onDeleteMessage={handleDeleteMessage}
-                placeholder="Type your legal question or request..."
+                placeholder={selectedMatterId ? 'Ask LexChat about this matter' : 'Ask LexChat'}
                 prompt={prompt}
                 sendLabel="Send"
                 userInitials={userInitials}
