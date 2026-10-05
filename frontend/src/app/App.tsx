@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, Gauge, Menu, MessageSquare, Sparkles } from 'lucide-react'
+import { Brain, Menu, MessageSquare } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
+import { ModelPicker } from '../shared/ui/ModelPicker'
+import { MISSING_KEY_MESSAGE, useModelChoice } from '../shared/lib/llm'
 import { PanelErrorBoundary } from '../shared/ui/PanelErrorBoundary'
 import { Sidebar } from '../features/navigation/Sidebar'
 import { DemoBar } from '../features/demo/DemoBar'
@@ -27,7 +29,6 @@ import {
 } from '../shared/api/api'
 import type {
   BirdiePageContext,
-  ChatModel,
   ChatThread,
   CurrentUser,
   Message,
@@ -71,30 +72,6 @@ type ActiveStream = {
   messages: Message[]
 }
 
-const CHAT_MODELS: Array<{
-  id: ChatModel
-  label: string
-  description: string
-}> = [
-  {
-    id: 'deepseek-v4-flash',
-    label: 'Flash',
-    description: 'Faster, lower-cost responses',
-  },
-  {
-    id: 'deepseek-v4-pro',
-    label: 'Pro',
-    description: 'Deeper legal reasoning',
-  },
-]
-
-function getSavedChatModel(): ChatModel {
-  const saved = localStorage.getItem('chatModel')
-  return saved === 'deepseek-v4-flash' || saved === 'deepseek-v4-pro'
-    ? saved
-    : 'deepseek-v4-pro'
-}
-
 function getSavedUser(): SessionUser | null {
   try {
     const saved = localStorage.getItem('user')
@@ -135,6 +112,7 @@ function App() {
     isKnownRoute,
     selectHome,
     selectMemories,
+    selectSettings,
     selectThread,
     startNewChat,
   } = useWorkspaceNavigation()
@@ -179,7 +157,10 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isBirdieOpen, setIsBirdieOpen] = useState(false)
-  const [selectedModel, setSelectedModel] = useState<ChatModel>(getSavedChatModel)
+  const { choice: modelChoice, setChoice: setModelChoice, settings: llmSettings, needsKey } = useModelChoice(
+    'lex.chat.tier',
+    'lexchat',
+  )
   const [selectedMatterId, setSelectedMatterId] = useState<string | null>(
     () => localStorage.getItem('selectedMatterId'),
   )
@@ -306,7 +287,7 @@ function App() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmedPrompt = prompt.trim()
-    if (!trimmedPrompt || isLoading) return
+    if (!trimmedPrompt || isLoading || needsKey) return
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -334,7 +315,7 @@ function App() {
     try {
       await streamChatMessage({
         message: trimmedPrompt,
-        model: selectedModel,
+        model: modelChoice,
         matterId: selectedMatterId,
         signal: controller.signal,
         threadId,
@@ -520,11 +501,6 @@ function App() {
     }
   }
 
-  function handleModelChange(model: ChatModel) {
-    setSelectedModel(model)
-    localStorage.setItem('chatModel', model)
-  }
-
   function handleMatterChange(matterId: string | null) {
     setSelectedMatterId(matterId)
     if (matterId) {
@@ -588,6 +564,7 @@ function App() {
           isOpen={isBirdieOpen}
           onToggle={() => setIsBirdieOpen((o) => !o)}
           matterId={selectedMatterId}
+          onOpenSettings={() => selectSettings()}
           pageContext={buildBirdiePageContext(current, activeThread?.title ?? null)}
         />
       </Suspense>
@@ -692,32 +669,6 @@ function App() {
                       </option>
                     ))}
                   </select>
-                  <div
-                    className="flex items-center rounded-xl bg-neutral-100 p-1"
-                    aria-label="Chat model"
-                  >
-                    {CHAT_MODELS.map((model) => {
-                      const isSelected = selectedModel === model.id
-                      return (
-                        <Button
-                          key={model.id}
-                          aria-pressed={isSelected}
-                          title={model.description}
-                          onClick={() => handleModelChange(model.id)}
-                          className="sm:px-2.5"
-                          size="sm"
-                          variant={isSelected ? 'selected' : 'secondary'}
-                        >
-                          {model.id === 'deepseek-v4-flash' ? (
-                            <Gauge size={14} />
-                          ) : (
-                            <Sparkles size={14} />
-                          )}
-                          <span className="hidden sm:inline">{model.label}</span>
-                        </Button>
-                      )
-                    })}
-                  </div>
                   <Button
                     aria-label="Memories"
                     aria-pressed={false}
@@ -750,7 +701,15 @@ function App() {
                 attachmentStatus={composerAttachmentStatus}
                 error={error ?? (workspaceError ? getErrorMessage(workspaceError) : null)}
                 inputLabel="Ask LexChat"
-                modelLabel={`DeepSeek V4 ${CHAT_MODELS.find((m) => m.id === selectedModel)?.label ?? ''}`.trim()}
+                modelPicker={
+                  <ModelPicker
+                    choice={modelChoice}
+                    onChange={setModelChoice}
+                    onOpenSettings={() => selectSettings()}
+                    settings={llmSettings}
+                  />
+                }
+                sendDisabledReason={needsKey ? MISSING_KEY_MESSAGE : undefined}
                 isLoading={isLoading}
                 isResponding={isResponding}
                 isUploadingFile={isUploadingComposerFile}

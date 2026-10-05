@@ -15,7 +15,7 @@ from app.models import (
     WikiPageRevision,
     WikiPageSource,
 )
-from app.providers.deepseek import DeepSeekProvider
+from app.services.llm_service import get_llm
 from app.schemas import WikiIngestRequest, WikiPageCreate, WikiPageUpdate
 from app.services.resource_metadata_service import sync_metadata_safe, sync_wiki_metadata
 
@@ -390,11 +390,8 @@ async def ingest_document_to_wiki(
     if not chunks:
         raise WikiIngestionError("Document has no searchable chunks")
 
-    provider = DeepSeekProvider()
-    content, _ = await provider.chat(
-        build_ingestion_prompt(document=document, chunks=chunks),
-        model=request.model,
-    )
+    provider = get_llm(db, user.id, feature="wiki", tier=request.tier, model=request.model)
+    content, _ = await provider.chat(build_ingestion_prompt(document=document, chunks=chunks))
     payload = parse_json_object(content)
     # New prompt returns the page object directly; old format wrapped it in {"pages": [...]}
     page_payload = payload if "title" in payload else first_page_payload(payload)

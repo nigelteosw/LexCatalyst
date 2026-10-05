@@ -3,7 +3,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 from app.models import Memory
 from app.schemas import MemoryCreate, MemoryUpdate, MemoryExtractionResult, MemoryExtractionCandidate
-from app.providers.deepseek import DeepSeekProvider
+from app.services.llm_service import get_llm
 
 EXTRACTION_PROMPT = """You are a memory extraction assistant. Extract patterns about who the user is and how they work from a conversation between a user and a legal assistant.
 
@@ -116,11 +116,13 @@ def delete_memory(db: Session, user_id: str, memory_id: str) -> bool:
     return True
 
 
-async def extract_memory_candidates(user_message: str, assistant_message: str) -> list[MemoryExtractionCandidate]:
-    provider = DeepSeekProvider()
+async def extract_memory_candidates(
+    db: Session, user_id: str, user_message: str, assistant_message: str
+) -> list[MemoryExtractionCandidate]:
     prompt = EXTRACTION_PROMPT.format(user_message=user_message, assistant_message=assistant_message)
     
     try:
+        provider = get_llm(db, user_id, feature="memory")
         content, _ = await provider.chat([{"role": "user", "content": prompt}])
         # Strip potential markdown code blocks if the LLM includes them
         cleaned_content = content.strip()

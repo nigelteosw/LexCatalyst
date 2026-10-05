@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import check_kb_read
 from app.models import User
-from app.providers.deepseek import DeepSeekProvider
+from app.services.llm_service import get_llm
 from app.services.document_service import get_document_full_text
 from app.services.knowledge_bank_service import (
     get_kb_entry,
@@ -17,153 +17,6 @@ from app.services.rag_service import search_documents
 MAX_TOOL_ROUNDS = 4
 MAX_MEMORY_RESULTS = 6
 MAX_KB_BODY_PREVIEW = 2000
-
-# DeepSeek Pro occasionally emits its native tool-call markup as content
-# tokens instead of through the OpenAI-style `tool_calls` delta. We must
-# strip these from anything we stream to the user.
-_DSML_START_TOKEN = "<｜｜DSML｜｜"   # "<｜｜DSML｜｜"
-_DSML_END_TOKEN = "</｜｜DSML｜｜tool_calls>"  # "</｜｜DSML｜｜tool_calls>"
-# Hold back a small tail so that a marker split across two chunks gets
-# caught. The longest marker we need to recognise is ~30 chars.
-_DSML_TAIL_HOLD = 32
-
-
-class _DsmlStripper:
-    """Streaming filter that suppresses DeepSeek's inline tool-call markup."""
-
-    def __init__(self) -> None:
-        self._buf = ""
-        self._in_dsml = False
-
-    def feed(self, token: str) -> str:
-        self._buf += token
-        out = ""
-
-        while True:
-            if self._in_dsml:
-                end = self._buf.find(_DSML_END_TOKEN)
-                if end < 0:
-                    # Still inside DSML; drop everything.
-                    self._buf = ""
-                    return out
-                # Consume up to and including the end marker.
-                self._buf = self._buf[end + len(_DSML_END_TOKEN):]
-                self._in_dsml = False
-                continue
-
-            start = self._buf.find(_DSML_START_TOKEN)
-            if start >= 0:
-                out += self._buf[:start]
-                self._buf = self._buf[start:]
-                self._in_dsml = True
-                continue
-
-            # Not in DSML and no start marker visible. Flush everything
-            # except a small trailing buffer so a marker that spans
-            # chunks doesn't slip through.
-            if len(self._buf) > _DSML_TAIL_HOLD:
-                out += self._buf[:-_DSML_TAIL_HOLD]
-                self._buf = self._buf[-_DSML_TAIL_HOLD:]
-            return out
-
-    def flush(self) -> str:
-        if self._in_dsml:
-            self._buf = ""
-            return ""
-        out = self._buf
-        self._buf = ""
-        return out
-
-TOOLS: list[dict] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_documents",
-            "description": (
-                "Search uploaded legal documents for relevant clauses, facts, or analysis. "
-                "Use when the question requires specific text from uploaded files."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Natural-language search query"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_knowledge_bank",
-            "description": (
-                "Search the firm's knowledge bank for playbooks, precedents, style guides, "
-                "and soft-skill advice the user has access to."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Natural-language search query"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_memories",
-            "description": (
-                "Keyword-search the user's memory bank for personal context, working style "
-                "preferences, and past matter facts."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Keyword(s) to match against memories"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_kb_entry",
-            "description": (
-                "Fetch the full content of a specific knowledge bank entry by its ID. "
-                "Use after search_knowledge_bank when you want to read an entry in full."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "entry_id": {"type": "string", "description": "The knowledge bank entry ID"},
-                },
-                "required": ["entry_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_document",
-            "description": (
-                "Read the full extracted text of an uploaded document by its ID. "
-                "Use this when the KB summary is not detailed enough and you need to "
-                "quote or analyse the original document. The document_id can be found "
-                "on a KB entry as 'source_document_id', or surfaced by search_documents."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "document_id": {"type": "string", "description": "The document ID"},
-                },
-                "required": ["document_id"],
-            },
-        },
-    },
-]
-
 
 # --- Tool execution -------------------------------------------------------
 
@@ -309,7 +162,7 @@ async def run_agent_loop(
         in a row, the loop short-circuits to the final answer round to
         prevent runaway loops on hallucinated queries.
     """
-    provider = DeepSeekProvider()
+    provider = get_llm(db, user.id, feature="lexchat", model=model)
     current_messages = list(messages)
     previous_fingerprints: set[str] = set()
 
@@ -329,25 +182,16 @@ async def run_agent_loop(
             })
 
         accumulated_tool_calls: list[dict] = []
-        assistant_reasoning = ""
         assistant_content: str | None = None
-        stripper = _DsmlStripper()
 
         async for event_type, event_data in provider.stream_with_tools(
-            current_messages, tools, model=model,
+            current_messages, tools,
         ):
             if event_type == "token":
-                clean = stripper.feed(event_data)
-                if clean:
-                    yield ("token", {"content": clean})
+                yield ("token", {"content": event_data})
             elif event_type == "tool_calls":
                 accumulated_tool_calls = event_data["tool_calls"]
-                assistant_reasoning = event_data["reasoning_content"]
                 assistant_content = event_data["content"]
-
-        tail = stripper.flush()
-        if tail:
-            yield ("token", {"content": tail})
 
         if not accumulated_tool_calls:
             return
@@ -378,9 +222,6 @@ async def run_agent_loop(
         current_messages.append({
             "role": "assistant",
             "content": assistant_content,
-            # DeepSeek V4 thinking-mode tool calls require this field on
-            # every subsequent request in the same agent turn.
-            "reasoning_content": assistant_reasoning,
             "tool_calls": accumulated_tool_calls,
         })
 

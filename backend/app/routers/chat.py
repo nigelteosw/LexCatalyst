@@ -8,11 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import ChatThread, User
-from app.providers.deepseek import DeepSeekError
+from app.providers.openrouter import OpenRouterError, OpenRouterKeyMissing
 from app.providers.embedding_provider import EmbeddingError
 from app.schemas import (
     ChatMessageResponse,
@@ -51,9 +50,12 @@ async def chat(
             user_id=current_user.id,
             thread_id=request.thread_id,
             model=request.model,
+            tier=request.tier,
             matter_id=request.matter_id,
         )
-    except DeepSeekError as exc:
+    except OpenRouterKeyMissing as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except OpenRouterError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except EmbeddingError as exc:
         raise HTTPException(status_code=502, detail=f"Document search is unavailable: {exc}") from exc
@@ -63,7 +65,7 @@ async def chat(
     return ChatResponse(
         thread_id=thread.id,
         message=ChatMessageResponse.model_validate(assistant_message),
-        model=assistant_message.model or get_settings().deepseek_model,
+        model=assistant_message.model or "",
     )
 
 
@@ -84,6 +86,7 @@ async def chat_stream(
                 user_id=current_user.id,
                 thread_id=request.thread_id,
                 model=request.model,
+                tier=request.tier,
                 matter_id=request.matter_id,
             )
             yield event("thread", {"thread_id": thread.id, "title": thread.title})
@@ -119,7 +122,7 @@ async def chat_stream(
 
             assistant_content = "".join(chunks).strip()
             if not assistant_content:
-                yield event("error", {"detail": "DeepSeek returned an empty response"})
+                yield event("error", {"detail": "The model returned an empty response"})
                 return
 
             assistant_message = await persist_assistant_message(
@@ -144,7 +147,7 @@ async def chat_stream(
                 assistant_message=assistant_message,
                 user_message=request.message,
             )
-        except DeepSeekError as exc:
+        except OpenRouterError as exc:
             yield event("error", {"detail": str(exc)})
         except EmbeddingError as exc:
             yield event("error", {"detail": f"Document search is unavailable: {exc}"})

@@ -9,7 +9,7 @@ Raw comments are shown as written. Distilled lessons (general principles rewritt
 Birdie model) are generated once per round, on demand, and stored.
 
 External LLM note: distilling sends the reviewer's comments and quoted document text to the
-user's Birdie provider (their OpenRouter key if set, otherwise the firm DeepSeek key).
+user's Birdie provider (their OpenRouter key, or the demo key in DEMO_MODE).
 """
 
 import json
@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import ReviewAnnotation, ReviewHandoff, ReviewLesson, User
-from app.services.birdie_provider import get_birdie_provider
+from app.services.llm_service import get_llm
 from app.services.review_handoff_service import lock_handoff
 
 FEEDBACK_STATUSES = ("returned", "completed")
@@ -188,7 +188,7 @@ async def distill_lessons(db: Session, *, user: User, handoff_id: str) -> list[R
 
     messages = _distill_messages(handoff.document.filename, annotations)
     valid_ids = {a.id for a in annotations}
-    provider = get_birdie_provider(db, user)
+    provider = get_llm(db, user.id, feature="lessons")
     db.rollback()  # release the read transaction before the slow provider call
 
     raw = await provider.complete(messages)

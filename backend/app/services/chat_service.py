@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ChatMessage, ChatThread
 from app.providers.embedding_provider import EmbeddingError
-from app.providers.deepseek import DeepSeekProvider, resolve_chat_model
+from app.services.llm_service import get_llm, resolve_model
 from app.services.memory_service import (
     extract_memory_candidates,
     format_memory_context,
@@ -116,7 +116,7 @@ def _count_messages(db: Session, thread_id: str) -> int:
     return db.scalar(stmt) or 0
 
 
-async def _generate_summary(older_messages: list[ChatMessage]) -> str | None:
+async def _generate_summary(db: Session, user_id: str, older_messages: list[ChatMessage]) -> str | None:
     """Ask the LLM to summarise a list of messages that fall outside the recent window."""
     if not older_messages:
         return None
@@ -144,16 +144,16 @@ async def _generate_summary(older_messages: list[ChatMessage]) -> str | None:
         {"role": "user", "content": "Conversation history to summarise:\n\n" + "\n".join(lines)},
     ]
 
-    provider = DeepSeekProvider()
     try:
-        summary, _ = await provider.chat(prompt_messages, model="deepseek-v4-flash")
+        provider = get_llm(db, user_id, feature="thread_summary")
+        summary, _ = await provider.chat(prompt_messages)
         return summary
     except Exception as exc:
         print(f"Thread summarisation skipped: {exc}")
         return None
 
 
-async def _maybe_refresh_summary(db: Session, thread: ChatThread) -> None:
+async def _maybe_refresh_summary(db: Session, thread: ChatThread, user_id: str) -> None:
     """Regenerate the summary whenever the archived history grows."""
     total = _count_messages(db, thread.id)
     archived = total - _RECENT_LIMIT
@@ -165,7 +165,7 @@ async def _maybe_refresh_summary(db: Session, thread: ChatThread) -> None:
 
     all_messages = _get_all_messages(db, thread.id)
     older = all_messages[:-_RECENT_LIMIT]
-    summary = await _generate_summary(older)
+    summary = await _generate_summary(db, user_id, older)
     if summary:
         thread.summary = summary
         thread.summary_up_to = archived
@@ -264,8 +264,11 @@ async def create_chat_response(
     thread_id: str | None = None,
     matter_id: str | None = None,
     model: str | None = None,
+    tier: str | None = None,
 ) -> tuple[ChatThread, ChatMessage]:
-    selected_model = resolve_chat_model(model)
+    # Resolve the key first so a missing key fails before anything is saved.
+    provider = get_llm(db, user_id, feature="lexchat", tier=tier, model=model)
+    selected_model = provider.model
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     if matter_id is not None:
         thread.matter_id = matter_id
@@ -283,7 +286,6 @@ async def create_chat_response(
     db.commit()
     db.refresh(thread)
 
-    provider = DeepSeekProvider()
     assistant_content, usage = await provider.chat(
         build_provider_messages(
             history,
@@ -294,7 +296,6 @@ async def create_chat_response(
             kb_entries=kb_entries,
             thread_summary=thread.summary,
         ),
-        model=selected_model,
     )
 
     assistant_message = add_message(
@@ -312,10 +313,10 @@ async def create_chat_response(
     db.refresh(assistant_message)
     db.refresh(thread)
 
-    candidates = await extract_memory_candidates(user_message, assistant_content)
+    candidates = await extract_memory_candidates(db, user_id, user_message, assistant_content)
     save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
 
-    await _maybe_refresh_summary(db, thread)
+    await _maybe_refresh_summary(db, thread, user_id)
 
     return thread, assistant_message
 
@@ -329,7 +330,6 @@ async def create_chat_request(
     matter_id: str | None = None,
     model: str | None = None,
 ) -> tuple[ChatThread, list[dict[str, str]], str]:
-    selected_model = resolve_chat_model(model)
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     if matter_id is not None:
         thread.matter_id = matter_id
@@ -376,6 +376,7 @@ async def prepare_agent_context(
     user_id: str,
     thread_id: str | None = None,
     model: str | None = None,
+    tier: str | None = None,
     matter_id: str | None = None,
 ) -> tuple[ChatThread, list[dict], str]:
     """Build initial messages for the ReAct agent loop.
@@ -383,7 +384,8 @@ async def prepare_agent_context(
     Memories are pre-loaded (always relevant, cheap). Documents and KB are
     left for the agent to search via tools.
     """
-    selected_model = resolve_chat_model(model)
+    selected_model = resolve_model(db, user_id, feature="lexchat", tier=tier, model=model)
+    get_llm(db, user_id, feature="lexchat", tier=tier, model=model)  # fail fast without a key
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     if matter_id is not None:
         thread.matter_id = matter_id
@@ -457,9 +459,9 @@ async def run_post_save_tasks(
 ) -> None:
     """Run memory extraction and summarization after the response has been sent to the client."""
     if user_message:
-        candidates = await extract_memory_candidates(user_message, assistant_message.content)
+        candidates = await extract_memory_candidates(db, user_id, user_message, assistant_message.content)
         save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
-    await _maybe_refresh_summary(db, thread)
+    await _maybe_refresh_summary(db, thread, user_id)
 
 
 async def save_assistant_response(

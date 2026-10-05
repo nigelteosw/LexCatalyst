@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import ChatMessage, ChatThread, DreamJob, Memory, User
-from app.providers.deepseek import DeepSeekError, DeepSeekProvider
+from app.providers.openrouter import OpenRouterError
+from app.services.llm_service import get_llm
 from app.schemas import (
     DreamAddition,
     DreamDrop,
@@ -32,7 +33,6 @@ from app.services.memory_service import list_memories
 RECENT_MESSAGE_LIMIT = 50
 RECENT_MESSAGE_CHAR_BUDGET = 30_000
 RATE_LIMIT_WINDOW = timedelta(minutes=5)
-DREAM_MODEL = "deepseek-v4-pro"
 DREAM_JOB_RETENTION = timedelta(days=1)
 STALE_CLAIM_AFTER = timedelta(minutes=10)
 MAX_PROCESSING_ATTEMPTS = 3
@@ -243,7 +243,8 @@ async def _run_dream_consolidation(*, user_id: str) -> DreamProposal:
             },
         ]
 
-        raw_response, _ = await DeepSeekProvider().chat(prompt_messages, model=DREAM_MODEL)
+        # Runs on the key of the user who requested the Dream.
+        raw_response, _ = await get_llm(db, user_id, feature="dream").chat(prompt_messages)
 
         return _parse_dream_proposal(
             raw_response,
@@ -412,7 +413,7 @@ async def process_dream_job(claim: WorkerClaim) -> None:
 
     try:
         proposal = await _run_dream_consolidation(user_id=user_id)
-    except DeepSeekError as exc:
+    except OpenRouterError as exc:
         _mark_dream_failed(job_id, claim_started_at, str(exc))
         return
     except HTTPException as exc:

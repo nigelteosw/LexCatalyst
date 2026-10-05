@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-ChatModel = Literal["deepseek-v4-flash", "deepseek-v4-pro"]
+LlmTier = Literal["high", "mid"]
 DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
 FirmRole = Literal["partner", "senior_associate", "associate", "admin"]
 MatterStatus = Literal["active", "closed", "archived"]
@@ -39,7 +39,8 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     thread_id: str | None = None
     matter_id: str | None = None
-    model: ChatModel | None = None
+    tier: LlmTier | None = None
+    model: str | None = Field(default=None, max_length=200)
 
 
 class ChatMessageResponse(BaseModel):
@@ -174,7 +175,8 @@ class WikiPageUpdate(BaseModel):
 
 class WikiIngestRequest(BaseModel):
     page_types: list[WikiPageType] = Field(default_factory=lambda: ["source_summary"])
-    model: ChatModel | None = None
+    tier: LlmTier | None = None
+    model: str | None = Field(default=None, max_length=200)
 
 
 class WikiUserResponse(BaseModel):
@@ -786,16 +788,27 @@ class FirmUserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class BirdieSettingsUpdate(BaseModel):
+class LlmSettingsUpdate(BaseModel):
     openrouter_api_key: str | None = Field(default=None, min_length=10, max_length=500)
-    openrouter_model: str | None = Field(default=None, max_length=200)
+    model_high: str | None = Field(default=None, max_length=200)
+    model_mid: str | None = Field(default=None, max_length=200)
+    feature_tiers: dict[str, str] | None = None
 
 
-class BirdieSettingsResponse(BaseModel):
-    has_openrouter_key: bool
+class LlmFeatureResponse(BaseModel):
+    key: str
+    label: str
+    default_tier: LlmTier
+
+
+class LlmSettingsResponse(BaseModel):
+    has_key: bool
     key_last4: str | None = None
-    openrouter_model: str | None = None
-    effective_model: str | None = None
+    key_source: Literal["user", "demo"] | None = None
+    custom_models: dict[str, str | None]
+    models: dict[str, str]
+    feature_tiers: dict[str, str]
+    features: list[LlmFeatureResponse]
 
 
 class LessonAnnotationResponse(BaseModel):

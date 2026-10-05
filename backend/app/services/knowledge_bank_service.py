@@ -18,7 +18,7 @@ from app.models import (
     User,
     WikiPage,
 )
-from app.providers.deepseek import DeepSeekProvider
+from app.services.llm_service import get_llm
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.schemas import (
     KnowledgeBankEntryCreate,
@@ -536,7 +536,7 @@ async def sync_linked_wiki_page_to_kb(
 
     Only entries created via the legacy wiki-ingestion path share an id
     with their wiki page. Entries created via the async KB ingestion path
-    own their content (DeepSeek Pro summary) and must NOT be overwritten
+    own their content (LLM summary) and must NOT be overwritten
     by wiki edits — we'd silently clobber the Pro-generated summary.
     """
     if not page.source_document_id:
@@ -628,7 +628,7 @@ def delete_kb_entry(db: Session, *, user: User, entry_id: str) -> bool:
     return True
 
 
-async def _propose_redactions(content: str) -> tuple[dict[str, str], str]:
+async def _propose_redactions(db: Session, user_id: str, content: str) -> tuple[dict[str, str], str]:
     prompt = """You identify confidential details in legal work product before it is reused.
 Return only valid JSON with:
 {"redactions": [{"label": "company_name", "original": "Acme Ltd", "replacement": "[Client]"}]}
@@ -640,7 +640,7 @@ legal language. Content:
 """ + content
 
     try:
-        provider = DeepSeekProvider()
+        provider = get_llm(db, user_id, feature="kb_summary")
         response, _ = await provider.chat(
             [
                 {
@@ -649,7 +649,6 @@ legal language. Content:
                 },
                 {"role": "user", "content": prompt},
             ],
-            model="deepseek-v4-flash",
         )
         cleaned = response.strip()
         if cleaned.startswith("```json"):
@@ -714,7 +713,7 @@ async def create_pending_review_entry(
         team_id=schema.team_id,
         matter_id=schema.matter_id,
     )
-    redacted_fields, redacted_content = await _propose_redactions(schema.body_markdown)
+    redacted_fields, redacted_content = await _propose_redactions(db, user.id, schema.body_markdown)
     entry = KnowledgeBankEntry(
         team_id=team_id,
         matter_id=matter_id,

@@ -31,7 +31,7 @@ Run once on the machine or environment you'll present from.
 1. **Environment** (`backend/.env`, or the Railway variables):
    - `DEMO_MODE=true` 🆕
    - `ADMIN_EMAILS` includes your Google email
-   - `DEEPSEEK_API_KEY`, `OPENAI_API_KEY` (embeddings), and the R2 credentials are set
+   - `DEMO_OPENROUTER_KEY` (with `DEMO_MODE=true`), `OPENAI_API_KEY` (embeddings), and the R2 credentials are set
    - `FIELD_ENCRYPTION_KEY` is set (it encrypts client names and OpenRouter keys)
 2. **Start**:
    ```sh
@@ -132,7 +132,7 @@ Run once on the machine or environment you'll present from.
 |---|---|
 | Chat has no citations | Documents may still be processing. Check Documents shows **ready**, or use the NDA question again in 30 s |
 | "Distilling lessons…" errors | Click **Retry**. The raw **Comments** still tell the story, so carry on with **Explain this** |
-| Birdie says the OpenRouter key was rejected | Settings → Birdie model → **Remove key** (falls back to DeepSeek) |
+| Birdie says the OpenRouter key was rejected | Settings → Models → **Remove key** (falls back to the demo key in demo mode) |
 | **Return for rework** is disabled | Mark an annotation **Needs rework** in the rail first |
 | Switch user missing | `DEMO_MODE` is off, or you're not in `ADMIN_EMAILS`. Fix the env and restart the backend |
 | Anything else mid-demo | **Switch back**, rerun the seed (Settings → **Load demo data**), and restart from step 2 |

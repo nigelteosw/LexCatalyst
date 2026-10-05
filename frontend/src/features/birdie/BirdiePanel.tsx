@@ -3,13 +3,18 @@ import { ArrowUp, BookMarked, Lightbulb, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   distillBirdieLessons,
-  getBirdieSettings,
   listBirdieLessons,
   listKnowledgeBankEntries,
-  listOpenrouterModels,
   streamBirdieMessage,
 } from '../../shared/api/api'
 import { getErrorMessage } from '../../shared/lib/errors'
+import {
+  MISSING_KEY_MESSAGE,
+  describeModelChoice,
+  useModelChoice,
+  useOpenrouterModels,
+} from '../../shared/lib/llm'
+import { ModelPicker } from '../../shared/ui/ModelPicker'
 import type {
   BirdieLesson,
   BirdiePageContext,
@@ -58,6 +63,7 @@ type BirdiePanelProps = {
   onToggle: () => void
   matterId: string | null
   pageContext?: BirdiePageContext
+  onOpenSettings?: () => void
 }
 
 type MentorTab = 'review' | 'examples' | 'ask' | 'progress'
@@ -141,7 +147,7 @@ function getDefaultPosition() {
   }
 }
 
-export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdiePanelProps) {
+export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSettings }: BirdiePanelProps) {
   const [pos, setPos] = useState(getDefaultPosition)
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null)
 
@@ -187,21 +193,14 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdieP
     queryClient.invalidateQueries({ queryKey: ['birdieLessons'] })
   }, [isOpen, queryClient])
 
-  // Show which model is answering, but only when the user's own OpenRouter key is active.
-  const settingsQuery = useQuery({ queryKey: ['birdieSettings'], queryFn: getBirdieSettings })
-  const hasKey = settingsQuery.data?.hasOpenrouterKey ?? false
-  const modelsQuery = useQuery({
-    queryKey: ['openrouterModels'],
-    queryFn: listOpenrouterModels,
-    staleTime: 60 * 60 * 1000,
-    enabled: hasKey,
-  })
-  const modelId = hasKey ? settingsQuery.data?.effectiveModel ?? null : null
-  const modelName = modelId
-    ? (modelsQuery.data?.find((m) => m.id === modelId)?.name.replace(/^[^:]+:\s*/, '') ?? modelId)
-    : null
+  // The header shows which model is answering for the current tier choice.
+  const { choice, settings } = useModelChoice('lex.birdie.tier', 'birdie')
+  const modelsQuery = useOpenrouterModels(!!settings?.hasKey)
+  const { modelId, modelName } = settings?.hasKey
+    ? describeModelChoice(choice, settings, modelsQuery.data)
+    : { modelId: null, modelName: null }
   useEffect(() => {
-    if (isOpen) queryClient.invalidateQueries({ queryKey: ['birdieSettings'] })
+    if (isOpen) queryClient.invalidateQueries({ queryKey: ['llmSettings'] })
   }, [isOpen, queryClient])
 
   // Stay mounted when closed (just hidden) so the conversation and any in-flight answer survive.
@@ -249,12 +248,20 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext }: BirdieP
       </header>
 
       {/* Tabs + content */}
-      <BirdiePanelBody matterId={matterId} pageContext={pageContext} />
+      <BirdiePanelBody matterId={matterId} onOpenSettings={onOpenSettings} pageContext={pageContext} />
     </div>
   )
 }
 
-function BirdiePanelBody({ matterId, pageContext }: { matterId: string | null; pageContext?: BirdiePageContext }) {
+function BirdiePanelBody({
+  matterId,
+  pageContext,
+  onOpenSettings,
+}: {
+  matterId: string | null
+  pageContext?: BirdiePageContext
+  onOpenSettings?: () => void
+}) {
   const [activeTab, setActiveTab] = useState<MentorTab>('ask')
   const [pendingPrompt, setPendingPrompt] = useState<{ id: string; text: string } | null>(null)
   const pickedTabRef = useRef(false)
@@ -305,6 +312,7 @@ function BirdiePanelBody({ matterId, pageContext }: { matterId: string | null; p
         <div className={activeTab === 'ask' ? 'h-full' : 'hidden'}>
           <AskTab
             matterId={matterId}
+            onOpenSettings={onOpenSettings}
             onPromptConsumed={() => setPendingPrompt(null)}
             pageContext={pageContext}
             pendingPrompt={pendingPrompt}
@@ -600,12 +608,15 @@ function AskTab({
   pageContext,
   pendingPrompt,
   onPromptConsumed,
+  onOpenSettings,
 }: {
+  onOpenSettings?: () => void
   matterId: string | null
   pageContext?: BirdiePageContext
   pendingPrompt: { id: string; text: string } | null
   onPromptConsumed: () => void
 }) {
+  const { choice, setChoice, settings, needsKey } = useModelChoice('lex.birdie.tier', 'birdie')
   const [messages, setMessages] = useState<BirdieMsg[]>([])
   const [prompt, setPrompt] = useState('')
   const [isResponding, setIsResponding] = useState(false)
@@ -634,6 +645,10 @@ function AskTab({
 
   async function send(text: string) {
     if (!text.trim() || isResponding) return
+    if (needsKey) {
+      setError(MISSING_KEY_MESSAGE)
+      return
+    }
     setPrompt('')
     setError(null)
 
@@ -657,6 +672,7 @@ function AskTab({
         history,
         matterId,
         pageContext,
+        model: choice,
         signal: controller.signal,
         onToken: (content) => {
           setMessages((m) =>
@@ -769,12 +785,21 @@ function AskTab({
           <button
             aria-label="Send message"
             className="grid h-8 w-8 shrink-0 place-items-center rounded-[7px] bg-[#1a6b4a] disabled:bg-[#aaa9a3]"
-            disabled={!prompt.trim() || isResponding}
+            disabled={!prompt.trim() || isResponding || needsKey}
             onClick={() => send(prompt)}
             type="button"
           >
             <ArrowUp size={13} className="text-white" />
           </button>
+        </div>
+        <div className="mt-1.5 flex justify-end">
+          <ModelPicker
+            choice={choice}
+            compact
+            onChange={setChoice}
+            onOpenSettings={onOpenSettings}
+            settings={settings}
+          />
         </div>
       </div>
     </div>

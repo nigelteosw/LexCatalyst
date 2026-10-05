@@ -3,11 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.providers.openrouter import DEFAULT_OPENROUTER_MODEL, OpenRouterProvider
 from app.services import lesson_service
-from app.services.birdie_provider import DeepSeekBirdie, get_birdie_provider
 from app.services.lesson_service import LessonDistillError, is_feedback, parse_lessons
-from app.services.user_settings_service import birdie_settings_payload
 
 
 def _handoff(submitted_by="junior"):
@@ -105,7 +102,7 @@ class DistillTests(unittest.TestCase):
         db.scalar.return_value = handoff
         stored = [SimpleNamespace(id="l1")]
         with patch.object(lesson_service, "_stored_lessons", return_value=stored), patch.object(
-            lesson_service, "get_birdie_provider"
+            lesson_service, "get_llm"
         ) as provider:
             result = asyncio.run(
                 lesson_service.distill_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
@@ -129,7 +126,7 @@ class DistillTests(unittest.TestCase):
         stored_after = [SimpleNamespace(id="l1")]
         calls = iter([[], [], stored_after])
         with patch.object(lesson_service, "_stored_lessons", side_effect=lambda *_: next(calls)), patch.object(
-            lesson_service, "get_birdie_provider", return_value=llm
+            lesson_service, "get_llm", return_value=llm
         ), patch.object(lesson_service, "lock_handoff", return_value=handoff):
             result = asyncio.run(
                 lesson_service.distill_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
@@ -138,40 +135,6 @@ class DistillTests(unittest.TestCase):
         llm.complete.assert_awaited_once()
         db.add_all.assert_called_once()
         db.commit.assert_called_once()
-
-
-class ProviderSelectionTests(unittest.TestCase):
-    def test_user_key_selects_openrouter(self) -> None:
-        setting = SimpleNamespace(openrouter_api_key="sk-or-test-1234", openrouter_model="x/y")
-        with patch("app.services.birdie_provider.get_user_setting", return_value=setting):
-            provider = get_birdie_provider(MagicMock(), SimpleNamespace(id="u"))
-        self.assertIsInstance(provider, OpenRouterProvider)
-        self.assertEqual(provider.model, "x/y")
-
-    def test_default_model_when_unset(self) -> None:
-        setting = SimpleNamespace(openrouter_api_key="sk-or-test-1234", openrouter_model=None)
-        with patch("app.services.birdie_provider.get_user_setting", return_value=setting):
-            provider = get_birdie_provider(MagicMock(), SimpleNamespace(id="u"))
-        self.assertEqual(provider.model, DEFAULT_OPENROUTER_MODEL)
-
-    def test_no_key_falls_back_to_deepseek(self) -> None:
-        with patch("app.services.birdie_provider.get_user_setting", return_value=None):
-            provider = get_birdie_provider(MagicMock(), SimpleNamespace(id="u"))
-        self.assertIsInstance(provider, DeepSeekBirdie)
-
-
-class SettingsPayloadTests(unittest.TestCase):
-    def test_never_exposes_the_key(self) -> None:
-        setting = SimpleNamespace(openrouter_api_key="sk-or-secret-abcd", openrouter_model=None)
-        payload = birdie_settings_payload(setting)
-        self.assertEqual(payload["key_last4"], "abcd")
-        self.assertTrue(payload["has_openrouter_key"])
-        self.assertNotIn("sk-or-secret", str(payload))
-
-    def test_no_row(self) -> None:
-        payload = birdie_settings_payload(None)
-        self.assertFalse(payload["has_openrouter_key"])
-        self.assertIsNone(payload["effective_model"])
 
 
 if __name__ == "__main__":

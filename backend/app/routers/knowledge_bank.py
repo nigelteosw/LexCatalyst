@@ -162,7 +162,7 @@ async def ingest_document_kb_entry(
     """Kick off async ingestion of a document into a KB entry.
 
     Returns a placeholder entry with `status="processing"` immediately. The
-    worker claims the job, formats the full document text using DeepSeek Flash,
+    worker claims the job, formats the full document text using the owner's OpenRouter model,
     computes the embedding, and flips the entry to `status="ready"` (or
     `"failed"`) when done. Clients should poll `GET /kb/entries/{id}` to
     observe completion.

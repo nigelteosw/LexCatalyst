@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.providers.deepseek import DeepSeekError
+from app.providers.openrouter import OpenRouterError, OpenRouterKeyMissing
 from app.schemas import (
     WikiGraphEdge,
     WikiGraphNode,
@@ -204,7 +204,9 @@ async def ingest_document_wiki_page(
         return build_wiki_page_response(page)
     except WikiIngestionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except DeepSeekError as exc:
+    except OpenRouterKeyMissing as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except OpenRouterError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Wiki database is unavailable") from exc

@@ -52,7 +52,9 @@ export type DocumentComment = {
   }
 }
 
-export type ChatModel = 'deepseek-v4-flash' | 'deepseek-v4-pro'
+export type LlmTier = 'high' | 'mid'
+// Per-prompt model choice: a tier (resolved server-side from the user's settings) or an explicit OpenRouter model id.
+export type ModelChoice = { tier: LlmTier; model?: undefined } | { model: string; tier?: undefined }
 
 export type MemoryCategory = 'semantic' | 'procedural' | 'episodic'
 
@@ -416,11 +418,20 @@ export type BirdiePageContext = {
   actionTitle?: string | null
 }
 
-export type BirdieSettings = {
-  hasOpenrouterKey: boolean
+export type LlmFeature = {
+  key: string
+  label: string
+  defaultTier: LlmTier
+}
+
+export type LlmSettings = {
+  hasKey: boolean
   keyLast4: string | null
-  openrouterModel: string | null
-  effectiveModel: string | null
+  keySource: 'user' | 'demo' | null
+  customModels: { high: string | null; mid: string | null }
+  models: { high: string; mid: string }
+  featureTiers: Record<string, LlmTier>
+  features: LlmFeature[]
 }
 
 export type LessonAnnotation = {

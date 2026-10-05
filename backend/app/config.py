@@ -46,10 +46,11 @@ class Settings(BaseModel):
                 )
         return self
 
-    deepseek_api_key: str | None = getenv("DEEPSEEK_API_KEY")
-    deepseek_base_url: str = getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-    deepseek_model: str = getenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
-    deepseek_temperature: float = float(getenv("DEEPSEEK_TEMPERATURE", "0.2"))
+    # Optional env defaults for each tier when a user hasn't picked a model.
+    openrouter_default_high: str | None = getenv("OPENROUTER_DEFAULT_HIGH")
+    openrouter_default_mid: str | None = getenv("OPENROUTER_DEFAULT_MID")
+    # Demo only: stands in for a user's OpenRouter key when DEMO_MODE=true. Never use with real client data.
+    demo_openrouter_key: str | None = getenv("DEMO_OPENROUTER_KEY")
 
     openai_api_key: str | None = getenv("OPENAI_API_KEY")
     openai_embedding_model: str = getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")

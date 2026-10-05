@@ -7,6 +7,9 @@ export type ExtensionUser = { id: string; email: string; fullName: string | null
 export type CaseLink = { citation: string; title: string; decisionDate: string | null; url: string }
 export type BirdieTurn = { role: 'user' | 'assistant'; content: string; cases?: CaseLink[] }
 
+export type LlmTier = 'high' | 'mid'
+export type ModelChoice = { tier: LlmTier; model?: undefined } | { model: string; tier?: undefined }
+
 export class UnauthorizedError extends Error {}
 
 type ApiUser = { id: string; email: string; full_name: string | null }
@@ -56,6 +59,7 @@ export async function fetchMe(): Promise<ExtensionUser> {
 }
 
 export async function streamBirdie(opts: {
+  model?: ModelChoice
   message: string
   history: BirdieTurn[]
   webContext: WebContext | null
@@ -72,7 +76,7 @@ export async function streamBirdie(opts: {
   const response = await fetch(`${API_URL}/birdie/stream`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ message: opts.message, history: opts.history.slice(-40).map(({ role, content }) => ({ role, content })), web_context: webContext }),
+    body: JSON.stringify({ message: opts.message, history: opts.history.slice(-40).map(({ role, content }) => ({ role, content })), web_context: webContext, ...opts.model }),
     signal: opts.signal,
   })
   await checkAuth(response)
@@ -113,69 +117,29 @@ export function toCaseLinks(raw: unknown): CaseLink[] {
   })
 }
 
-export type BirdieSettings = {
-  hasOpenRouterKey: boolean
-  keyLast4: string | null
-  openRouterModel: string | null
-  effectiveModel: string | null
+export type LlmSettings = {
+  hasKey: boolean
+  keySource: 'user' | 'demo' | null
+  models: { high: string; mid: string }
+  featureTiers: Record<string, LlmTier>
 }
-export type OpenRouterModel = {
-  id: string
-  name: string
-  contextLength: number | null
-  promptPricePerMillion: number | null
+export type OpenrouterModel = { id: string; name: string; promptPricePerMillion: number | null }
+
+export async function fetchLlmSettings(): Promise<LlmSettings> {
+  const s = await apiJson<{
+    has_key: boolean
+    key_source: 'user' | 'demo' | null
+    models: { high: string; mid: string }
+    feature_tiers: Record<string, LlmTier>
+  }>('/settings/llm')
+  return { hasKey: s.has_key, keySource: s.key_source, models: s.models, featureTiers: s.feature_tiers }
 }
 
-type ApiBirdieSettings = {
-  has_openrouter_key: boolean
-  key_last4: string | null
-  openrouter_model: string | null
-  effective_model: string | null
-}
-type ApiOpenRouterModel = {
-  id: string
-  name: string
-  context_length: number | null
-  prompt_price_per_million: number | null
-}
-
-export function toBirdieSettings(raw: ApiBirdieSettings): BirdieSettings {
-  return {
-    hasOpenRouterKey: raw.has_openrouter_key,
-    keyLast4: raw.key_last4 ?? null,
-    openRouterModel: raw.openrouter_model ?? null,
-    effectiveModel: raw.effective_model ?? null,
-  }
-}
-
-export function toOpenRouterModel(raw: ApiOpenRouterModel): OpenRouterModel {
-  return {
-    id: raw.id,
-    name: raw.name,
-    contextLength: raw.context_length ?? null,
-    promptPricePerMillion: raw.prompt_price_per_million ?? null,
-  }
-}
-
-export async function getBirdieSettings(): Promise<BirdieSettings> {
-  return toBirdieSettings(await apiJson<ApiBirdieSettings>('/settings/birdie'))
-}
-
-export async function saveBirdieSettings(update: { apiKey?: string; model?: string | null }): Promise<BirdieSettings> {
-  const body: Record<string, string | null> = {}
-  if (update.apiKey) body.openrouter_api_key = update.apiKey
-  if (update.model !== undefined) body.openrouter_model = update.model
-  return toBirdieSettings(
-    await apiJson<ApiBirdieSettings>('/settings/birdie', { method: 'PUT', body: JSON.stringify(body) }),
+export async function fetchOpenrouterModels(): Promise<OpenrouterModel[]> {
+  const models = await apiJson<{ id: string; name: string; prompt_price_per_million: number | null }[]>(
+    '/settings/llm/models',
   )
-}
-
-export async function removeOpenRouterKey(): Promise<BirdieSettings> {
-  return toBirdieSettings(await apiJson<ApiBirdieSettings>('/settings/birdie/openrouter-key', { method: 'DELETE' }))
-}
-
-export async function listOpenRouterModels(): Promise<OpenRouterModel[]> {
-  return (await apiJson<ApiOpenRouterModel[]>('/settings/birdie/models')).map(toOpenRouterModel)
+  return models.map((m) => ({ id: m.id, name: m.name, promptPricePerMillion: m.prompt_price_per_million }))
 }
 
 export type PrecedentResult = {

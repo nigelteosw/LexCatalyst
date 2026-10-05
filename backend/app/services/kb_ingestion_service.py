@@ -6,7 +6,7 @@ Flow:
      body, and no embedding, then returns it immediately.
   2. The embedded combined worker claims processing rows from Postgres and calls
      `process_kb_summary`. It opens its own DB session, concatenates all
-     document chunk text and sends it to DeepSeek Flash for light formatting
+     document chunk text and sends it to the owner's OpenRouter model for light formatting
      (clean up OCR artefacts, repeated headers/footers — no summarising),
      writes the result into the entry body, computes the embedding, and
      flips the status to `"ready"`. On failure it records `"failed"`.
@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session, defer
 
 from app.database import SessionLocal
 from app.models import Document, DocumentChunk, KnowledgeBankEntry, User
-from app.providers.deepseek import DeepSeekError, DeepSeekProvider
+from app.providers.openrouter import OpenRouterError
+from app.services.llm_service import get_llm
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.knowledge_bank_service import (
     build_entry_embedding_hash,
@@ -31,7 +32,6 @@ from app.services.knowledge_bank_service import (
 from app.services.resource_metadata_service import sync_kb_metadata, sync_metadata_safe
 from app.worker_types import WorkerClaim
 
-FORMAT_MODEL = "deepseek-v4-flash"
 # Cap raw text sent to the formatter — fits comfortably in Flash's context.
 MAX_INGEST_CHARS = 150_000
 FORMAT_TIMEOUT_SECONDS = 120.0
@@ -175,6 +175,7 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
     db = SessionLocal()
     validation_error: str | None = None
     entry_title = ""
+    owner_id = ""
     document_filename = ""
     raw_text = ""
     try:
@@ -188,6 +189,7 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         if not entry:
             return
         entry_title = entry.title
+        owner_id = entry.created_by
         if not entry.source_document_id:
             validation_error = "Entry has no source document."
         else:
@@ -221,19 +223,23 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         _mark_failed(claim, validation_error)
         return
 
-    provider = DeepSeekProvider()
+    # Runs on the key of the user who created the entry.
     try:
+        key_db = SessionLocal()
+        try:
+            provider = get_llm(key_db, owner_id, feature="kb_format")
+        finally:
+            key_db.close()
         content, _ = await asyncio.wait_for(
             provider.chat(
                 _build_format_prompt(filename=document_filename, raw_text=raw_text),
-                model=FORMAT_MODEL,
             ),
             timeout=FORMAT_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
         _mark_failed(claim, f"Formatting timed out after {int(FORMAT_TIMEOUT_SECONDS)}s")
         return
-    except DeepSeekError as exc:
+    except OpenRouterError as exc:
         _mark_failed(claim, f"Formatting failed: {exc}")
         return
     except Exception as exc:  # noqa: BLE001

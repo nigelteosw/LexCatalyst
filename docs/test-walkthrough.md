@@ -79,16 +79,16 @@ Switch to **Jane Pereira**, then open **Birdie** from the sidebar.
 
 ---
 
-## 4. Personal OpenRouter key (Settings → Birdie model)
+## 4. OpenRouter key and tiers (Settings → Models)
 
 Use any user; Jane is fine.
 
 | # | Do | Expect |
 |---|---|---|
-| 4.1 | Open the section with no key | "Birdie is using the firm default (DeepSeek)…". Save is disabled |
+| 4.1 | Open the section with no key | "Add your OpenRouter key" (or "Using demo key" in demo mode). Save is disabled |
 | 4.2 | Type `abc` in the key field | "That key looks too short." Save stays disabled |
 | 4.3 | Enter a fake key (`sk-or-test-key-1234`) and **Save** | "Birdie settings saved." Status line: "…using your OpenRouter key (…1234) with anthropic/claude-sonnet-5.5". The field clears |
-| 4.4 | Ask Birdie anything | Error: "Your OpenRouter key was rejected or ran out of credit — check Settings." No silent fall back to DeepSeek |
+| 4.4 | Ask Birdie anything | Error: "Your OpenRouter key was rejected or ran out of credit — check Settings." No silent fall back to another key |
 | 4.5 | Set the model to `openai/gpt-4o-mini` and **Save** | Status line shows the new model |
 | 4.6 | Reload Settings | Key never shown, only the last four characters |
 | 4.7 | **Remove key** | Back to the firm default; Birdie answers again |
@@ -129,6 +129,6 @@ Quick regression pass as Jane, with the Meridian matter selected:
 |---|---|
 | Switch-user picker missing | `DEMO_MODE` not set on the backend, or you aren't in `ADMIN_EMAILS` |
 | Review tab empty for Jane | Demo data not loaded, or you're not actually switched into Jane |
-| "Distilling lessons…" ends in an error | DeepSeek key missing or the call failed. **Retry** appears; raw comments still show |
+| "Distilling lessons…" ends in an error | OpenRouter key missing or the call failed. **Retry** appears; raw comments still show |
 | Documents stuck on **processing** | The backend isn't running (the worker is embedded in it), or OpenAI/R2 keys are missing |
 | Chat has no citations | Documents not **ready** yet, or no matter selected |

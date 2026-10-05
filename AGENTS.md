@@ -40,8 +40,8 @@ backend/
     config.py
     routers/          # thin HTTP handlers — one file per domain
     services/         # business logic — keep route handlers thin
-    providers/        # LLM and embedding adapters (deepseek, openrouter, embeddings)
-  migrations/         # Alembic; current head: y0a1b2c3d4e5
+    providers/        # LLM and embedding adapters (openrouter, embeddings)
+  migrations/         # Alembic; current head: y0b1c2d3e4f5
   Makefile
   requirements.txt
 
@@ -135,7 +135,7 @@ app/services/
   agent_service.py        # Tool dispatch inside streamed chat (search, KB, memory)
   action_service.py       # Action board items
   birdie_service.py       # Birdie AI mentor
-  birdie_provider.py      # Per-user LLM choice: personal OpenRouter key, else DeepSeek
+  llm_service.py          # Per-user OpenRouter key + High/Mid tier model resolution; FEATURES list
   lesson_service.py       # Reviewer feedback → Birdie lessons (submitter-only)
   user_settings_service.py # Per-user settings (OpenRouter key/model, encrypted)
   demo_seed_service.py    # Demo firm seed + reset (DEMO_MODE only); demo_pdfs.py builds the PDFs
@@ -174,7 +174,7 @@ Do not add a tool registry unless it removes real duplication.
 
 All schema changes go through Alembic (`backend/migrations/`). Never add new tables or indexes only to `create_db_tables()` — that path runs only when `AUTO_CREATE_TABLES=true`, which is not the case in production.
 
-Current head: `y0a1b2c3d4e5`
+Current head: `y0b1c2d3e4f5`
 
 ```sh
 cd backend && source .venv/bin/activate
@@ -193,7 +193,7 @@ When adding or moving components, always verify no imports are broken — the Ty
 The following items from the original plan are complete:
 
 - Database connection and models
-- DeepSeek chat endpoint with persisted chat threads
+- Chat endpoint with persisted chat threads (OpenRouter, per-user key)
 - Google OAuth auth routes and JWT session
 - Document upload (Cloudflare R2)
 - Text extraction for PDF and DOCX
@@ -233,10 +233,9 @@ Expected backend env vars:
 ```txt
 DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
 AUTO_CREATE_TABLES=false
-DEEPSEEK_API_KEY=...
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-pro
-DEEPSEEK_TEMPERATURE=0.2
+# Demo only (read when DEMO_MODE=true): OpenRouter key for users without their own
+DEMO_OPENROUTER_KEY=...
+# Optional tier defaults: OPENROUTER_DEFAULT_HIGH, OPENROUTER_DEFAULT_MID
 OPENAI_API_KEY=...
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_EMBEDDING_DIMENSIONS=1536
@@ -247,7 +246,7 @@ CLOUDFLARE_R2_SECRET_ACCESS_KEY=...
 GOOGLE_CLIENT_ID=...
 ```
 
-Default to `deepseek-v4-pro` for the demo because the user asked to prioritize the slower, more capable DeepSeek V4 Pro model. Surface model choice in the chat navbar so users can switch each prompt between `deepseek-v4-pro` for deeper legal reasoning and `deepseek-v4-flash` for faster, lower-cost responses.
+Every LLM call uses the acting user's own OpenRouter key (no firm key). Users pick any model for two tiers, **High** and **Mid**, and choose a tier per feature in Settings → Models; the feature list lives in `llm_service.FEATURES`. LexChat and Birdie show a High/Mid pill in the composer to switch per prompt. Background jobs run on the key of the user who started them. Embeddings stay on OpenAI.
 
 Keep the provider interface minimal:
 
@@ -280,7 +279,7 @@ If a new backend route is added, document the route and expected authentication 
 
 If the LLM or embedding provider changes, update both `README.md` and this file.
 
-Birdie uses DeepSeek by default and OpenRouter when a user saves their own key (Settings → Birdie model). Birdie prompts then leave for OpenRouter and the chosen model provider; keep that disclosure in the UI and README.
+All AI features run through OpenRouter on the user's own key. Prompts (including document excerpts) leave for OpenRouter and the chosen model provider; keep that disclosure in the UI and README.
 
 The Chrome extension (`extension/`) runs its selection content script only on origins the user turns on, and sends user-shared webpage text to Birdie as `web_context` on `POST /birdie/stream` and highlighted clauses to `POST /precedent/search`; keep the side-panel disclosure in sync with the provider line above. Birdie cites case law only from eLitigation (`case_law_service.py`); only a search phrase is sent there.
 

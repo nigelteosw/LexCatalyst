@@ -1,32 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toBirdieSettings, toCaseLinks, toOpenRouterModel, toPrecedentResponse } from './api'
-
-describe('settings mapping', () => {
-  it('maps snake_case settings', () => {
-    expect(
-      toBirdieSettings({
-        has_openrouter_key: true,
-        key_last4: 'abcd',
-        openrouter_model: 'anthropic/claude-sonnet-5.5',
-        effective_model: 'anthropic/claude-sonnet-5.5',
-      }),
-    ).toEqual({
-      hasOpenRouterKey: true,
-      keyLast4: 'abcd',
-      openRouterModel: 'anthropic/claude-sonnet-5.5',
-      effectiveModel: 'anthropic/claude-sonnet-5.5',
-    })
-  })
-
-  it('maps models', () => {
-    expect(toOpenRouterModel({ id: 'a/b', name: 'B', context_length: 1000, prompt_price_per_million: 3 })).toEqual({
-      id: 'a/b',
-      name: 'B',
-      contextLength: 1000,
-      promptPricePerMillion: 3,
-    })
-  })
-})
+import { toCaseLinks, toPrecedentResponse } from './api'
 
 describe('precedent mapping', () => {
   it('maps the response', () => {

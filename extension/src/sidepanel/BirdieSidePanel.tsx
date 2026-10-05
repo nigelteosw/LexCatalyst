@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  type BirdieSettings,
+  fetchLlmSettings,
+  type LlmSettings,
+  type ModelChoice,
   type BirdieTurn,
   type CaseLink,
   type ExtensionUser,
   fetchMe,
-  getBirdieSettings,
   type PrecedentResult,
   signIn,
   streamBirdie,
@@ -14,17 +15,16 @@ import {
 import { clearToken, getToken } from '../lib/auth'
 import { APP_URL } from '../lib/config'
 import { clearTurns, loadTurns, saveTurns } from '../lib/conversation'
-import { modelLabel, providerDisclosure } from '../lib/models'
 import { buildWebContext } from '../lib/webContext'
 import { CasesList } from './CasesList'
 import { ContextChips } from './ContextChips'
 import { MarkdownContent } from './MarkdownContent'
-import { ModelView } from './ModelView'
+import { loadSavedChoice, ModelPicker, saveChoice } from './ModelPicker'
 import { PrecedentTab } from './PrecedentTab'
 import { useBrowserContext } from './useBrowserContext'
 
 type AuthState = { status: 'loading' } | { status: 'signedOut' } | { status: 'signedIn'; user: ExtensionUser }
-type View = 'chat' | 'precedent' | 'model'
+type View = 'chat' | 'precedent'
 
 const CASE_SEARCH_PROMPT = 'Find Singapore judgments on eLitigation relevant to the highlighted text.'
 
@@ -38,7 +38,10 @@ export function BirdieSidePanel() {
   const [streamingCases, setStreamingCases] = useState<CaseLink[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [settings, setSettings] = useState<BirdieSettings | null>(null)
+  const [llm, setLlm] = useState<LlmSettings | null>(null)
+  const [override, setOverride] = useState<ModelChoice | null>(loadSavedChoice)
+  const choice: ModelChoice = override ?? { tier: llm?.featureTiers.birdie ?? 'mid' }
+  const needsKey = llm !== null && !llm.hasKey
   const abortRef = useRef<AbortController | null>(null)
   const browser = useBrowserContext()
 
@@ -62,7 +65,7 @@ export function BirdieSidePanel() {
   }, [])
 
   useEffect(() => {
-    if (auth.status === 'signedIn') getBirdieSettings().then(setSettings).catch(handleError)
+    if (auth.status === 'signedIn') fetchLlmSettings().then(setLlm).catch(handleError)
   }, [auth.status, handleError])
 
   useEffect(() => {
@@ -111,6 +114,10 @@ export function BirdieSidePanel() {
   async function send(text: string) {
     const message = text.trim()
     if (!message || busy) return
+    if (needsKey) {
+      setError('Add your OpenRouter key in Settings')
+      return
+    }
     const history = turns
     const webContext = browser.selection ?? browser.page
     let cases: CaseLink[] = []
@@ -127,6 +134,7 @@ export function BirdieSidePanel() {
         message,
         history,
         webContext,
+        model: choice,
         signal: abortRef.current.signal,
         onSources: (found) => {
           cases = found
@@ -182,9 +190,6 @@ export function BirdieSidePanel() {
             <button className="underline" title="New chat (⌘K)" onClick={newChat}>
               New chat
             </button>
-            <button className="max-w-32 truncate underline" title="Choose model" onClick={() => setView('model')}>
-              {modelLabel(settings)}
-            </button>
             <button className="underline" onClick={handleSignOut}>
               Sign out
             </button>
@@ -199,8 +204,6 @@ export function BirdieSidePanel() {
           </button>
         </nav>
       </header>
-
-      {view === 'model' && <ModelView settings={settings} onChange={setSettings} onClose={() => setView('chat')} />}
 
       {view === 'precedent' && (
         <PrecedentTab selectionText={browser.selection?.text ?? null} onUseInChat={useInChat} onError={handleError} />
@@ -236,40 +239,53 @@ export function BirdieSidePanel() {
         </section>
       )}
 
-      {view !== 'model' && (
-        <footer className="space-y-2 border-t border-stone-200 p-3">
-          <ContextChips context={browser} onSearchCases={() => void send(CASE_SEARCH_PROMPT)} />
-          <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              setView('chat')
-              void send(draft)
+      <footer className="space-y-2 border-t border-stone-200 p-3">
+        <ContextChips context={browser} onSearchCases={() => void send(CASE_SEARCH_PROMPT)} />
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setView('chat')
+            void send(draft)
+          }}
+        >
+          <textarea
+            className="flex-1 resize-none rounded-md border border-stone-300 p-2 text-sm"
+            rows={2}
+            value={draft}
+            placeholder="Ask Birdie…"
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                setView('chat')
+                void send(draft)
+              }
             }}
-          >
-            <textarea
-              className="flex-1 resize-none rounded-md border border-stone-300 p-2 text-sm"
-              rows={2}
-              value={draft}
-              placeholder="Ask Birdie…"
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault()
-                  setView('chat')
-                  void send(draft)
-                }
+          />
+          <button className="rounded-md bg-stone-900 px-3 text-sm text-white disabled:opacity-50" disabled={busy || needsKey}>
+            Send
+          </button>
+        </form>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] text-stone-500">
+            {needsKey
+              ? 'Add your OpenRouter key in the LexCatalyst web app (Settings → Models) to use Birdie.'
+              : `Text you share is sent to OpenRouter and the model provider you choose${llm?.keySource === 'demo' ? ' (demo key in use)' : ''}.`}{' '}
+            Case searches send only a short phrase to eLitigation.
+          </p>
+          {llm && (
+            <ModelPicker
+              choice={choice}
+              settings={llm}
+              onChange={(next) => {
+                setOverride(next)
+                saveChoice(next)
               }}
             />
-            <button className="rounded-md bg-stone-900 px-3 text-sm text-white disabled:opacity-50" disabled={busy}>
-              Send
-            </button>
-          </form>
-          <p className="text-[11px] text-stone-500">
-            {providerDisclosure(settings)} Case searches send only a short phrase to eLitigation.
-          </p>
-        </footer>
-      )}
+          )}
+        </div>
+      </footer>
     </main>
   )
 }

@@ -28,7 +28,7 @@ const CHAT_HELP: HelpContent = {
     {
       emoji: '⚖️',
       title: 'Choose your model',
-      body: 'Switch between DeepSeek Flash (fast, great for drafting and quick questions) and DeepSeek Pro (slower, better for complex legal reasoning) in the header dropdown.',
+      body: 'Use the model pill under the message box to pick High (stronger, slower reasoning) or Mid (faster, lower cost), or search any OpenRouter model. Set the models behind each tier in Settings.',
     },
     {
       emoji: '🗂️',
@@ -47,7 +47,8 @@ export type ChatPanelProps = {
   attachmentStatus?: string | null
   error: string | null
   inputLabel: string
-  modelLabel?: string
+  modelPicker?: ReactNode
+  sendDisabledReason?: string
   isLoading: boolean
   isResponding: boolean
   isUploadingFile: boolean
@@ -74,7 +75,8 @@ export function ChatPanel({
   attachmentStatus,
   error,
   inputLabel,
-  modelLabel,
+  modelPicker,
+  sendDisabledReason,
   isLoading,
   isResponding,
   isUploadingFile,
@@ -89,7 +91,7 @@ export function ChatPanel({
   sendLabel,
   userInitials,
 }: ChatPanelProps) {
-  const canSubmit = prompt.trim().length > 0 && !isLoading
+  const canSubmit = prompt.trim().length > 0 && !isLoading && !sendDisabledReason
   const canUpload = !isUploadingFile
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -296,13 +298,11 @@ export function ChatPanel({
               )}
             </div>
           </div>
-          <p className="mt-3 text-center text-[11px] text-neutral-500">
-            {modelLabel && (
-              <>
-                <span className="font-medium text-neutral-700">{modelLabel}</span>
-                {' · '}
-              </>
-            )}
+          <div className="mt-2 flex items-center justify-center gap-2">
+            {modelPicker}
+            {sendDisabledReason && <span className="text-[11px] text-amber-700">{sendDisabledReason}</span>}
+          </div>
+          <p className="mt-2 text-center text-[11px] text-neutral-500">
             Enter to send · Shift+Enter for a new line · LexChat can make mistakes, so check important information.
           </p>
         </form>

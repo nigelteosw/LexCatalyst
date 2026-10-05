@@ -7,7 +7,6 @@ from app.config import get_settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.providers.deepseek import SUPPORTED_CHAT_MODELS
 from app.services.user_service import create_dummy_users, delete_dummy_users
 
 router = APIRouter(tags=["system"])
@@ -22,9 +21,6 @@ def health() -> dict[str, str]:
 def config() -> dict[str, object]:
     settings = get_settings()
     return {
-        "deepseek_model": settings.deepseek_model,
-        "deepseek_base_url": settings.deepseek_base_url,
-        "available_chat_models": list(SUPPORTED_CHAT_MODELS),
         "demo_mode": settings.demo_mode,
     }
 

@@ -2,7 +2,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import ActionItem, User
-from app.services.birdie_provider import get_birdie_provider
+from app.services.llm_service import get_llm
 from app.services.case_law_service import CASE_LAW_RULE, CaseSource, format_case_sources
 from app.schemas import PageContext, WebContext
 from app.services.lesson_service import format_feedback_context
@@ -77,7 +77,7 @@ _WEB_END_MARKER = "WEB_CONTENT>>>"
 
 
 def _format_web_context(ctx: WebContext | None) -> str:
-    # Sent to the Birdie LLM provider (DeepSeek or the user's OpenRouter model).
+    # Sent to the Birdie LLM provider (the user's OpenRouter model).
     if not ctx:
         return ""
     label = (
@@ -143,6 +143,8 @@ async def stream_birdie_response(
     page_context: PageContext | None = None,
     web_context: WebContext | None = None,
     case_sources: list[CaseSource] | None = None,
+    tier: str | None = None,
+    model: str | None = None,
 ):
     messages = await build_birdie_messages(
         db,
@@ -154,6 +156,6 @@ async def stream_birdie_response(
         web_context=web_context,
         case_sources=case_sources,
     )
-    provider = get_birdie_provider(db, user)
+    provider = get_llm(db, user.id, feature="birdie", tier=tier, model=model)
     async for chunk in provider.stream_chat(messages):
         yield chunk

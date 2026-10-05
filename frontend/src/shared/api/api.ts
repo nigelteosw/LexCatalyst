@@ -2,7 +2,7 @@ import type {
   ActionItem,
   ActionPriority,
   ActionStatus,
-  ChatModel,
+  ModelChoice,
   ChatThread,
   CurrentUser,
   DreamJobStatus,
@@ -36,7 +36,8 @@ import type {
   WikiPageType,
   WorkspaceDocument,
   BirdiePageContext,
-  BirdieSettings,
+  LlmSettings,
+  LlmTier,
   BirdieLesson,
   DemoUser,
   FeedbackRound,
@@ -154,7 +155,7 @@ type StreamErrorPayload = {
 
 type StreamChatOptions = {
   message: string
-  model: ChatModel
+  model: ModelChoice
   threadId: string | null
   matterId?: string | null
   signal?: AbortSignal
@@ -323,7 +324,8 @@ function mapMessage(message: BackendMessage): Message {
     id: message.id,
     role: message.role,
     body: message.content,
-    meta: message.model ? `Model: ${message.model}` : undefined,
+    // Messages from before the OpenRouter switch carry a retired provider's model id.
+    meta: message.model ? `Model: ${message.model.startsWith('deepseek') ? 'DeepSeek (retired)' : message.model}` : undefined,
     steps: message.tool_steps ?? undefined,
   }
 }
@@ -689,13 +691,13 @@ export async function publishWikiPage(id: string): Promise<WikiPage> {
 
 export async function ingestDocumentToWiki(
   documentId: string,
-  model: ChatModel,
+  model?: ModelChoice,
 ): Promise<WikiPage> {
   return mapWikiPage(await request<BackendWikiPage>(`/wiki/ingest/document/${documentId}`, {
     method: 'POST',
     body: JSON.stringify({
       page_types: ['source_summary'],
-      model,
+      ...(model ?? {}),
     }),
   }))
 }
@@ -713,13 +715,13 @@ export async function getKbGraph(): Promise<WikiGraph> {
   return request<WikiGraph>('/kb/graph')
 }
 
-export async function sendChatMessage(message: string, threadId: string | null, model: ChatModel) {
+export async function sendChatMessage(message: string, threadId: string | null, model: ModelChoice) {
   const response = await request<BackendChatResponse>('/chat', {
     method: 'POST',
     body: JSON.stringify({
       message,
       thread_id: threadId,
-      model,
+      ...model,
     }),
   })
 
@@ -757,7 +759,7 @@ export async function streamChatMessage({
       message,
       thread_id: threadId,
       matter_id: matterId,
-      model,
+      ...model,
     }),
     signal,
   })
@@ -927,7 +929,7 @@ export async function createKnowledgeBankEntry(payload: {
 export async function ingestDocumentToKnowledgeBank(
   documentId: string,
 ): Promise<KnowledgeBankEntry> {
-  // The backend always uses DeepSeek Pro for KB summarisation and runs it
+  // The backend uses the user's kb_summary tier for KB summarisation and runs it
   // as an async background task. The response is a placeholder entry with
   // status="processing"; clients should poll until status="ready".
   return mapKnowledgeBankEntry(
@@ -1469,11 +1471,13 @@ export async function streamBirdieMessage({
   history,
   matterId,
   pageContext,
+  model,
   signal,
   onToken,
   onDone,
   onError,
 }: {
+  model?: ModelChoice
   message: string
   history: BirdieHistoryMessage[]
   matterId: string | null
@@ -1490,7 +1494,7 @@ export async function streamBirdieMessage({
   const response = await fetch(`${API_BASE_URL}/birdie/stream`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ message, history, matter_id: matterId, page_context: pageContext }),
+    body: JSON.stringify({ message, history, matter_id: matterId, page_context: pageContext, ...model }),
     signal,
   })
 
@@ -1993,37 +1997,47 @@ export async function deleteDummyUsers(): Promise<void> {
 }
 
 
-// Birdie settings (personal OpenRouter key)
+// LLM settings (personal OpenRouter key, High/Mid tier models, per-feature tiers)
 
-type BackendBirdieSettings = {
-  has_openrouter_key: boolean
+type BackendLlmSettings = {
+  has_key: boolean
   key_last4: string | null
-  openrouter_model: string | null
-  effective_model: string | null
+  key_source: 'user' | 'demo' | null
+  custom_models: { high: string | null; mid: string | null }
+  models: { high: string; mid: string }
+  feature_tiers: Record<string, LlmTier>
+  features: { key: string; label: string; default_tier: LlmTier }[]
 }
 
-function mapBirdieSettings(s: BackendBirdieSettings): BirdieSettings {
+function mapLlmSettings(s: BackendLlmSettings): LlmSettings {
   return {
-    hasOpenrouterKey: s.has_openrouter_key,
+    hasKey: s.has_key,
     keyLast4: s.key_last4,
-    openrouterModel: s.openrouter_model,
-    effectiveModel: s.effective_model,
+    keySource: s.key_source,
+    customModels: s.custom_models,
+    models: s.models,
+    featureTiers: s.feature_tiers,
+    features: s.features.map((f) => ({ key: f.key, label: f.label, defaultTier: f.default_tier })),
   }
 }
 
-export async function getBirdieSettings(): Promise<BirdieSettings> {
-  return mapBirdieSettings(await request<BackendBirdieSettings>('/settings/birdie'))
+export async function getLlmSettings(): Promise<LlmSettings> {
+  return mapLlmSettings(await request<BackendLlmSettings>('/settings/llm'))
 }
 
-export async function updateBirdieSettings(payload: {
+export async function updateLlmSettings(payload: {
   openrouterApiKey?: string
-  openrouterModel?: string | null
-}): Promise<BirdieSettings> {
-  const body: Record<string, string | null> = {}
+  modelHigh?: string | null
+  modelMid?: string | null
+  featureTiers?: Record<string, LlmTier>
+}): Promise<LlmSettings> {
+  const body: Record<string, unknown> = {}
   if (payload.openrouterApiKey) body.openrouter_api_key = payload.openrouterApiKey
-  if (payload.openrouterModel !== undefined) body.openrouter_model = payload.openrouterModel
-  return mapBirdieSettings(
-    await request<BackendBirdieSettings>('/settings/birdie', {
+  if (payload.modelHigh !== undefined) body.model_high = payload.modelHigh
+  if (payload.modelMid !== undefined) body.model_mid = payload.modelMid
+  if (payload.featureTiers !== undefined) body.feature_tiers = payload.featureTiers
+  return mapLlmSettings(
+    await request<BackendLlmSettings>('/settings/llm', {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
@@ -2040,7 +2054,7 @@ export type OpenrouterModel = {
 export async function listOpenrouterModels(): Promise<OpenrouterModel[]> {
   const models = await request<
     { id: string; name: string; context_length: number | null; prompt_price_per_million: number | null }[]
-  >('/settings/birdie/models')
+  >('/settings/llm/models')
   return models.map((m) => ({
     id: m.id,
     name: m.name,
@@ -2049,9 +2063,9 @@ export async function listOpenrouterModels(): Promise<OpenrouterModel[]> {
   }))
 }
 
-export async function clearOpenrouterKey(): Promise<BirdieSettings> {
-  return mapBirdieSettings(
-    await request<BackendBirdieSettings>('/settings/birdie/openrouter-key', { method: 'DELETE' }),
+export async function clearOpenrouterKey(): Promise<LlmSettings> {
+  return mapLlmSettings(
+    await request<BackendLlmSettings>('/settings/llm/openrouter-key', { method: 'DELETE' }),
   )
 }
 

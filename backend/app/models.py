@@ -1105,7 +1105,7 @@ class ReviewLesson(Base):
 
 
 class UserSetting(Base):
-    """Per-user preferences. Currently the optional personal OpenRouter key powering Birdie."""
+    """Per-user preferences. The user's OpenRouter key, High/Mid model choices and per-feature tiers."""
 
     __tablename__ = "user_settings"
 
@@ -1117,7 +1117,10 @@ class UserSetting(Base):
     _openrouter_api_key: Mapped[str | None] = mapped_column(
         "openrouter_api_key", Text, nullable=True
     )
-    openrouter_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    model_high: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    model_mid: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # {feature_key: "high" | "mid"}; missing keys use the feature default (llm_service.FEATURES).
+    feature_tiers: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

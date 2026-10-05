@@ -9,7 +9,7 @@ import {
   seedDemoData,
   updateOtherUserRole,
 } from '../../shared/api/api'
-import { BirdieSettingsSection } from './BirdieSettingsSection'
+import { ModelSettingsSection } from './ModelSettingsSection'
 import type { CurrentUser, FirmRole } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
@@ -157,7 +157,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
             </div>
           </div>
 
-          <BirdieSettingsSection />
+          <ModelSettingsSection />
 
           <div className="rounded-xl border border-black/10 bg-white p-4">
             <h3 className="text-sm font-semibold text-[#0f0f0f]">Professional role</h3>

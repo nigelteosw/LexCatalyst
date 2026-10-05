@@ -5,7 +5,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 ## Core Features
 
 ### Knowledge & Documents
-- **Async document, Knowledge Bank, and Dream jobs**: The FastAPI service runs an embedded worker thread that claims durable Postgres jobs for extraction, OCR, embeddings, **DeepSeek Flash** KB formatting, and automatic memory consolidation.
+- **Async document, Knowledge Bank, and Dream jobs**: The FastAPI service runs an embedded worker thread that claims durable Postgres jobs for extraction, OCR, embeddings, OpenRouter-based KB formatting, and automatic memory consolidation.
 - **Auditable memory consolidation**: Dream applies conservative memory additions, merges, updates, and drops without a manual approval step. Automated memories retain the agent's justification.
 - **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
 - **Drag-and-drop uploads**: Drop PDF/DOCX directly onto the Documents panel. OCR fallback via Tesseract for scanned PDFs.
@@ -27,9 +27,9 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - A **draggable picture-in-picture widget** (320×480, fixed position, drag anywhere). Open via the "Birdie" pill in the chat header.
 - Tabs: **Ask** (live chat), **Review** (reviewer feedback and lessons), **Examples** (KB-backed), **Progress** (skills map).
 - **Review tab:** comments seniors leave while redlining a junior's returned/completed review round appear here automatically, with no promote step. Birdie distils each round into 1–4 general lessons (once, on first open) and every comment has an **Explain this** button that continues in the Ask tab. Only the junior who submitted the round sees its feedback.
-- Uses a dedicated `/birdie/stream` endpoint with a mentor-specific system prompt — separate agent from the main legal chat. Runs on `deepseek-v4-flash` by default; users can add their own **OpenRouter key and model** in Settings → Birdie model.
+- Uses a dedicated `/birdie/stream` endpoint with a mentor-specific system prompt — separate agent from the main legal chat. Runs on the user's own **OpenRouter** key and the tier (High or Mid) chosen in the composer or Settings → Models.
 - Pulls firm KB context (RBAC-respecting) and recent reviewer feedback for grounded answers.
-- **Privacy:** with a personal OpenRouter key, Birdie prompts (document excerpts, KB entries, reviewer feedback) go to OpenRouter and the chosen model provider.
+- **Privacy:** Birdie prompts (document excerpts, KB entries, reviewer feedback) go to OpenRouter and the chosen model provider.
 
 ### Wellbeing — Weekly Team Check-ins
 - Survey responses are linked to the submitting user and upserted per user, question, and week.
@@ -78,9 +78,8 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - **Google OAuth2** + **JWT** auth; field-level Fernet encryption for `client_name`
 
 ### AI & Search
-- **DeepSeek V4 Pro** for Dream memory consolidation
-- **DeepSeek V4 Flash** for KB document formatting, Birdie mentor chat, and thread summarisation
-- **DeepSeek V4 Flash/Pro** user-selectable for the main agent chat
+- **OpenRouter, bring your own key** for every LLM call (LexChat, Birdie, Dream, wiki, KB, memory, summaries). Each user saves their key and picks any model for two tiers, **High** and **Mid**, then chooses which tier each feature uses (Settings → Models). LexChat and Birdie also have a High/Mid pill in the composer.
+- **No firm LLM key.** `DEMO_OPENROUTER_KEY` is used only when `DEMO_MODE=true` and the user has no key of their own. Background jobs (KB formatting, Dream) run on the key of the user who started them.
 - **OpenAI `text-embedding-3-small`** (1536 dim) for both document chunks and KB entries
 - **Cloudflare R2** for original document storage
 
@@ -113,7 +112,7 @@ Editable high-level architecture diagrams:
 │   │   ├── dependencies.py                    # Auth + RBAC helpers
 │   │   ├── auth.py                            # Google OAuth + JWT
 │   │   ├── routers/                           # Thin HTTP/SSE handlers by domain
-│   │   ├── providers/                         # DeepSeek + OpenAI integrations
+│   │   ├── providers/                         # OpenRouter (chat) + OpenAI (embeddings) integrations
 │   │   └── services/
 │   │       ├── agent_service.py               # ReAct loop with cycle detection
 │   │       ├── birdie_service.py              # Mentor agent (separate prompt + endpoint)
@@ -222,7 +221,7 @@ Load it at `chrome://extensions` -> Developer mode -> Load unpacked -> `extensio
 
 Sign-in reuses the web Google OAuth client; `https://<extension-id>.chromiumapp.org/` must be an authorised redirect URI on it. The extension ID is pinned by the `key` in `extension/public/manifest.json` (the matching private key, `extension/key.pem`, is git-ignored).
 
-Birdie only reads sites you turn on ("Turn on Birdie for this site", which grants that one origin). On those sites it shows your current highlight above the "Ask Birdie…" box and reads the page text (Google Docs via its text export; in Docs, copy (⌘C) or right-click to share a highlight). Nothing is sent until you press Send or open Precedent. Shared text goes to `POST /birdie/stream` (JWT required) as `web_context` (max 20,000 chars) and then to DeepSeek, or to OpenRouter and the chosen model's provider when you saved your own key — choose the model from the model name in the panel header (same setting as the web app). Case-law questions send only a short search phrase to eLitigation (https://www.elitigation.sg); Birdie cites only judgments found there. **New chat** (⌘K) clears the conversation and shared context. The **Precedent** tab calls `POST /precedent/search` with the highlighted clause.
+Birdie only reads sites you turn on ("Turn on Birdie for this site", which grants that one origin). On those sites it shows your current highlight above the "Ask Birdie…" box and reads the page text (Google Docs via its text export; in Docs, copy (⌘C) or right-click to share a highlight). Nothing is sent until you press Send or open Precedent. Shared text goes to `POST /birdie/stream` (JWT required) as `web_context` (max 20,000 chars) and then to OpenRouter and the chosen model's provider — choose High or Mid with the pill under the box (tiers and models are set in the web app's Settings → Models). Case-law questions send only a short search phrase to eLitigation (https://www.elitigation.sg); Birdie cites only judgments found there. **New chat** (⌘K) clears the conversation and shared context. The **Precedent** tab calls `POST /precedent/search` with the highlighted clause.
 
 `VITE_APP_URL` (default `https://lexcatalyst.pages.dev`) sets where "Open" links to documents point.
 
@@ -236,7 +235,9 @@ Birdie only reads sites you turn on ("Turn on Birdie for this site", which grant
 
 ```ini
 DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
-DEEPSEEK_API_KEY=your_key_here
+# LLM calls use each user's OpenRouter key (Settings → Models). Demo only:
+# DEMO_MODE=true
+# DEMO_OPENROUTER_KEY=sk-or-...
 OPENAI_API_KEY=your_key_here
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 
@@ -349,7 +350,7 @@ Optimized KB read routes, all requiring Bearer authentication:
        │   Claims queued rows from Postgres
        │   Reclaims stale jobs after restarts
        │   Concatenates all chunk text (up to 150K chars)
-       │   Calls DeepSeek Flash to reformat (no summarising)
+       │   Calls the owner's OpenRouter model to reformat (no summarising)
        │   Parses JSON → title + body
        │   Computes embedding
        │
@@ -376,15 +377,16 @@ embedded worker claims it from the durable Postgres queue.
 - `/birdie/stream` is an endpoint distinct from `/chat/stream`. Client manages history.
 - System prompt: brief (3–5 sentences), legal hard skills + soft skills equally weighted, cites firm KB inline.
 - Reuses `search_kb_for_chat` so KB scope filtering still applies.
-- The LLM is chosen per user by `get_birdie_provider`: their OpenRouter key if set (no silent fallback — a rejected key surfaces an error pointing to Settings), otherwise DeepSeek.
+- The LLM is chosen per user by `llm_service.get_llm`: their OpenRouter key, else `DEMO_OPENROUTER_KEY` when `DEMO_MODE=true`, else `409 Add your OpenRouter key in Settings`. A rejected key surfaces an error pointing to Settings. `POST /birdie/stream` and `POST /chat[/stream]` accept optional `tier` (`high`|`mid`) and `model` (any OpenRouter id).
 
 | Route | Auth | Behaviour |
 |---|---|---|
 | `GET /birdie/lessons` | signed-in user | reviewer feedback on rounds the user submitted (returned/completed), with stored lessons |
 | `POST /birdie/lessons/{handoff_id}/distill` | signed-in submitter of that round | idempotent; returns stored lessons or distils them once. 404 for anyone else |
-| `GET /settings/birdie` | signed-in user | `{has_openrouter_key, key_last4, openrouter_model, effective_model}`; never the key |
-| `PUT /settings/birdie` | signed-in user | save `openrouter_api_key` and/or `openrouter_model` |
-| `DELETE /settings/birdie/openrouter-key` | signed-in user | remove the key; Birdie returns to DeepSeek |
+| `GET /settings/llm` | signed-in user | `{has_key, key_last4, key_source, custom_models, models, feature_tiers, features}`; never the key |
+| `PUT /settings/llm` | signed-in user | save `openrouter_api_key`, `model_high`, `model_mid` and/or `feature_tiers` (422 on unknown feature or tier) |
+| `DELETE /settings/llm/openrouter-key` | signed-in user | remove the key |
+| `GET /settings/llm/models` | signed-in user | OpenRouter model catalogue for the pickers |
 | `POST /precedent/search` | signed-in user | classify the highlighted clause and return the firm's past versions from the user's own/matter documents and clean or redacted KB entries, with source, matter ref, date, author and draft/executed status; logged to `retrieval_audit_events` |
 
 `POST /birdie/stream` may first emit `event: sources` with `{"cases": [{citation, title, decision_date, url}]}`. Birdie only cites judgments from eLitigation (https://www.elitigation.sg): it searches eLitigation with a short phrase (no document or client text is sent there) and appends a warning if its answer contains a neutral citation that was not in the results. Each lookup is logged to `retrieval_audit_events`.
