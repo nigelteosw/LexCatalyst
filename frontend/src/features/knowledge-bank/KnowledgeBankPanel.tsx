@@ -434,7 +434,7 @@ export function KnowledgeBankPanel({
             onClick={() => setActiveTab('library')}
             type="button"
           >
-            Library
+            Knowledge Bank
           </button>
           <button
             className="border-b-2 border-[#0f0f0f] px-3 py-2.5 text-xs font-medium text-[#0f0f0f]"

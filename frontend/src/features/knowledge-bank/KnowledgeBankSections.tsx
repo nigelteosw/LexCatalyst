@@ -2,7 +2,7 @@ import { BookMarked, BriefcaseBusiness } from 'lucide-react'
 import { useWorkspaceNavigation } from '../../app/routes'
 
 const sections = [
-  { id: 'knowledge_bank', label: 'Library', icon: BookMarked },
+  { id: 'knowledge_bank', label: 'Knowledge Bank', icon: BookMarked },
   { id: 'matters', label: 'Matters', icon: BriefcaseBusiness },
 ] as const
 

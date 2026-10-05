@@ -1,6 +1,6 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CheckSquare, MessageSquare, Scale } from 'lucide-react'
+import { CheckSquare, FileText, MessageSquare, Scale } from 'lucide-react'
 import {
   listActionItems,
   listChatThreads,
@@ -9,7 +9,6 @@ import {
   listMatters,
 } from '../../shared/api/api'
 import { useWorkspaceNavigation } from '../../app/routes'
-import { Button } from '../../shared/ui/Button'
 import { getErrorMessage } from '../../shared/lib/errors'
 import {
   MatterDocuments,
@@ -26,16 +25,19 @@ function shortDate(iso: string) {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
-function Row({
+/** Same row as a Knowledge Bank entry: tile, title and detail, then a type column and a date. */
+function ItemRow({
   icon,
   title,
-  meta,
+  detail,
+  kind,
   date,
   onClick,
 }: {
   icon: ReactNode
   title: string
-  meta?: string
+  detail?: string
+  kind?: string
   date: string
   onClick: () => void
 }) {
@@ -43,17 +45,39 @@ function Row({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-start gap-4 border-b border-neutral-100 px-1 py-4 text-left transition-colors hover:bg-neutral-50"
+      className="grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-x-4 px-1 py-5 text-left transition-colors hover:bg-black/[0.025] sm:grid-cols-[44px_minmax(0,1fr)_110px_70px]"
     >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium text-neutral-900">{title}</span>
-        {meta && <span className="mt-0.5 block truncate text-sm text-neutral-500">{meta}</span>}
-      </span>
-      <span className="shrink-0 text-sm text-neutral-500">{shortDate(date)}</span>
+      <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-50 text-[#1e3a8a]">{icon}</span>
+      <div className="min-w-0">
+        <h3 className="text-base font-medium leading-snug text-neutral-900">{title}</h3>
+        {detail && <p className="mt-1 line-clamp-1 text-sm text-neutral-500">{detail}</p>}
+      </div>
+      <span className="hidden text-sm capitalize text-neutral-500 sm:block">{kind}</span>
+      <span className="hidden text-right text-sm text-neutral-500 sm:block">{shortDate(date)}</span>
     </button>
+  )
+}
+
+function Section({
+  icon,
+  label,
+  count,
+  children,
+}: {
+  icon: ReactNode
+  label: string
+  count: number
+  children: ReactNode
+}) {
+  return (
+    <section className="mt-6">
+      <h2 className="flex items-center gap-2.5 border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">
+        {icon}
+        {label}
+        <span className="font-sans text-sm text-neutral-400">{count}</span>
+      </h2>
+      <div className="divide-y divide-neutral-200/70">{children}</div>
+    </section>
   )
 }
 
@@ -73,6 +97,7 @@ export function MatterPage({
   const [tab, setTab] = useState<Tab>('documents')
   const [folderId, setFolderId] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const { selectKnowledgeBank, selectMatters, selectThread, selectActions, startNewChat } =
     useWorkspaceNavigation()
@@ -93,8 +118,8 @@ export function MatterPage({
   const actions = useQuery({ queryKey: ['actions'], queryFn: listActionItems })
 
   const matterDocs = (docs.data ?? []).filter((d) => (d.matterId ?? null) === matterKey)
-  const matterCases = cases.data?.items ?? []
-  const matterChats = chats.data ?? []
+  const matterCases = useMemo(() => cases.data?.items ?? [], [cases.data])
+  const matterChats = useMemo(() => chats.data ?? [], [chats.data])
   const pending = (actions.data ?? []).filter(
     (a) => (a.matterId ?? null) === matterKey && a.status !== 'done',
   )
@@ -113,7 +138,7 @@ export function MatterPage({
   const caseLabel = matter ? matter.caseNumber : 'General'
   const subtitle = matter
     ? [matter.caseNumber, matter.clientName].filter(Boolean).join(' · ')
-    : 'Documents and LexChats that are not filed under a matter'
+    : 'Documents and LexChats that are not filed under a matter.'
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: 'documents', label: 'Documents', count: matterDocs.length },
@@ -121,128 +146,173 @@ export function MatterPage({
     { id: 'chats', label: 'LexChats', count: matterChats.length },
     { id: 'pending', label: 'Pending', count: pending.length },
   ]
-  const activeCount = tabs.find((t) => t.id === tab)?.count ?? 0
+
+  const needle = search.trim().toLowerCase()
+  const matches = (value: string) => !needle || value.toLowerCase().includes(needle)
+  const shownCases = matterCases.filter((e) => matches(e.title))
+  const shownChats = matterChats.filter((c) => matches(c.title))
+  const shownPending = pending.filter((a) => matches(a.title))
+  const listEmpty =
+    (tab === 'cases' && shownCases.length === 0) ||
+    (tab === 'chats' && shownChats.length === 0) ||
+    (tab === 'pending' && shownPending.length === 0)
+
+  const outlineButton =
+    'h-10 rounded-lg border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-60'
 
   return (
-    <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto px-4 py-6 lg:px-8">
-      <nav aria-label="Breadcrumb" className="text-sm text-neutral-500">
-        <button type="button" className="underline" onClick={() => selectKnowledgeBank()}>
-          Knowledge Bank
-        </button>
-        {' / '}
-        <button type="button" className="hover:underline" onClick={() => selectMatters()}>
-          Matters
-        </button>
-        {' / '}
-        <span>{caseLabel}</span>
-      </nav>
-      <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="font-serif text-3xl text-neutral-900 lg:text-4xl">{title}</h1>
-          <p className="mt-2 text-sm text-neutral-500">{subtitle}</p>
-        </div>
-        <div className="flex gap-2">
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pdf,.docx"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              e.target.value = ''
-              if (!file) return
-              const problem = validateDocumentFile(file)
-              setUploadError(problem)
-              if (problem) return
-              setTab('documents')
-              upload.mutate(file, { onError: (err) => setUploadError(getErrorMessage(err)) })
-            }}
-          />
-          <Button
-            variant="secondary"
-            className="border border-neutral-200"
-            disabled={upload.isPending}
-            onClick={() => fileRef.current?.click()}
-          >
-            {upload.isPending ? 'Uploading…' : 'Upload'}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              onMatterChange(matterKey)
-              startNewChat()
-            }}
-          >
-            {isGeneral ? 'New LexChat' : 'New LexChat in matter'}
-          </Button>
-        </div>
-      </div>
+    <div className="flex min-h-0 flex-1">
+      <main className="min-w-0 flex-1 overflow-y-auto px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
+        <div className="mx-auto max-w-5xl">
+          <nav aria-label="Breadcrumb" className="mb-4 text-sm text-neutral-500">
+            <button type="button" className="hover:text-neutral-800" onClick={() => selectKnowledgeBank()}>
+              Knowledge Bank
+            </button>
+            {' / '}
+            <button type="button" className="hover:text-neutral-800" onClick={() => selectMatters()}>
+              Matters
+            </button>
+            {' / '}
+            <span className="text-neutral-700">{caseLabel}</span>
+          </nav>
 
-      <div role="tablist" className="mt-8 flex gap-6 border-b border-neutral-200">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`-mb-px border-b-2 pb-3 text-sm ${
-              tab === t.id
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800'
-            }`}
-          >
-            {t.label} <span className="text-neutral-400">{t.count}</span>
-          </button>
-        ))}
-      </div>
+          <h1 className="font-serif text-4xl tracking-tight text-neutral-950">{title}</h1>
+          <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-neutral-500">{subtitle}</p>
 
-      <div role="tabpanel">
-        {tab === 'documents' && (
-          <MatterDocuments
-            folderId={folderId}
-            matterId={matterKey}
-            onFolderChange={setFolderId}
-            onUploadError={setUploadError}
-            uploadError={uploadError}
-          />
-        )}
-        {tab === 'cases' &&
-          matterCases.map((e) => (
-            <Row
-              key={e.id}
-              icon={<Scale size={18} />}
-              title={e.title}
-              meta={e.entryType.replace('_', ' ')}
-              date={e.updatedAt}
-              onClick={() => selectKnowledgeBank(e.id)}
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.docx"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (!file) return
+                const problem = validateDocumentFile(file)
+                setUploadError(problem)
+                if (problem) return
+                setTab('documents')
+                upload.mutate(file, { onError: (err) => setUploadError(getErrorMessage(err)) })
+              }}
             />
-          ))}
-        {tab === 'chats' &&
-          matterChats.map((c) => (
-            <Row
-              key={c.id}
-              icon={<MessageSquare size={18} />}
-              title={c.title}
-              date={c.updatedAt}
-              onClick={() => selectThread(c.id)}
+            <button
+              className={outlineButton}
+              disabled={upload.isPending}
+              onClick={() => fileRef.current?.click()}
+              type="button"
+            >
+              {upload.isPending ? 'Uploading…' : 'Upload'}
+            </button>
+            <button
+              className="h-10 rounded-lg bg-[#1e3a8a] px-4 text-sm font-medium text-white transition-colors hover:bg-[#172e6e]"
+              onClick={() => {
+                onMatterChange(matterKey)
+                startNewChat()
+              }}
+              type="button"
+            >
+              {isGeneral ? 'New LexChat' : 'New LexChat in matter'}
+            </button>
+          </div>
+
+          <div
+            role="tablist"
+            className="mt-10 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-3"
+          >
+            <div className="flex flex-wrap gap-x-6 gap-y-1">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`text-[15px] transition-colors ${
+                    tab === t.id ? 'text-[#1e3a8a]' : 'text-neutral-500 hover:text-neutral-800'
+                  }`}
+                >
+                  {t.label} <span className="text-neutral-400">{t.count}</span>
+                </button>
+              ))}
+            </div>
+            <input
+              aria-label={`Search ${title}`}
+              className="h-10 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm outline-none placeholder:text-neutral-400 focus:border-neutral-400 sm:w-64"
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search"
+              value={search}
             />
-          ))}
-        {tab === 'pending' &&
-          pending.map((a) => (
-            <Row
-              key={a.id}
-              icon={<CheckSquare size={18} />}
-              title={a.title}
-              meta={a.status.replace('_', ' ')}
-              date={a.updatedAt}
-              onClick={() => selectActions(a.id)}
-            />
-          ))}
-        {tab !== 'documents' && activeCount === 0 && (
-          <p className="py-8 text-center text-sm text-neutral-500">Nothing here yet.</p>
-        )}
-      </div>
+          </div>
+
+          <div role="tabpanel">
+            {tab === 'documents' && (
+              <MatterDocuments
+                folderId={folderId}
+                matterId={matterKey}
+                onFolderChange={setFolderId}
+                onUploadError={setUploadError}
+                search={search}
+                uploadError={uploadError}
+              />
+            )}
+            {tab === 'cases' && shownCases.length > 0 && (
+              <Section icon={<Scale size={18} className="text-neutral-600" />} label="Cases" count={shownCases.length}>
+                {shownCases.map((e) => (
+                  <ItemRow
+                    key={e.id}
+                    icon={<Scale size={18} />}
+                    title={e.title}
+                    detail={e.bodyMarkdown?.replace(/[#*_`>\-]/g, '').trim().slice(0, 160)}
+                    kind={e.entryType.replace('_', ' ')}
+                    date={e.updatedAt}
+                    onClick={() => selectKnowledgeBank(e.id)}
+                  />
+                ))}
+              </Section>
+            )}
+            {tab === 'chats' && shownChats.length > 0 && (
+              <Section icon={<MessageSquare size={18} className="text-neutral-600" />} label="LexChats" count={shownChats.length}>
+                {shownChats.map((c) => (
+                  <ItemRow
+                    key={c.id}
+                    icon={<MessageSquare size={18} />}
+                    title={c.title}
+                    kind="LexChat"
+                    date={c.updatedAt}
+                    onClick={() => selectThread(c.id)}
+                  />
+                ))}
+              </Section>
+            )}
+            {tab === 'pending' && shownPending.length > 0 && (
+              <Section icon={<CheckSquare size={18} className="text-neutral-600" />} label="Pending" count={shownPending.length}>
+                {shownPending.map((a) => (
+                  <ItemRow
+                    key={a.id}
+                    icon={<CheckSquare size={18} />}
+                    title={a.title}
+                    detail={a.description ?? undefined}
+                    kind={a.status.replace('_', ' ')}
+                    date={a.updatedAt}
+                    onClick={() => selectActions(a.id)}
+                  />
+                ))}
+              </Section>
+            )}
+            {tab !== 'documents' && listEmpty && (
+              <div className="mt-6 grid min-h-40 place-items-center rounded-[14px] border border-dashed border-black/15 bg-white/50 p-6 text-center">
+                <div>
+                  <FileText size={24} className="mx-auto text-[#8a8a84]" />
+                  <p className="mt-3 text-sm text-[#6f6f69]">
+                    {needle ? 'Nothing matches your search.' : 'Nothing here yet.'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   )
 }

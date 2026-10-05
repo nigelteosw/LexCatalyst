@@ -3,7 +3,6 @@ import {
   BookOpen,
   Check,
   ChevronRight,
-  Eye,
   FileText,
   Folder,
   FolderPlus,
@@ -71,12 +70,15 @@ export function MatterDocuments({
   onFolderChange,
   uploadError,
   onUploadError,
+  search,
 }: {
   matterId: string | null
   folderId: string | null
   onFolderChange: (folderId: string | null) => void
   uploadError: string | null
   onUploadError: (message: string | null) => void
+  /** Filters folders and documents by name. */
+  search: string
 }) {
   const { selectDocuments, selectKnowledgeBank } = useWorkspaceNavigation()
   const queryClient = useQueryClient()
@@ -122,7 +124,13 @@ export function MatterDocuments({
     if (folderId && foldersQuery.isSuccess && !activeFolder) onFolderChange(null)
   }, [folderId, foldersQuery.isSuccess, activeFolder, onFolderChange])
 
-  const visibleDocuments = matterDocuments.filter((d) => (d.folderId ?? null) === (activeFolder?.id ?? null))
+  const needle = search.trim().toLowerCase()
+  const visibleDocuments = matterDocuments.filter(
+    (d) =>
+      (d.folderId ?? null) === (activeFolder?.id ?? null) &&
+      (!needle || d.filename.toLowerCase().includes(needle)),
+  )
+  const visibleFolders = folders.filter((f) => !needle || f.name.toLowerCase().includes(needle))
   const folderCounts = useMemo(() => {
     const counts = new Map<string, number>()
     for (const d of matterDocuments) {
@@ -255,17 +263,24 @@ export function MatterDocuments({
   }
 
   const inlineInputClass =
-    'h-8 min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-900 outline-none focus:border-neutral-500'
+    'h-9 min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-neutral-500'
+  const outlineButton =
+    'h-10 rounded-lg border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50'
+  const sectionHeading =
+    'flex items-center gap-2.5 border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900'
+  const rowClass =
+    'grid grid-cols-[44px_minmax(0,1fr)] items-start gap-x-4 gap-y-3 px-1 py-5 transition-colors hover:bg-black/[0.025] md:grid-cols-[44px_minmax(0,1fr)_auto]'
+  const tile = 'grid h-11 w-11 place-items-center rounded-lg bg-blue-50 text-[#1e3a8a]'
 
   return (
-    <div className="pt-4">
-      {error && <ErrorBanner className="mb-3" message={error} onDismiss={() => { setMutationError(null); onUploadError(null) }} />}
+    <div className="mt-6">
+      {error && <ErrorBanner className="mb-4" message={error} onDismiss={() => { setMutationError(null); onUploadError(null) }} />}
 
-      {/* Folder bar */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <nav aria-label="Folder" className="flex min-w-0 items-center gap-1 text-sm text-neutral-600">
+      {/* Where am I + folder creation */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <nav aria-label="Folder" className="flex min-w-0 items-center gap-1.5 text-[15px] text-neutral-500">
           <button
-            className={activeFolder ? 'underline-offset-2 hover:underline' : 'font-medium text-neutral-900'}
+            className={activeFolder ? 'hover:text-neutral-800' : 'text-neutral-900'}
             onClick={() => onFolderChange(null)}
             type="button"
           >
@@ -274,28 +289,32 @@ export function MatterDocuments({
           {activeFolder && (
             <>
               <ChevronRight size={14} className="shrink-0 text-neutral-400" />
-              <span className="truncate font-medium text-neutral-900">{activeFolder.name}</span>
+              <span className="truncate text-neutral-900">{activeFolder.name}</span>
             </>
           )}
         </nav>
         {!activeFolder && (
-          <Button size="sm" variant="secondary" className="border border-neutral-200" onClick={() => setNewFolderName('')}>
-            <FolderPlus size={14} />
-            New folder
-          </Button>
+          <button className={outlineButton} onClick={() => setNewFolderName('')} type="button">
+            <span className="inline-flex items-center gap-2">
+              <FolderPlus size={15} />
+              New folder
+            </span>
+          </button>
         )}
       </div>
 
       {newFolderName !== null && (
         <form
-          className="mb-3 flex items-center gap-1"
+          className="mb-4 flex items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault()
             const name = newFolderName.trim()
             if (name) createFolderMutation.mutate(name)
           }}
         >
-          <Folder size={16} className="mx-2 shrink-0 text-neutral-500" />
+          <span className={tile}>
+            <Folder size={18} />
+          </span>
           <input
             aria-label="New folder name"
             autoFocus
@@ -307,18 +326,18 @@ export function MatterDocuments({
             value={newFolderName}
           />
           <Button aria-label="Create folder" disabled={!newFolderName.trim() || createFolderMutation.isPending} size="icon" type="submit" variant="ghost">
-            <Check size={14} />
+            <Check size={16} />
           </Button>
           <Button aria-label="Cancel" onClick={() => setNewFolderName(null)} size="icon" variant="ghost">
-            <X size={14} />
+            <X size={16} />
           </Button>
         </form>
       )}
 
       {/* Drop zone */}
       <label
-        className={`mb-4 flex cursor-pointer items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-5 text-center transition-colors ${
-          isDragOver ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 bg-white hover:border-neutral-300 hover:bg-neutral-50'
+        className={`mb-2 flex cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-4 text-center transition-colors ${
+          isDragOver ? 'border-[#1e3a8a] bg-blue-50/60' : 'border-neutral-300 bg-white hover:border-neutral-400 hover:bg-neutral-50'
         }`}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false)
@@ -334,8 +353,8 @@ export function MatterDocuments({
           if (file) pickFile(file)
         }}
       >
-        <UploadCloud size={20} className={isDragOver ? 'text-neutral-900' : 'text-neutral-400'} />
-        <span className="text-sm text-neutral-600">
+        <UploadCloud size={18} className={isDragOver ? 'text-[#1e3a8a]' : 'text-neutral-400'} />
+        <span className="text-sm text-neutral-500">
           {upload.isPending
             ? 'Uploading…'
             : isDragOver
@@ -356,230 +375,263 @@ export function MatterDocuments({
         />
       </label>
 
-      <div className="space-y-2">
-        {/* Folders (root view only; folders are one level deep) */}
-        {!activeFolder &&
-          folders.map((folder) => (
-            <article
-              key={folder.id}
-              className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 hover:border-neutral-300 hover:bg-neutral-50/50"
-            >
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600">
-                <Folder size={16} />
-              </div>
-              {renamingFolderId === folder.id ? (
-                <form
-                  className="flex min-w-0 flex-1 items-center gap-1"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    const name = renameValue.trim()
-                    if (name) renameFolderMutation.mutate({ id: folder.id, name })
-                  }}
-                >
-                  <input
-                    aria-label="Folder name"
-                    autoFocus
-                    className={inlineInputClass}
-                    maxLength={120}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Escape' && setRenamingFolderId(null)}
-                    value={renameValue}
-                  />
-                  <Button aria-label="Save folder name" disabled={!renameValue.trim() || renameFolderMutation.isPending} size="icon" type="submit" variant="ghost">
-                    <Check size={14} />
-                  </Button>
-                  <Button aria-label="Cancel rename" onClick={() => setRenamingFolderId(null)} size="icon" variant="ghost">
-                    <X size={14} />
-                  </Button>
-                </form>
-              ) : (
-                <button className="min-w-0 flex-1 text-left" onClick={() => onFolderChange(folder.id)} type="button">
-                  <span className="block truncate text-sm font-medium text-neutral-900">{folder.name}</span>
-                  <span className="mt-0.5 block text-xs text-neutral-500">
-                    {folderCounts.get(folder.id) ?? 0} {(folderCounts.get(folder.id) ?? 0) === 1 ? 'document' : 'documents'}
+      {/* Folders (root only; one level deep) */}
+      {!activeFolder && visibleFolders.length > 0 && (
+        <section className="mt-9 first:mt-6">
+          <h2 className={sectionHeading}>
+            <Folder size={18} className="text-neutral-600" />
+            Folders
+            <span className="font-sans text-sm text-neutral-400">{visibleFolders.length}</span>
+          </h2>
+          <div className="divide-y divide-neutral-200/70">
+            {visibleFolders.map((folder) => {
+              const count = folderCounts.get(folder.id) ?? 0
+              return (
+                <article key={folder.id} className={rowClass}>
+                  <span className={tile}>
+                    <Folder size={18} />
                   </span>
-                </button>
-              )}
-              {folder.canManage && renamingFolderId !== folder.id && (
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    aria-label={`Rename folder ${folder.name}`}
-                    onClick={() => {
-                      setRenamingFolderId(folder.id)
-                      setRenameValue(folder.name)
-                    }}
-                    size="icon"
-                    title="Rename folder"
-                    variant="ghost"
-                  >
-                    <Pencil size={14} />
-                  </Button>
-                  <Button
-                    aria-label={`Delete folder ${folder.name}`}
-                    disabled={deleteFolderMutation.isPending}
-                    onClick={() => handleDeleteFolder(folder)}
-                    size="icon"
-                    title="Delete folder"
-                    variant="danger"
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              )}
-            </article>
-          ))}
-
-        {visibleDocuments.map((document) => {
-          const knowledgeEntry = knowledgeEntries.find((entry) => entry.sourceDocumentId === document.id)
-          const isGenerating = ingestingDocumentId === document.id
-          const isDeleting = deleteMutation.isPending && deleteMutation.variables === document.id
-          return (
-            <article
-              key={document.id}
-              className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 transition-colors hover:border-neutral-300 hover:bg-neutral-50/50 sm:flex-row sm:items-start"
-            >
-              <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600">
-                <FileText size={16} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {renamingDocumentId === document.id ? (
+                  {renamingFolderId === folder.id ? (
                     <form
-                      className="flex min-w-0 flex-1 items-center gap-1"
+                      className="col-span-1 flex min-w-0 items-center gap-1 md:col-span-2"
                       onSubmit={(e) => {
                         e.preventDefault()
-                        const filename = renameValue.trim()
-                        if (filename && !renameMutation.isPending) renameMutation.mutate({ id: document.id, filename })
+                        const name = renameValue.trim()
+                        if (name) renameFolderMutation.mutate({ id: folder.id, name })
                       }}
                     >
                       <input
-                        aria-label="Filename"
+                        aria-label="Folder name"
                         autoFocus
                         className={inlineInputClass}
-                        maxLength={255}
+                        maxLength={120}
                         onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Escape' && setRenamingDocumentId(null)}
+                        onKeyDown={(e) => e.key === 'Escape' && setRenamingFolderId(null)}
                         value={renameValue}
                       />
-                      <Button aria-label="Save filename" disabled={!renameValue.trim() || renameMutation.isPending} size="icon" type="submit" variant="ghost">
-                        <Check size={14} />
+                      <Button aria-label="Save folder name" disabled={!renameValue.trim() || renameFolderMutation.isPending} size="icon" type="submit" variant="ghost">
+                        <Check size={16} />
                       </Button>
-                      <Button aria-label="Cancel rename" onClick={() => setRenamingDocumentId(null)} size="icon" variant="ghost">
-                        <X size={14} />
+                      <Button aria-label="Cancel rename" onClick={() => setRenamingFolderId(null)} size="icon" variant="ghost">
+                        <X size={16} />
                       </Button>
                     </form>
                   ) : (
-                    <h3 className="truncate text-sm font-medium text-neutral-900">{document.filename}</h3>
+                    <>
+                      <button className="min-w-0 text-left" onClick={() => onFolderChange(folder.id)} type="button">
+                        <h3 className="truncate text-base font-medium leading-snug text-neutral-900">{folder.name}</h3>
+                        <p className="mt-1 text-sm text-neutral-500">
+                          {count} {count === 1 ? 'document' : 'documents'}
+                        </p>
+                      </button>
+                      {folder.canManage && (
+                        <div className="flex items-center gap-1 md:justify-end">
+                          <Button
+                            aria-label={`Rename folder ${folder.name}`}
+                            onClick={() => {
+                              setRenamingFolderId(folder.id)
+                              setRenameValue(folder.name)
+                            }}
+                            size="icon"
+                            title="Rename folder"
+                            variant="ghost"
+                          >
+                            <Pencil size={15} />
+                          </Button>
+                          <Button
+                            aria-label={`Delete folder ${folder.name}`}
+                            disabled={deleteFolderMutation.isPending}
+                            onClick={() => handleDeleteFolder(folder)}
+                            size="icon"
+                            title="Delete folder"
+                            variant="danger"
+                          >
+                            <Trash2 size={15} />
+                          </Button>
+                        </div>
+                      )}
+                    </>
                   )}
-                  <StatusBadge
-                    tone={document.status === 'ready' ? 'success' : document.status === 'failed' ? 'danger' : 'warning'}
-                  >
-                    {document.status}
-                  </StatusBadge>
-                </div>
-                <div className="mt-1 text-xs text-neutral-500">
-                  {document.chunkCount} {document.chunkCount === 1 ? 'chunk' : 'chunks'} · Uploaded {formatDate(document.createdAt)}
-                </div>
-                {knowledgeEntry && (
-                  <div className="mt-1 text-xs text-neutral-500">
-                    Knowledge Bank: {knowledgeEntry.title} ({knowledgeEntry.scope.replace('_', ' ')})
-                    {knowledgeEntry.status === 'processing' && (
-                      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                        Summarising...
-                      </span>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Documents */}
+      {visibleDocuments.length > 0 && (
+        <section className="mt-9">
+          <h2 className={sectionHeading}>
+            <FileText size={18} className="text-neutral-600" />
+            {activeFolder ? activeFolder.name : 'Documents'}
+            <span className="font-sans text-sm text-neutral-400">{visibleDocuments.length}</span>
+          </h2>
+          <div className="divide-y divide-neutral-200/70">
+            {visibleDocuments.map((document) => {
+              const knowledgeEntry = knowledgeEntries.find((entry) => entry.sourceDocumentId === document.id)
+              const isGenerating = ingestingDocumentId === document.id
+              const isDeleting = deleteMutation.isPending && deleteMutation.variables === document.id
+              return (
+                <article key={document.id} className={rowClass}>
+                  <span className={tile}>
+                    <FileText size={18} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {renamingDocumentId === document.id ? (
+                        <form
+                          className="flex min-w-0 flex-1 items-center gap-1"
+                          onSubmit={(e) => {
+                            e.preventDefault()
+                            const filename = renameValue.trim()
+                            if (filename && !renameMutation.isPending) renameMutation.mutate({ id: document.id, filename })
+                          }}
+                        >
+                          <input
+                            aria-label="Filename"
+                            autoFocus
+                            className={inlineInputClass}
+                            maxLength={255}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Escape' && setRenamingDocumentId(null)}
+                            value={renameValue}
+                          />
+                          <Button aria-label="Save filename" disabled={!renameValue.trim() || renameMutation.isPending} size="icon" type="submit" variant="ghost">
+                            <Check size={16} />
+                          </Button>
+                          <Button aria-label="Cancel rename" onClick={() => setRenamingDocumentId(null)} size="icon" variant="ghost">
+                            <X size={16} />
+                          </Button>
+                        </form>
+                      ) : (
+                        <button className="min-w-0 text-left" onClick={() => selectDocuments(document.id)} type="button">
+                          <h3 className="truncate text-base font-medium leading-snug text-neutral-900 hover:underline">
+                            {document.filename}
+                          </h3>
+                        </button>
+                      )}
+                      <StatusBadge
+                        tone={document.status === 'ready' ? 'success' : document.status === 'failed' ? 'danger' : 'warning'}
+                      >
+                        {document.status}
+                      </StatusBadge>
+                    </div>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      {document.contentType.includes('pdf') ? 'PDF' : 'DOCX'} · {document.chunkCount}{' '}
+                      {document.chunkCount === 1 ? 'chunk' : 'chunks'} · Uploaded {formatDate(document.createdAt)}
+                    </p>
+                    {knowledgeEntry && (
+                      <p className="mt-1 text-sm text-neutral-500">
+                        Knowledge Bank: {knowledgeEntry.title} ({knowledgeEntry.scope.replace('_', ' ')})
+                        {knowledgeEntry.status === 'processing' && (
+                          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                            Summarising…
+                          </span>
+                        )}
+                        {knowledgeEntry.status === 'failed' && (
+                          <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                            Failed — retry
+                          </span>
+                        )}
+                      </p>
                     )}
-                    {knowledgeEntry.status === 'failed' && (
-                      <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700">
-                        Failed — retry below
-                      </span>
+                    {document.errorMessage && <p className="mt-1 text-sm text-red-700">{document.errorMessage}</p>}
+                    {knowledgeEntry?.errorMessage && (
+                      <p className="mt-1 text-sm text-red-700">Summary error: {knowledgeEntry.errorMessage}</p>
                     )}
                   </div>
-                )}
-                {document.errorMessage && <div className="mt-2 text-xs text-red-600">{document.errorMessage}</div>}
-                {knowledgeEntry?.errorMessage && (
-                  <div className="mt-2 text-xs text-red-600">Summary error: {knowledgeEntry.errorMessage}</div>
-                )}
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                <Button onClick={() => selectDocuments(document.id)} size="sm" variant="secondary">
-                  <Eye size={14} />
-                  Review
-                </Button>
-                {knowledgeEntry?.status === 'ready' ? (
-                  <Button onClick={() => selectKnowledgeBank(knowledgeEntry.id)} size="sm" variant="secondary">
-                    <BookOpen size={14} />
-                    Open Knowledge Bank
-                  </Button>
-                ) : knowledgeEntry?.status === 'processing' ? (
-                  <Button disabled size="sm" title="Summary is being generated" variant="secondary">
-                    <BookOpen size={14} />
-                    Summarising...
-                  </Button>
-                ) : document.canManage ? (
-                  <Button
-                    disabled={document.status !== 'ready' || !!ingestingDocumentId}
-                    onClick={() => void handleAddToKnowledgeBank(document)}
-                    size="sm"
-                    title={
-                      document.status === 'ready'
-                        ? knowledgeEntry?.status === 'failed'
-                          ? 'Retry summary generation'
-                          : 'Generate a private Knowledge Bank summary'
-                        : 'Document must be ready first'
-                    }
-                    variant="secondary"
-                  >
-                    <BookOpen size={14} />
-                    {isGenerating ? 'Queuing...' : knowledgeEntry?.status === 'failed' ? 'Retry summary' : 'Add to Knowledge Bank'}
-                  </Button>
-                ) : null}
-                {document.canManage && folders.length > 0 && (
-                  <select
-                    aria-label={`Folder for ${document.filename}`}
-                    className="h-8 max-w-40 rounded-lg border border-neutral-200 bg-white px-2 text-xs text-neutral-700"
-                    onChange={(e) => moveMutation.mutate({ id: document.id, folderId: e.target.value || null })}
-                    value={document.folderId ?? ''}
-                  >
-                    <option value="">No folder</option>
-                    {folders.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {document.canManage && renamingDocumentId !== document.id && (
-                  <Button
-                    onClick={() => {
-                      setRenamingDocumentId(document.id)
-                      setRenameValue(document.filename)
-                      setMutationError(null)
-                    }}
-                    size="sm"
-                    variant="secondary"
-                  >
-                    <Pencil size={14} />
-                    Rename
-                  </Button>
-                )}
-                {document.canManage && (
-                  <Button disabled={isDeleting || isGenerating} onClick={() => handleDeleteDocument(document)} size="sm" variant="danger">
-                    <Trash2 size={14} />
-                    {isDeleting ? 'Deleting...' : 'Delete'}
-                  </Button>
-                )}
-              </div>
-            </article>
-          )
-        })}
-
-        {visibleDocuments.length === 0 && (activeFolder || folders.length === 0) && (
-          <div className="rounded-lg border border-neutral-200 px-4 py-8 text-center text-sm text-neutral-500">
-            {activeFolder ? 'This folder is empty.' : 'No documents yet.'}
+                  <div className="col-span-2 flex flex-wrap items-center gap-1 md:col-span-1 md:justify-end">
+                    {knowledgeEntry?.status === 'ready' ? (
+                      <Button onClick={() => selectKnowledgeBank(knowledgeEntry.id)} size="sm" variant="ghost">
+                        <BookOpen size={14} />
+                        Open entry
+                      </Button>
+                    ) : knowledgeEntry?.status === 'processing' ? (
+                      <Button disabled size="sm" title="Summary is being generated" variant="ghost">
+                        <BookOpen size={14} />
+                        Summarising…
+                      </Button>
+                    ) : document.canManage ? (
+                      <Button
+                        disabled={document.status !== 'ready' || !!ingestingDocumentId}
+                        onClick={() => void handleAddToKnowledgeBank(document)}
+                        size="sm"
+                        title={
+                          document.status === 'ready'
+                            ? knowledgeEntry?.status === 'failed'
+                              ? 'Retry summary generation'
+                              : 'Generate a private Knowledge Bank summary'
+                            : 'Document must be ready first'
+                        }
+                        variant="ghost"
+                      >
+                        <BookOpen size={14} />
+                        {isGenerating ? 'Queuing…' : knowledgeEntry?.status === 'failed' ? 'Retry summary' : 'Add to Knowledge Bank'}
+                      </Button>
+                    ) : null}
+                    {document.canManage && folders.length > 0 && (
+                      <select
+                        aria-label={`Folder for ${document.filename}`}
+                        className="h-8 max-w-36 rounded-lg border border-neutral-200 bg-white px-2 text-xs text-neutral-700"
+                        onChange={(e) => moveMutation.mutate({ id: document.id, folderId: e.target.value || null })}
+                        value={document.folderId ?? ''}
+                      >
+                        <option value="">No folder</option>
+                        {folders.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {document.canManage && renamingDocumentId !== document.id && (
+                      <Button
+                        aria-label={`Rename ${document.filename}`}
+                        onClick={() => {
+                          setRenamingDocumentId(document.id)
+                          setRenameValue(document.filename)
+                          setMutationError(null)
+                        }}
+                        size="icon"
+                        title="Rename"
+                        variant="ghost"
+                      >
+                        <Pencil size={15} />
+                      </Button>
+                    )}
+                    {document.canManage && (
+                      <Button
+                        aria-label={`Delete ${document.filename}`}
+                        disabled={isDeleting || isGenerating}
+                        onClick={() => handleDeleteDocument(document)}
+                        size="icon"
+                        title="Delete"
+                        variant="danger"
+                      >
+                        <Trash2 size={15} />
+                      </Button>
+                    )}
+                  </div>
+                </article>
+              )
+            })}
           </div>
-        )}
-      </div>
+        </section>
+      )}
+
+      {visibleDocuments.length === 0 && (activeFolder || visibleFolders.length === 0) && (
+        <div className="mt-6 grid min-h-40 place-items-center rounded-[14px] border border-dashed border-black/15 bg-white/50 p-6 text-center">
+          <p className="text-sm text-neutral-500">
+            {needle
+              ? 'No documents match your search.'
+              : activeFolder
+                ? 'This folder is empty.'
+                : 'No documents yet. Drop a file above to add one.'}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
