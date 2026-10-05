@@ -18,6 +18,7 @@ from app.schemas import (
 from app.services.organization_service import (
     add_matter_member,
     create_matter,
+    delete_matter,
     get_matter,
     list_matter_members,
     list_matters,
@@ -115,6 +116,21 @@ def patch_matter(
     if not matter:
         raise HTTPException(status_code=404, detail="Matter not found")
     return MatterResponse.model_validate(matter)
+
+
+@router.delete("/matters/{matter_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_matter(
+    matter_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    require_partner_or_admin(current_user)
+    try:
+        deleted = delete_matter(db, matter_id)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Matter database is unavailable") from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Matter not found")
 
 
 @router.get("/matters/{matter_id}/members", response_model=list[MatterMemberResponse])

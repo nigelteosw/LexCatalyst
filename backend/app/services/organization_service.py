@@ -1,8 +1,17 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.dependencies import is_partner_or_admin
-from app.models import Matter, MatterMember, Team, TeamMember, User
+from app.models import (
+    KnowledgeBankEntry,
+    Matter,
+    MatterMember,
+    ResourceMetadata,
+    Team,
+    TeamMember,
+    User,
+    WikiPage,
+)
 from app.schemas import MatterCreate, MatterMemberCreate, MatterUpdate
 
 DEFAULT_TEAM_NAME = "LexCatalyst Legal"
@@ -155,5 +164,32 @@ def remove_matter_member(db: Session, matter_id: str, user_id: str) -> bool:
     if not membership:
         return False
     db.delete(membership)
+    db.commit()
+    return True
+
+
+def delete_matter(db: Session, matter_id: str) -> bool:
+    """Hard-delete a matter. Linked records fall back to General.
+
+    FKs with ON DELETE SET NULL clear matter_id on chats, documents, KB
+    entries, actions and reviews. wiki_pages.matter_id has no FK, so it is
+    cleared here. Matter-scoped KB entries and resource metadata become
+    private so they are not exposed more widely than before.
+    """
+    matter = db.get(Matter, matter_id)
+    if not matter:
+        return False
+    db.execute(update(WikiPage).where(WikiPage.matter_id == matter_id).values(matter_id=None))
+    db.execute(
+        update(KnowledgeBankEntry)
+        .where(KnowledgeBankEntry.matter_id == matter_id, KnowledgeBankEntry.scope == "matter")
+        .values(scope="private")
+    )
+    db.execute(
+        update(ResourceMetadata)
+        .where(ResourceMetadata.matter_id == matter_id, ResourceMetadata.scope == "matter")
+        .values(scope="private")
+    )
+    db.delete(matter)
     db.commit()
     return True
