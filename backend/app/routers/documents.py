@@ -6,6 +6,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     Header,
     HTTPException,
     Query,
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import authenticate_user_token, get_current_user, require_matter_member
+from app.services.document_folder_service import get_folder, require_folder_access
 from app.models import Document, User
 from app.schemas import (
     DocumentCommentCreate,
@@ -90,6 +92,7 @@ def build_document_response(
         status=document.status,
         error_message=document.error_message,
         matter_id=document.matter_id,
+        folder_id=document.folder_id,
         team_id=document.team_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
@@ -118,12 +121,25 @@ def build_comment_response(db: Session, comment, current_user: User) -> Document
 )
 async def upload_document(
     file: UploadFile = File(...),
+    matter_id: str | None = Form(default=None),
+    folder_id: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DocumentResponse:
     """Store a document and enqueue extraction, OCR, and embedding."""
     filename = file.filename or "document"
     content_type = file.content_type or "application/octet-stream"
+    matter_id = matter_id or None
+    folder_id = folder_id or None
+    if matter_id:
+        require_matter_member(db, current_user, matter_id)
+    if folder_id:
+        folder = get_folder(db, folder_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        require_folder_access(db, current_user, folder)
+        if folder.matter_id != matter_id:
+            raise HTTPException(status_code=400, detail="Folder belongs to a different matter")
 
     try:
         file_bytes = await file.read()
@@ -139,6 +155,8 @@ async def upload_document(
             filename=filename,
             content_type=content_type,
             file_bytes=file_bytes,
+            matter_id=matter_id,
+            folder_id=folder_id,
         )
         document_with_count = get_user_document(db, current_user.id, document.id)
         chunk_count = document_with_count[1] if document_with_count else 0
@@ -204,8 +222,14 @@ def rename_document(
     current_user: User = Depends(get_current_user),
 ) -> DocumentResponse:
     set_matter = "matter_id" in schema.model_fields_set
+    set_folder = "folder_id" in schema.model_fields_set
     if set_matter and schema.matter_id:
         require_matter_member(db, current_user, schema.matter_id)
+    if set_folder and schema.folder_id:
+        folder = get_folder(db, schema.folder_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        require_folder_access(db, current_user, folder)
     try:
         document = update_user_document(
             db,
@@ -214,6 +238,8 @@ def rename_document(
             filename=schema.filename,
             matter_id=schema.matter_id,
             set_matter=set_matter,
+            folder_id=schema.folder_id,
+            set_folder=set_folder,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

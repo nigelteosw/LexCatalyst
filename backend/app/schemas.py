@@ -84,6 +84,7 @@ class DocumentResponse(BaseModel):
     status: DocumentStatus | str
     error_message: str | None = None
     matter_id: str | None = None
+    folder_id: str | None = None
     team_id: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -93,11 +94,33 @@ class DocumentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DocumentFolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    matter_id: str | None = None
+
+
+class DocumentFolderUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class DocumentFolderResponse(BaseModel):
+    id: str
+    matter_id: str | None = None
+    name: str
+    created_by: str
+    can_manage: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class DocumentUpdate(BaseModel):
     """Omitted fields are unchanged. matter_id=null moves the document to General."""
 
     filename: str | None = Field(default=None, min_length=1, max_length=255)
     matter_id: str | None = None
+    folder_id: str | None = None
 
 
 class ResourceMetadataResponse(BaseModel):

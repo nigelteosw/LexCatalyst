@@ -8,7 +8,7 @@ from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Document, DocumentChunk, MatterMember
+from app.models import Document, DocumentChunk, DocumentFolder, MatterMember
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
     IngestionError,
@@ -148,6 +148,7 @@ async def create_pending_document(
     content_type: str,
     file_bytes: bytes,
     matter_id: str | None = None,
+    folder_id: str | None = None,
     team_id: str | None = None,
 ) -> Document:
     """Store an upload and enqueue durable document processing."""
@@ -159,6 +160,7 @@ async def create_pending_document(
         content_type=content_type,
         status="uploaded",
         matter_id=matter_id,
+        folder_id=folder_id,
         team_id=team_id,
         file_size=len(file_bytes),
     )
@@ -475,8 +477,15 @@ def update_user_document(
     filename: str | None,
     matter_id: str | None,
     set_matter: bool,
+    folder_id: str | None = None,
+    set_folder: bool = False,
 ) -> Document | None:
-    """Rename and/or move a document. matter_id=None with set_matter moves it to General."""
+    """Rename and/or move a document.
+
+    matter_id=None with set_matter moves it to General; folder_id=None with set_folder
+    moves it to the matter root. Changing matter without naming a folder clears the folder,
+    because folders belong to one matter.
+    """
     document = db.scalar(
         select(Document).where(
             Document.id == document_id,
@@ -515,6 +524,16 @@ def update_user_document(
             )
     if set_matter:
         document.matter_id = matter_id
+        if not set_folder:
+            document.folder_id = None
+    if set_folder:
+        if folder_id:
+            folder = db.get(DocumentFolder, folder_id)
+            if not folder or folder.matter_id != document.matter_id:
+                raise ValueError("Folder belongs to a different matter")
+            if folder.matter_id is None and folder.created_by != user_id:
+                raise ValueError("Folder not found")
+        document.folder_id = folder_id
     document.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(document)
