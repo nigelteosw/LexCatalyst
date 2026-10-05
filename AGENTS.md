@@ -283,6 +283,6 @@ All AI features run through OpenRouter on the user's own key. Prompts (including
 
 The Chrome extension (`extension/`) runs its selection content script only on origins the user turns on, and sends user-shared webpage text to Birdie as `web_context` on `POST /birdie/stream` and highlighted clauses to `POST /precedent/search`; keep the side-panel disclosure in sync with the provider line above. Birdie cites case law only from eLitigation (`case_law_service.py`); only a search phrase is sent there.
 
-`DEMO_MODE=true` enables `/demo/*` (admin-only, 404 otherwise) for user switching and seeding. Never enable it in a deployment with real client data.
+`DEMO_MODE=true` enables `/demo/*` (admin-only, 404 otherwise) for user switching and seeding, makes every Google sign-in an admin, and lets users mimic any role via `PUT /demo/role` (Settings → View as). Never enable it in a deployment with real client data.
 
 If a new Alembic migration is added, update the "Current head" reference above.

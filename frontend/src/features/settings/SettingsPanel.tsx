@@ -7,6 +7,7 @@ import {
   getAppConfig,
   listFirmUsers,
   seedDemoData,
+  setDemoRole,
   updateOtherUserRole,
 } from '../../shared/api/api'
 import { ModelSettingsSection } from './ModelSettingsSection'
@@ -111,6 +112,16 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
     onError: (error) => setMessage(getErrorMessage(error)),
   })
 
+  const demoRoleMutation = useMutation({
+    mutationFn: setDemoRole,
+    onSuccess: () => {
+      // Role changes what every panel shows, so refetch everything rather than picking queries.
+      queryClient.invalidateQueries()
+      setMessage('Role updated.')
+    },
+    onError: (error) => setMessage(getErrorMessage(error)),
+  })
+
   const usersQuery = useQuery({
     queryKey: ['firmUsers'],
     queryFn: listFirmUsers,
@@ -165,9 +176,29 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
               {(currentUser?.isAdmin ? 'administrator' : currentUser?.firmRole ?? 'associate')
                 .replace('_', ' ')}
             </p>
-            <p className="mt-2 text-xs leading-5 text-[#8c8c86]">
-              Roles are managed by an administrator.
-            </p>
+            {demoMode ? (
+              <label className="mt-3 flex items-center justify-between gap-4 text-xs text-[#6f6f69]">
+                <span>
+                  View as
+                  <span className="block text-[11px] text-[#8c8c86]">
+                    Demo mode: everyone is an admin and can mimic any role to see what it can do.
+                  </span>
+                </span>
+                <select
+                  className="rounded-lg border border-black/10 bg-[#f4f3ef] px-2 py-1 text-[11px] font-medium text-[#5a5a56] outline-none focus:border-black/25"
+                  disabled={!currentUser || demoRoleMutation.isPending}
+                  onChange={(e) => demoRoleMutation.mutate(e.target.value as FirmRole)}
+                  value={currentUser?.isAdmin ? 'admin' : (currentUser?.firmRole ?? 'associate')}
+                >
+                  <option value="admin">Administrator</option>
+                  <option value="partner">Partner</option>
+                  <option value="senior_associate">Senior Associate</option>
+                  <option value="associate">Junior Associate</option>
+                </select>
+              </label>
+            ) : (
+              <p className="mt-2 text-xs leading-5 text-[#8c8c86]">Roles are managed by an administrator.</p>
+            )}
           </div>
 
           {message && (

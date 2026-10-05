@@ -67,6 +67,72 @@ class DemoSwitchTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 404)
 
 
+class DemoRoleTests(unittest.TestCase):
+    def _set_role(self, user, role, *, demo_mode=True):
+        db = MagicMock()
+        with (
+            patch.object(demo, "get_settings", return_value=_settings(demo_mode)),
+            patch.object(demo, "update_user_role", return_value=user) as update,
+        ):
+            result = demo.set_demo_role(demo.RoleRequest(firm_role=role), db=db, current_user=user)
+        return result, update
+
+    def test_404_when_demo_mode_off(self) -> None:
+        with self.assertRaises(HTTPException) as raised:
+            self._set_role(_user(), "partner", demo_mode=False)
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_seeded_dummy_users_keep_their_roles(self) -> None:
+        with self.assertRaises(HTTPException) as raised:
+            self._set_role(_user("jane", google_id="dummy:jane-pereira"), "partner")
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_any_real_user_can_mimic_a_role(self) -> None:
+        user = _user(admin=False)
+        result, update = self._set_role(user, "senior_associate")
+        self.assertEqual(update.call_args.kwargs["firm_role"], "senior_associate")
+        self.assertIs(update.call_args.kwargs["user"], user)
+        self.assertEqual(result["id"], user.id)
+
+    def test_admin_can_return_to_admin(self) -> None:
+        _result, update = self._set_role(_user(admin=False), "admin")
+        self.assertEqual(update.call_args.kwargs["firm_role"], "admin")
+
+    def test_rejects_unknown_role(self) -> None:
+        with self.assertRaises(ValueError):
+            demo.RoleRequest(firm_role="intern")
+
+
+class DemoAdminSyncTests(unittest.TestCase):
+    def test_login_promotes_real_users_to_admin_in_demo_mode(self) -> None:
+        from app import auth
+
+        db = MagicMock()
+        existing = SimpleNamespace(is_admin=False, firm_role="associate", email="a@x.test")
+        db.query.return_value.filter.return_value.first.return_value = existing
+        info = {"sub": "g1", "email": "a@x.test"}
+        with (
+            patch.object(auth, "get_settings", return_value=SimpleNamespace(demo_mode=True, admin_emails=[])),
+            patch.object(auth, "ensure_default_team"),
+        ):
+            user = auth.get_or_create_user(db, info)
+        self.assertTrue(user.is_admin)
+        self.assertEqual(user.firm_role, "partner")
+
+    def test_login_unchanged_outside_demo_mode(self) -> None:
+        from app import auth
+
+        db = MagicMock()
+        existing = SimpleNamespace(is_admin=False, firm_role="associate", email="a@x.test")
+        db.query.return_value.filter.return_value.first.return_value = existing
+        with (
+            patch.object(auth, "get_settings", return_value=SimpleNamespace(demo_mode=False, admin_emails=[])),
+            patch.object(auth, "ensure_default_team"),
+        ):
+            user = auth.get_or_create_user(db, {"sub": "g1", "email": "a@x.test"})
+        self.assertFalse(user.is_admin)
+
+
 class SeedContentTests(unittest.TestCase):
     def test_review_feedback_anchors_pass_rect_validation(self) -> None:
         pdf = DemoPdf(NDA_BLOCKS)

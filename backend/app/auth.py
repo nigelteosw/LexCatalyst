@@ -58,7 +58,8 @@ def get_or_create_user(db: Session, google_info: dict[str, Any]) -> User:
     name = google_info.get("name")
     
     settings = get_settings()
-    is_admin = email.lower() in [e.strip().lower() for e in settings.admin_emails]
+    # DEMO_MODE: everyone who signs in is an admin; they mimic other roles from Settings (PUT /demo/role).
+    is_admin = settings.demo_mode or email.lower() in [e.strip().lower() for e in settings.admin_emails]
 
     user = db.query(User).filter(User.google_id == google_id).first()
     if not user:

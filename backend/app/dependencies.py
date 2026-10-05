@@ -44,10 +44,11 @@ def authenticate_user_token(db: Session, token: str | None) -> User:
     if user is None:
         raise credentials_exception
 
-    # Sync admin status from config
+    # Sync admin status from config. Skipped in DEMO_MODE, where users mimic roles (PUT /demo/role)
+    # and must keep the role they picked; login (get_or_create_user) re-promotes them to admin.
     settings = get_settings()
     is_admin = user.email.lower() in [e.strip().lower() for e in settings.admin_emails]
-    if user.is_admin != is_admin:
+    if not settings.demo_mode and user.is_admin != is_admin:
         user.is_admin = is_admin
         if is_admin:
             user.firm_role = "partner"

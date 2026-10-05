@@ -276,8 +276,11 @@ With demo mode on, admins get a **Switch user** picker in the sidebar to act as 
 | `GET /demo/users` | admin + `DEMO_MODE` | seeded users you can switch into |
 | `POST /demo/switch` | admin + `DEMO_MODE` | 12-hour token for a seeded user |
 | `POST /demo/seed` | admin + `DEMO_MODE` | (re)load demo data |
+| `PUT /demo/role` | any real signed-in user + `DEMO_MODE` | mimic a role (`admin`, `partner`, `senior_associate`, `associate`) on your own account; 404 for seeded `dummy:` users |
 
-All three return 404 unless demo mode is on and the caller is an admin.
+In demo mode **every user who signs in with Google is an admin**, and the `ADMIN_EMAILS` sync is switched off so a mimicked role sticks until the next sign-in (which makes you an admin again). Pick a role under Settings → Professional role → **View as**; choosing Administrator switches back. Mimicking a role also updates your team and matter membership roles. Seeded `dummy:` users keep the roles the demo script gives them.
+
+The first three routes return 404 unless demo mode is on and the caller is an admin; `PUT /demo/role` returns 404 unless demo mode is on.
 
 ---
 

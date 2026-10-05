@@ -16,7 +16,9 @@ from app.config import get_settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
+from app.schemas import FirmRole
 from app.services.demo_seed_service import seed_demo
+from app.services.user_service import update_user_role
 
 router = APIRouter(tags=["demo"])
 
@@ -31,6 +33,10 @@ def require_demo_admin(current_user: User = Depends(get_current_user)) -> User:
 
 class SwitchRequest(BaseModel):
     user_id: str
+
+
+class RoleRequest(BaseModel):
+    firm_role: FirmRole
 
 
 def _public(user: User) -> dict:
@@ -73,3 +79,19 @@ async def demo_seed(
     admin: User = Depends(require_demo_admin),
 ) -> dict:
     return await seed_demo(db, presenter=admin)
+
+
+@router.put("/demo/role")
+def set_demo_role(
+    body: RoleRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Mimic a role (including administrator). Any real signed-in user, DEMO_MODE only.
+
+    Deliberately not admin-gated: a user who picked Associate is no longer an admin and must be able to
+    switch back. Seeded dummy users keep the roles the demo script gives them.
+    """
+    if not get_settings().demo_mode or current_user.google_id.startswith("dummy:"):
+        raise HTTPException(status_code=404, detail="Not found")
+    return _public(update_user_role(db, user=current_user, firm_role=body.firm_role))

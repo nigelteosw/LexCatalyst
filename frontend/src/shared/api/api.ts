@@ -2202,3 +2202,8 @@ export type DemoSeedSummary = Record<string, number | boolean>
 export async function seedDemoData(): Promise<DemoSeedSummary> {
   return request<DemoSeedSummary>('/demo/seed', { method: 'POST', headers: presenterAuthHeader() })
 }
+
+// DEMO_MODE only: mimic a role (including 'admin') on the signed-in account.
+export async function setDemoRole(firmRole: FirmRole): Promise<void> {
+  await request<unknown>('/demo/role', { method: 'PUT', body: JSON.stringify({ firm_role: firmRole }) })
+}
