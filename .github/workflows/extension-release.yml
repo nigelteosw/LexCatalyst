@@ -57,7 +57,7 @@ jobs:
           git commit -m "chore(extension): release v${{ steps.bump.outputs.version }} [skip ci]"
           git pull --rebase origin main
           git tag "extension-v${{ steps.bump.outputs.version }}"
-          git push origin HEAD:main --follow-tags
+          git push origin HEAD:main "refs/tags/extension-v${{ steps.bump.outputs.version }}"
 
       - name: Publish GitHub Release
         env:
