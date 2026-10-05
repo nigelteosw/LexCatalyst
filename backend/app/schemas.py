@@ -57,6 +57,7 @@ class ChatMessageResponse(BaseModel):
 class ChatThreadResponse(BaseModel):
     id: str
     title: str
+    matter_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -70,7 +71,10 @@ class ChatResponse(BaseModel):
 
 
 class ChatThreadUpdate(BaseModel):
-    title: str = Field(min_length=1, max_length=160)
+    """Omitted fields are unchanged. matter_id=null moves the thread to General."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    matter_id: str | None = None
 
 
 class DocumentResponse(BaseModel):

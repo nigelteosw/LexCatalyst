@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_matter_member
 from app.models import ChatThread, User
 from app.providers.openrouter import OpenRouterError, OpenRouterKeyMissing
 from app.providers.embedding_provider import EmbeddingError
@@ -26,10 +26,11 @@ from app.services.chat_service import (
     delete_message,
     delete_thread,
     list_thread_messages,
+    GENERAL,
     list_threads,
     persist_assistant_message,
     prepare_agent_context,
-    rename_thread,
+    update_thread,
     run_post_save_tasks,
     save_assistant_response,
 )
@@ -43,6 +44,8 @@ async def chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ChatResponse:
+    if request.matter_id:
+        require_matter_member(db, current_user, request.matter_id)
     try:
         thread, assistant_message = await create_chat_response(
             db,
@@ -75,6 +78,9 @@ async def chat_stream(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
+    if request.matter_id:
+        require_matter_member(db, current_user, request.matter_id)
+
     def event(name: str, payload: dict) -> str:
         return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 
@@ -169,15 +175,20 @@ async def chat_stream(
 
 @router.get("/chat/threads", response_model=list[ChatThreadResponse])
 def chat_threads(
+    matter_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[ChatThreadResponse]:
+    if matter_id and matter_id != GENERAL:
+        require_matter_member(db, current_user, matter_id)
     try:
         return [
             ChatThreadResponse.model_validate(thread)
-            for thread in list_threads(db, current_user.id, limit=limit, offset=offset)
+            for thread in list_threads(
+                db, current_user.id, matter_filter=matter_id, limit=limit, offset=offset,
+            )
         ]
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc
@@ -224,9 +235,17 @@ def update_chat_thread(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ChatThreadResponse:
+    set_matter = "matter_id" in schema.model_fields_set
+    if set_matter and schema.matter_id:
+        require_matter_member(db, current_user, schema.matter_id)
     try:
-        thread = rename_thread(
-            db, user_id=current_user.id, thread_id=thread_id, title=schema.title,
+        thread = update_thread(
+            db,
+            user_id=current_user.id,
+            thread_id=thread_id,
+            title=schema.title,
+            matter_id=schema.matter_id,
+            set_matter=set_matter,
         )
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc

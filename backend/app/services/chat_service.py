@@ -484,20 +484,24 @@ async def save_assistant_response(
     return assistant_message
 
 
+GENERAL = "general"
+
+
 def list_threads(
     db: Session,
     user_id: str,
     *,
+    matter_filter: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[ChatThread]:
-    stmt = (
-        select(ChatThread)
-        .where(ChatThread.user_id == user_id)
-        .order_by(desc(ChatThread.updated_at))
-        .offset(offset)
-        .limit(limit)
-    )
+    """matter_filter: None = all threads, GENERAL = no matter, else a matter id."""
+    stmt = select(ChatThread).where(ChatThread.user_id == user_id)
+    if matter_filter == GENERAL:
+        stmt = stmt.where(ChatThread.matter_id.is_(None))
+    elif matter_filter:
+        stmt = stmt.where(ChatThread.matter_id == matter_filter)
+    stmt = stmt.order_by(desc(ChatThread.updated_at)).offset(offset).limit(limit)
     return list(db.scalars(stmt))
 
 
@@ -539,8 +543,14 @@ def list_thread_messages(
     return rows
 
 
-def rename_thread(
-    db: Session, *, user_id: str, thread_id: str, title: str,
+def update_thread(
+    db: Session,
+    *,
+    user_id: str,
+    thread_id: str,
+    title: str | None,
+    matter_id: str | None,
+    set_matter: bool,
 ) -> ChatThread | None:
     thread = db.scalar(
         select(ChatThread).where(
@@ -549,7 +559,10 @@ def rename_thread(
     )
     if not thread:
         return None
-    thread.title = title.strip() or thread.title
+    if title is not None:
+        thread.title = title.strip() or thread.title
+    if set_matter:
+        thread.matter_id = matter_id
     thread.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(thread)
