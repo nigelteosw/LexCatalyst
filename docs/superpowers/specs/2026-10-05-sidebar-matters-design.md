@@ -20,13 +20,13 @@ Date: 2026-10-05
 ## 2. Documents inside Knowledge Bank
 
 - Remove the Documents nav item and its prefetch branch from the sidebar.
-- Knowledge Bank top-level tabs become: Library | Documents | Matters | Audit (Audit stays permission-gated).
-- Documents tab mounts the existing `DocumentsPanel` unchanged.
-- Tab switching lives in a new `features/knowledge-bank/KnowledgeBankTabs.tsx` to keep `KnowledgeBankPanel.tsx` from growing.
+- Knowledge Bank gets a section bar: Library | Documents | Matters. Audit stays where it is inside Library (permission-gated).
+- The section bar is a new `features/knowledge-bank/KnowledgeBankSections.tsx`, rendered by `App.tsx` above whichever panel is active, so `KnowledgeBankPanel.tsx` (55K) and `DocumentsPanel` stay unchanged.
 - Routing (`app/routes.ts`):
-  - `/knowledge/documents` and `/knowledge/documents/:id` → `{ view: 'knowledge_bank', tab: 'documents', documentId }`.
-  - `/knowledge/matters` → `{ view: 'knowledge_bank', tab: 'matters' }`.
-  - `/knowledge/:entryId` keeps working for entries.
+  - `/knowledge/documents` and `/knowledge/documents/:id` → the existing `{ view: 'documents', documentId }` view.
+  - `/knowledge/matters` → new `{ view: 'matters' }` view.
+  - `/knowledge/:entryId` keeps working for entries (entry ids are UUIDs, so no collision).
+  - The Knowledge Bank sidebar item is active for `knowledge_bank`, `documents` and `matters`.
   - Legacy `/documents` and `/documents/:id` redirect (replace) to the new paths.
   - `selectDocuments()` keeps its signature and points at the new path, so callers need no change.
 
@@ -36,11 +36,18 @@ Date: 2026-10-05
 
 - `DELETE /matters/{matter_id}` — partner or admin (same guard as `POST /matters`). Hard delete, implemented in `organization_service.delete_matter`:
   - Explicitly `UPDATE wiki_pages SET matter_id = NULL WHERE matter_id = :id` (that column has no FK).
+  - Knowledge Bank entries with `scope='matter'` for this matter become `scope='private'` (creator only), so they are neither lost nor exposed more widely. Their resource metadata rows follow (`scope='private'`).
+  - Document resource metadata rows for this matter become `scope='private'`, matching `sync_document_metadata` for a matterless document.
   - Delete the matter. FKs with `ON DELETE SET NULL` move chats, documents, KB entries and other records to "General"; `matter_members` cascade.
   - Returns 204. 404 if missing, 403 if not partner/admin.
-- `GET /chat/threads?matter_id=<id>` returns that matter's threads after `require_matter_member`. `GET /chat/threads?matter_id=general` (or param omitted) returns threads with `matter_id IS NULL`. Always scoped to the current user's threads.
+- `GET /chat/threads?matter_id=<id>` returns that matter's threads after `require_matter_member`. `matter_id=general` returns threads with `matter_id IS NULL`. Omitted returns all of the user's threads (Home dashboard keeps working). Always scoped to the current user's threads.
+- `ChatThreadResponse` gains `matter_id`.
 - Thread creation already accepts `matter_id`; add a membership check if not present.
-- README: document `DELETE /matters/{id}` and the `matter_id` filter on `GET /chat/threads`.
+- Reassigning items to a matter (or back to General):
+  - `PATCH /chat/threads/{id}` accepts optional `title` and optional `matter_id` (explicit `null` = General). Membership checked on the target matter.
+  - `PATCH /documents/{id}` accepts optional `filename` and optional `matter_id` (explicit `null` = General). Owner only, membership checked on the target matter, resource metadata re-synced.
+  - Knowledge Bank entries and action items already accept `matter_id` on PATCH; only UI is needed.
+- README: document reassignment, `DELETE /matters/{id}` and the `matter_id` filter on `GET /chat/threads`.
 
 ### Frontend
 
@@ -58,6 +65,14 @@ Date: 2026-10-05
   - Create/edit/delete visible to partner/admin only; others see a read-only list.
   - Row action "Open LexChats" sets the matter and navigates to `/chat`.
   - Deleting the currently selected matter resets selection to General and invalidates `['threads']`, `['matters']`, `['documents']`.
+
+### Reassignment UI
+
+- Shared `shared/ui/MatterSelect.tsx`: a `<select>` with "General" plus matters, `value: string | null`, `onChange(matterId | null)`.
+- LexChat header: a MatterSelect for the open thread. Changing it PATCHes the thread, sets the selected matter, and invalidates `['threads']`.
+- Sidebar thread row menu: "Move to matter…" opens a small dialog with MatterSelect.
+- Documents list rows: a MatterSelect in the document drawer (owner only).
+- Knowledge Bank entry edit form: confirm a matter field exists; add MatterSelect if not.
 
 ## Error handling
 
