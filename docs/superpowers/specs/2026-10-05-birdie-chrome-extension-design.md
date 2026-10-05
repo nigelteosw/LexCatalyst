@@ -8,8 +8,8 @@ Users install a Chrome extension, sign in with their LexCatalyst account, and ge
 
 ## Decisions
 
-- **Location:** new top-level folder `extensions/` (sibling of `frontend/` and `backend/`).
-- **Output:** `bun run build` emits `extensions/dist/` — a ready-to-load unpacked extension (Chrome → `chrome://extensions` → Developer mode → "Load unpacked" → select `extensions/dist`). `bun run package` also zips it to `extensions/birdie-extension.zip` for sharing. Chrome Web Store publishing is out of scope.
+- **Location:** new top-level folder `extension/` (sibling of `frontend/` and `backend/`).
+- **Output:** `bun run build` emits `extension/dist/` — a ready-to-load unpacked extension (Chrome → `chrome://extensions` → Developer mode → "Load unpacked" → select `extension/dist`). `bun run package` also zips it to `extension/birdie-extension.zip` for sharing. Chrome Web Store publishing is out of scope.
 - **UI surface:** Chrome Side Panel API (no DOM injection into host pages).
 - **Page access:** on demand only. Birdie sees highlighted text (via context menu) or the page text when the user clicks "Ask about this page". Nothing is read automatically.
 - **Auth:** Google sign-in in the extension via `chrome.identity.launchWebAuthFlow` → Google ID token → existing `POST /auth/google` → LexCatalyst JWT stored in `chrome.storage.local`.
@@ -17,7 +17,7 @@ Users install a Chrome extension, sign in with their LexCatalyst account, and ge
 ## Structure
 
 ```txt
-extensions/
+extension/
   package.json            # Bun + Vite + React + TS + Tailwind
   vite.config.ts          # multi-entry build: sidepanel + background -> dist/
   public/manifest.json    # MV3; copied into dist/
@@ -37,7 +37,7 @@ extensions/
 
 Manifest permissions: `sidePanel`, `contextMenus`, `activeTab`, `scripting`, `storage`, `identity`. No `<all_urls>` host permission; `activeTab` grants access only after user action. `host_permissions` covers the backend API origin only.
 
-Shared code: the SSE parsing mirrors `streamBirdie` in `frontend/src/shared/api/api.ts` (`event: token|done|error`). Copy it into `extensions/src/lib/api.ts` rather than importing across packages; copy `MarkdownContent` likewise. The extension stays a self-contained Bun package.
+Shared code: the SSE parsing mirrors `streamBirdie` in `frontend/src/shared/api/api.ts` (`event: token|done|error`). Copy it into `extension/src/lib/api.ts` rather than importing across packages; copy `MarkdownContent` likewise. The extension stays a self-contained Bun package.
 
 ## Data flow
 
