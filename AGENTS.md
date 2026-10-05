@@ -282,7 +282,7 @@ If the LLM or embedding provider changes, update both `README.md` and this file.
 
 Birdie uses DeepSeek by default and OpenRouter when a user saves their own key (Settings → Birdie model). Birdie prompts then leave for OpenRouter and the chosen model provider; keep that disclosure in the UI and README.
 
-The Chrome extension (`extension/`) sends user-shared webpage text to Birdie as `web_context` on `POST /birdie/stream`; keep the side-panel disclosure in sync with the provider line above.
+The Chrome extension (`extension/`) runs its selection content script only on origins the user turns on, and sends user-shared webpage text to Birdie as `web_context` on `POST /birdie/stream` and highlighted clauses to `POST /precedent/search`; keep the side-panel disclosure in sync with the provider line above. Birdie cites case law only from eLitigation (`case_law_service.py`); only a search phrase is sent there.
 
 `DEMO_MODE=true` enables `/demo/*` (admin-only, 404 otherwise) for user switching and seeding. Never enable it in a deployment with real client data.
 

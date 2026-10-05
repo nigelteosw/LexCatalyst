@@ -222,7 +222,9 @@ Load it at `chrome://extensions` -> Developer mode -> Load unpacked -> `extensio
 
 Sign-in reuses the web Google OAuth client; `https://<extension-id>.chromiumapp.org/` must be an authorised redirect URI on it. The extension ID is pinned by the `key` in `extension/public/manifest.json` (the matching private key, `extension/key.pem`, is git-ignored).
 
-Birdie only sees webpage text when the user highlights text and picks "Ask Birdie about this", or clicks "Ask about this page". That text is sent to `POST /birdie/stream` (JWT required) as `web_context` (max 20,000 chars) and then to DeepSeek, or OpenRouter when the user has saved their own key.
+Birdie only reads sites you turn on ("Turn on Birdie for this site", which grants that one origin). On those sites it shows your current highlight above the "Ask Birdie…" box and reads the page text (Google Docs via its text export; in Docs, copy (⌘C) or right-click to share a highlight). Nothing is sent until you press Send or open Precedent. Shared text goes to `POST /birdie/stream` (JWT required) as `web_context` (max 20,000 chars) and then to DeepSeek, or to OpenRouter and the chosen model's provider when you saved your own key — choose the model from the model name in the panel header (same setting as the web app). Case-law questions send only a short search phrase to eLitigation (https://www.elitigation.sg); Birdie cites only judgments found there. **New chat** (⌘K) clears the conversation and shared context. The **Precedent** tab calls `POST /precedent/search` with the highlighted clause.
+
+`VITE_APP_URL` (default `https://lexcatalyst.pages.dev`) sets where "Open" links to documents point.
 
 ---
 
