@@ -1,19 +1,21 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckSquare, FileText, MessageSquare, Scale } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { CheckSquare, MessageSquare, Scale } from 'lucide-react'
 import {
   listActionItems,
   listChatThreads,
   listDocuments,
   listKnowledgeBankEntryPage,
   listMatters,
-  moveDocument,
-  uploadDocument,
 } from '../../shared/api/api'
 import { useWorkspaceNavigation } from '../../app/routes'
 import { Button } from '../../shared/ui/Button'
-import { ErrorBanner } from '../../shared/ui/ErrorBanner'
 import { getErrorMessage } from '../../shared/lib/errors'
+import {
+  MatterDocuments,
+  useDocumentUpload,
+  validateDocumentFile,
+} from '../documents/MatterDocuments'
 
 type Tab = 'documents' | 'cases' | 'chats' | 'pending'
 
@@ -55,6 +57,9 @@ function Row({
   )
 }
 
+/** Route id for the pseudo-matter that holds everything without a matter. */
+export const GENERAL_MATTER_ID = 'general'
+
 export function MatterPage({
   matterId,
   onMatterChange,
@@ -62,35 +67,41 @@ export function MatterPage({
   matterId: string
   onMatterChange: (matterId: string | null) => void
 }) {
+  const isGeneral = matterId === GENERAL_MATTER_ID
+  // null = General; this is the value documents, threads and actions carry.
+  const matterKey = isGeneral ? null : matterId
   const [tab, setTab] = useState<Tab>('documents')
+  const [folderId, setFolderId] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const queryClient = useQueryClient()
-  const { selectKnowledgeBank, selectMatters, selectDocuments, selectThread, selectActions, startNewChat } =
+  const { selectKnowledgeBank, selectMatters, selectThread, selectActions, startNewChat } =
     useWorkspaceNavigation()
 
   const mattersQuery = useQuery({ queryKey: ['matters', 'all'], queryFn: () => listMatters() })
-  const matter = mattersQuery.data?.find((m) => m.id === matterId)
+  const matter = isGeneral ? null : (mattersQuery.data?.find((m) => m.id === matterId) ?? null)
 
   const docs = useQuery({ queryKey: ['documents'], queryFn: listDocuments })
   const cases = useQuery({
     queryKey: ['kbEntries', 'matter', matterId],
     queryFn: () => listKnowledgeBankEntryPage({ matterId, limit: 100, offset: 0 }),
+    enabled: !isGeneral,
   })
-  const chats = useQuery({ queryKey: ['threads', matterId], queryFn: () => listChatThreads(matterId) })
+  const chats = useQuery({
+    queryKey: ['threads', matterId],
+    queryFn: () => listChatThreads(matterId),
+  })
   const actions = useQuery({ queryKey: ['actions'], queryFn: listActionItems })
 
-  const matterDocs = (docs.data ?? []).filter((d) => d.matterId === matterId)
+  const matterDocs = (docs.data ?? []).filter((d) => (d.matterId ?? null) === matterKey)
   const matterCases = cases.data?.items ?? []
   const matterChats = chats.data ?? []
-  const pending = (actions.data ?? []).filter((a) => a.matterId === matterId && a.status !== 'done')
+  const pending = (actions.data ?? []).filter(
+    (a) => (a.matterId ?? null) === matterKey && a.status !== 'done',
+  )
 
-  const upload = useMutation({
-    // Upload takes no matter field; file it into this matter right after.
-    mutationFn: async (file: File) => moveDocument((await uploadDocument(file)).id, matterId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
-  })
+  const upload = useDocumentUpload(matterKey, folderId)
 
-  if (!matter) {
+  if (!isGeneral && !matter) {
     return (
       <div className="p-6 text-sm text-neutral-500">
         {mattersQuery.isLoading ? 'Loading…' : "Matter not found, or you don't have access."}
@@ -98,9 +109,15 @@ export function MatterPage({
     )
   }
 
+  const title = matter ? matter.title : 'General'
+  const caseLabel = matter ? matter.caseNumber : 'General'
+  const subtitle = matter
+    ? [matter.caseNumber, matter.clientName].filter(Boolean).join(' · ')
+    : 'Documents and LexChats that are not filed under a matter'
+
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: 'documents', label: 'Documents', count: matterDocs.length },
-    { id: 'cases', label: 'Cases', count: matterCases.length },
+    ...(isGeneral ? [] : [{ id: 'cases' as const, label: 'Cases', count: matterCases.length }]),
     { id: 'chats', label: 'LexChats', count: matterChats.length },
     { id: 'pending', label: 'Pending', count: pending.length },
   ]
@@ -117,14 +134,12 @@ export function MatterPage({
           Matters
         </button>
         {' / '}
-        <span>{matter.caseNumber}</span>
+        <span>{caseLabel}</span>
       </nav>
       <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="font-serif text-3xl text-neutral-900 lg:text-4xl">{matter.title}</h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            {[matter.caseNumber, matter.clientName].filter(Boolean).join(' · ')}
-          </p>
+          <h1 className="font-serif text-3xl text-neutral-900 lg:text-4xl">{title}</h1>
+          <p className="mt-2 text-sm text-neutral-500">{subtitle}</p>
         </div>
         <div className="flex gap-2">
           <input
@@ -134,25 +149,34 @@ export function MatterPage({
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0]
-              if (file) upload.mutate(file)
               e.target.value = ''
+              if (!file) return
+              const problem = validateDocumentFile(file)
+              setUploadError(problem)
+              if (problem) return
+              setTab('documents')
+              upload.mutate(file, { onError: (err) => setUploadError(getErrorMessage(err)) })
             }}
           />
-          <Button variant="secondary" className="border border-neutral-200" disabled={upload.isPending} onClick={() => fileRef.current?.click()}>
+          <Button
+            variant="secondary"
+            className="border border-neutral-200"
+            disabled={upload.isPending}
+            onClick={() => fileRef.current?.click()}
+          >
             {upload.isPending ? 'Uploading…' : 'Upload'}
           </Button>
           <Button
             variant="primary"
             onClick={() => {
-              onMatterChange(matterId)
+              onMatterChange(matterKey)
               startNewChat()
             }}
           >
-            New LexChat in matter
+            {isGeneral ? 'New LexChat' : 'New LexChat in matter'}
           </Button>
         </div>
       </div>
-      {upload.error && <ErrorBanner className="mt-4" message={getErrorMessage(upload.error)} />}
 
       <div role="tablist" className="mt-8 flex gap-6 border-b border-neutral-200">
         {tabs.map((t) => (
@@ -174,17 +198,15 @@ export function MatterPage({
       </div>
 
       <div role="tabpanel">
-        {tab === 'documents' &&
-          matterDocs.map((d) => (
-            <Row
-              key={d.id}
-              icon={<FileText size={18} />}
-              title={d.filename}
-              meta={`${d.contentType.includes('pdf') ? 'PDF' : 'DOCX'} · ${d.status}`}
-              date={d.updatedAt}
-              onClick={() => selectDocuments(d.id)}
-            />
-          ))}
+        {tab === 'documents' && (
+          <MatterDocuments
+            folderId={folderId}
+            matterId={matterKey}
+            onFolderChange={setFolderId}
+            onUploadError={setUploadError}
+            uploadError={uploadError}
+          />
+        )}
         {tab === 'cases' &&
           matterCases.map((e) => (
             <Row
@@ -217,7 +239,7 @@ export function MatterPage({
               onClick={() => selectActions(a.id)}
             />
           ))}
-        {activeCount === 0 && (
+        {tab !== 'documents' && activeCount === 0 && (
           <p className="py-8 text-center text-sm text-neutral-500">Nothing here yet.</p>
         )}
       </div>

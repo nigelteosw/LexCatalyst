@@ -4,6 +4,7 @@ import { MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react'
 import { createMatter, deleteMatter, listMatters, updateMatter } from '../../shared/api/api'
 import type { CurrentUser, Matter } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
+import { GENERAL_MATTER_ID } from './MatterPage'
 import { Button } from '../../shared/ui/Button'
 import { Dialog } from '../../shared/ui/Dialog'
 import { ErrorBanner } from '../../shared/ui/ErrorBanner'
@@ -110,6 +111,31 @@ export function MattersPanel({
           </tr>
         </thead>
         <tbody>
+          <tr className="border-b border-neutral-100 bg-neutral-50/60">
+            <td className="py-2 pr-3 font-medium text-neutral-900">
+              <button type="button" className="text-left hover:underline" onClick={() => selectMatter(GENERAL_MATTER_ID)}>
+                General
+              </button>
+            </td>
+            <td className="py-2 pr-3 text-neutral-400">—</td>
+            <td className="py-2 pr-3 text-neutral-500" colSpan={2}>
+              Documents and LexChats not filed under a matter
+            </td>
+            <td className="py-2 text-right">
+              <Button
+                aria-label="New LexChat in General"
+                title="New LexChat"
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  onMatterChange(null)
+                  startNewChat()
+                }}
+              >
+                <MessageSquare size={14} />
+              </Button>
+            </td>
+          </tr>
           {matters.map((m) => (
             <tr key={m.id} className="border-b border-neutral-100">
               <td className="py-2 pr-3 font-medium text-neutral-900">
@@ -172,13 +198,6 @@ export function MattersPanel({
               </td>
             </tr>
           ))}
-          {!mattersQuery.isLoading && matters.length === 0 && (
-            <tr>
-              <td colSpan={5} className="py-6 text-center text-neutral-500">
-                No matters yet.
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
 

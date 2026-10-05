@@ -53,8 +53,8 @@ frontend/
       actions/        # Action board (kanban)
       auth/           # LoginPage
       birdie/         # Birdie AI mentor panel
-      chat/           # ChatPanel
-      documents/      # Documents panel (shown under Knowledge Bank at /knowledge/documents)
+      chat/           # ChatPanel, header, matter chip, footnote source panel
+      documents/      # MatterDocuments (folders, upload, rename, delete; used on each matter page); DocumentsPanel is the single-document review page at /knowledge/documents/:id
       knowledge-bank/ # KB panel + filters + dialogs; section bar; Matters list (CRUD) and per-matter page
       memories/       # Memories panel + async Dream consolidation
       navigation/     # Collapsible sidebar; chats grouped by matter (chat page only)
@@ -258,7 +258,7 @@ embed_texts(texts)
 
 ## Matters
 
-Everything is grouped by matter: documents, Knowledge Bank entries, LexChats and Workboard items each carry an optional `matter_id`; no matter means "General". Matters are managed under Knowledge Bank → Matters, and each has a page at `/knowledge/matters/:id`. `DELETE /matters/{id}` is a hard delete (partner/admin): linked records fall back to General, and matter-scoped KB entries become private. Chats and documents are reassigned with `PATCH` and `matter_id` (`null` = General).
+Everything is grouped by matter: documents, Knowledge Bank entries, LexChats and Workboard items each carry an optional `matter_id`; no matter means "General". Matters are managed under Knowledge Bank → Matters, and each has a page at `/knowledge/matters/:id` (documents with one-level folders, cases, LexChats, pending). `/knowledge/matters/general` is the same page for items with no matter. There is no standalone Documents list. `DELETE /matters/{id}` is a hard delete (partner/admin): linked records fall back to General, and matter-scoped KB entries become private. Chats and documents are reassigned with `PATCH` and `matter_id` (`null` = General).
 
 ## Frontend Guidance
 

@@ -473,7 +473,7 @@ function App() {
     setError(null)
 
     try {
-      const uploaded = await uploadDocument(file)
+      const uploaded = await uploadDocument(file, { matterId: selectedMatterId })
       const statusLabel =
         uploaded.status === 'ready'
           ? 'ready for search'

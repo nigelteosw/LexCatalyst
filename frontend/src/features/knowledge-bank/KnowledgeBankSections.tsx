@@ -1,21 +1,20 @@
-import { BookMarked, BriefcaseBusiness, FileText } from 'lucide-react'
+import { BookMarked, BriefcaseBusiness } from 'lucide-react'
 import { useWorkspaceNavigation } from '../../app/routes'
 
 const sections = [
   { id: 'knowledge_bank', label: 'Library', icon: BookMarked },
-  { id: 'documents', label: 'Documents', icon: FileText },
   { id: 'matters', label: 'Matters', icon: BriefcaseBusiness },
 ] as const
 
 export function KnowledgeBankSections() {
-  const { current, selectKnowledgeBank, selectDocuments, selectMatters } = useWorkspaceNavigation()
+  const { current, selectKnowledgeBank, selectMatters } = useWorkspaceNavigation()
   const open = {
     knowledge_bank: () => selectKnowledgeBank(),
-    documents: () => selectDocuments(),
     matters: () => selectMatters(),
   }
-  // The matter detail page belongs to the Matters section.
-  const activeId = current.view === 'matter' ? 'matters' : current.view
+  // Matter pages and document review pages both belong to the Matters section.
+  const activeId =
+    current.view === 'matter' || current.view === 'documents' ? 'matters' : current.view
   return (
     <nav
       aria-label="Knowledge Bank sections"

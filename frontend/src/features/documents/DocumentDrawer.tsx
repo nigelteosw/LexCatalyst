@@ -167,7 +167,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
       <header className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3 sm:px-5">
         <Button onClick={onClose} size="sm" variant="ghost">
           <ArrowLeft size={15} />
-          All documents
+          Back
         </Button>
         <div className="hidden h-6 w-px bg-neutral-200 sm:block" />
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-neutral-100 text-neutral-600">
