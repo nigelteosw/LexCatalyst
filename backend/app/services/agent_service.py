@@ -18,6 +18,96 @@ MAX_TOOL_ROUNDS = 4
 MAX_MEMORY_RESULTS = 6
 MAX_KB_BODY_PREVIEW = 2000
 
+TOOLS: list[dict] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_documents",
+            "description": (
+                "Search uploaded legal documents for relevant clauses, facts, or analysis. "
+                "Use when the question requires specific text from uploaded files."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural-language search query"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_knowledge_bank",
+            "description": (
+                "Search the firm's knowledge bank for playbooks, precedents, style guides, "
+                "and soft-skill advice the user has access to."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural-language search query"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_memories",
+            "description": (
+                "Keyword-search the user's memory bank for personal context, working style "
+                "preferences, and past matter facts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Keyword(s) to match against memories"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_kb_entry",
+            "description": (
+                "Fetch the full content of a specific knowledge bank entry by its ID. "
+                "Use after search_knowledge_bank when you want to read an entry in full."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "string", "description": "The knowledge bank entry ID"},
+                },
+                "required": ["entry_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_document",
+            "description": (
+                "Read the full extracted text of an uploaded document by its ID. "
+                "Use this when the KB summary is not detailed enough and you need to "
+                "quote or analyse the original document. The document_id can be found "
+                "on a KB entry as 'source_document_id', or surfaced by search_documents."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "document_id": {"type": "string", "description": "The document ID"},
+                },
+                "required": ["document_id"],
+            },
+        },
+    },
+]
+
 # --- Tool execution -------------------------------------------------------
 
 

@@ -5,13 +5,35 @@ OpenRouter and the model provider behind the chosen model. In DEMO_MODE the firm
 DEMO_OPENROUTER_KEY may stand in for a user key (see app.services.llm_service).
 """
 
-from openai import APIStatusError, AsyncOpenAI, OpenAIError
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI, OpenAIError
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-5.5"
 TEMPERATURE = 0.2
 KEY_REJECTED_MESSAGE = (
-    "Your OpenRouter key was rejected or ran out of credit — check Settings."
+    "OpenRouter rejected your API key. Check or replace it in Settings."
+)
+KEY_NO_CREDIT_MESSAGE = (
+    "Your OpenRouter account is out of credit. Add credit on openrouter.ai, "
+    "or pick a cheaper model."
+)
+MODEL_FORBIDDEN_MESSAGE = (
+    "OpenRouter refused this request for the selected model (it may be restricted "
+    "for your key). Try a different model."
+)
+MODEL_NOT_FOUND_MESSAGE = (
+    "The selected model is not available on OpenRouter. Pick another model."
+)
+RATE_LIMITED_MESSAGE = (
+    "OpenRouter is rate limiting this request. Wait a moment and try again, "
+    "or switch model."
+)
+PROVIDER_UNAVAILABLE_MESSAGE = (
+    "OpenRouter or the model provider is unavailable right now. Try again shortly, "
+    "or switch model."
+)
+PROVIDER_UNREACHABLE_MESSAGE = (
+    "Could not reach OpenRouter. Check your connection and try again."
 )
 KEY_MISSING_MESSAGE = "Add your OpenRouter key in Settings"
 _HEADERS = {"HTTP-Referer": "https://lexcatalyst.app", "X-Title": "LexCatalyst"}
@@ -28,9 +50,23 @@ class OpenRouterKeyMissing(OpenRouterError):
         super().__init__(KEY_MISSING_MESSAGE)
 
 
+_STATUS_MESSAGES = {
+    401: KEY_REJECTED_MESSAGE,
+    402: KEY_NO_CREDIT_MESSAGE,
+    403: MODEL_FORBIDDEN_MESSAGE,
+    404: MODEL_NOT_FOUND_MESSAGE,
+    429: RATE_LIMITED_MESSAGE,
+}
+
+
 def _translate(exc: OpenAIError) -> OpenRouterError:
-    if isinstance(exc, APIStatusError) and exc.status_code in (401, 402, 403, 429):
-        return OpenRouterError(KEY_REJECTED_MESSAGE)
+    if isinstance(exc, APIConnectionError):
+        return OpenRouterError(PROVIDER_UNREACHABLE_MESSAGE)
+    if isinstance(exc, APIStatusError):
+        if exc.status_code in _STATUS_MESSAGES:
+            return OpenRouterError(_STATUS_MESSAGES[exc.status_code])
+        if exc.status_code >= 500:
+            return OpenRouterError(PROVIDER_UNAVAILABLE_MESSAGE)
     message = getattr(exc, "message", None) or str(exc)
     return OpenRouterError(f"OpenRouter error: {message}")
 
@@ -118,7 +154,9 @@ class OpenRouterProvider:
                             call["function"]["name"] += tc.function.name
                         if tc.function.arguments:
                             call["function"]["arguments"] += tc.function.arguments
-                if choice.finish_reason == "tool_calls":
+                # Some models repeat the finish_reason chunk; only emit once there is
+                # something accumulated, or an empty event would erase the real calls.
+                if choice.finish_reason == "tool_calls" and accumulated:
                     yield (
                         "tool_calls",
                         {

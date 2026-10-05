@@ -11,6 +11,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
 from app.providers.openrouter import OpenRouterError, OpenRouterKeyMissing
+from app.services.error_reporting import unexpected_error_detail
 from app.schemas import FeedbackRoundResponse, LessonResponse, LlmTier, PageContext, WebContext
 from app.services import lesson_service
 from app.services.llm_service import get_llm
@@ -75,7 +76,10 @@ async def birdie_stream(
 
             full_response = "".join(chunks).strip()
             if not full_response:
-                yield event("error", {"detail": "Birdie returned an empty response"})
+                yield event(
+                    "error",
+                    {"detail": "Birdie returned no answer. Try again, or switch to a different model."},
+                )
                 return
             warning = validate_case_citations(full_response, case_sources)
             if warning:
@@ -85,8 +89,7 @@ async def birdie_stream(
         except OpenRouterError as exc:
             yield event("error", {"detail": str(exc)})
         except Exception as exc:
-            print(f"Birdie stream error: {exc!r}")
-            yield event("error", {"detail": "An unexpected error occurred"})
+            yield event("error", {"detail": unexpected_error_detail("Birdie", exc)})
 
     return StreamingResponse(
         stream(),

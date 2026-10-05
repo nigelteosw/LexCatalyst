@@ -329,7 +329,9 @@ async def create_chat_request(
     thread_id: str | None = None,
     matter_id: str | None = None,
     model: str | None = None,
+    tier: str | None = None,
 ) -> tuple[ChatThread, list[dict[str, str]], str]:
+    selected_model = resolve_model(db, user_id, feature="lexchat", tier=tier, model=model)
     thread = get_or_create_thread(db, thread_id, user_message, user_id)
     if matter_id is not None:
         thread.matter_id = matter_id
@@ -433,13 +435,13 @@ async def persist_assistant_message(
     tool_steps: list | None = None,
 ) -> ChatMessage:
     """Save the assistant message to DB only — no memory extraction or summarization."""
-    selected_model = resolve_chat_model(model)
+    # `model` is the already-resolved model id from the agent loop.
     assistant_message = add_message(
         db,
         thread_id=thread.id,
         role="assistant",
         content=content,
-        model=selected_model,
+        model=model,
         tool_steps=tool_steps or None,
     )
     thread.updated_at = datetime.now(UTC)

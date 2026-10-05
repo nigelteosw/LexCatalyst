@@ -21,6 +21,7 @@ from app.schemas import (
     ChatThreadUpdate,
 )
 from app.services.agent_service import run_agent_loop
+from app.services.error_reporting import unexpected_error_detail
 from app.services.chat_service import (
     create_chat_response,
     delete_message,
@@ -128,7 +129,10 @@ async def chat_stream(
 
             assistant_content = "".join(chunks).strip()
             if not assistant_content:
-                yield event("error", {"detail": "The model returned an empty response"})
+                yield event(
+                    "error",
+                    {"detail": "The model returned no answer. Try again, or switch to a different model."},
+                )
                 return
 
             assistant_message = await persist_assistant_message(
@@ -160,8 +164,7 @@ async def chat_stream(
         except SQLAlchemyError:
             yield event("error", {"detail": "Chat database is unavailable"})
         except Exception as exc:
-            print(f"Unexpected chat stream error: {exc!r}")
-            yield event("error", {"detail": "An unexpected error occurred"})
+            yield event("error", {"detail": unexpected_error_detail("LexChat", exc)})
 
     return StreamingResponse(
         stream(),
