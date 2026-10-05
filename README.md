@@ -375,7 +375,7 @@ embedded worker claims it from the durable Postgres queue.
 
 ### Birdie — Stateless Mentor Agent
 - `/birdie/stream` is an endpoint distinct from `/chat/stream`. Client manages history.
-- System prompt: brief (3–5 sentences), legal hard skills + soft skills equally weighted, cites firm KB inline.
+- System prompt: a legal drafting assistant (accuracy rules, partner-ready register, no AI-style padding, "Notes for reviewer" output), followed by the eLitigation case-law rule.
 - Reuses `search_kb_for_chat` so KB scope filtering still applies.
 - The LLM is chosen per user by `llm_service.get_llm`: their OpenRouter key, else `DEMO_OPENROUTER_KEY` when `DEMO_MODE=true`, else `409 Add your OpenRouter key in Settings`. A rejected key surfaces an error pointing to Settings. `POST /birdie/stream` and `POST /chat[/stream]` accept optional `tier` (`high`|`mid`) and `model` (any OpenRouter id).
 
