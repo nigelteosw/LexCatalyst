@@ -145,6 +145,15 @@ class PageContext(BaseModel):
     action_title: str | None = None
 
 
+class WebContext(BaseModel):
+    """Text from an external webpage the user explicitly shared via the Chrome extension."""
+
+    url: str = Field(min_length=1, max_length=2048)
+    title: str | None = Field(default=None, max_length=500)
+    text: str = Field(min_length=1, max_length=20_000)
+    source: Literal["selection", "page"]
+
+
 class WikiPageCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body_markdown: str = Field(min_length=1, max_length=80_000)
