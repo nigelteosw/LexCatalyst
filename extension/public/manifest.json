@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Birdie by LexCatalyst",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Your LexCatalyst mentor, on any webpage.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlIx+lPJVtk8XoVMWxH8Yw+psmrOV2+daFT8vWmwM7i5fT2boXbSdBZzPYpWyeO+gXCsFk8co+M2kRGck9Rw3lNnlbvbOPuFeq+v8D9bCEGPMAKBmlKoUXtGqjMAoEXc+TC5hL0sNw1FoYHLBSTWWHCVJwtc9lqDIuvW+GMN8u6zRZIt5W6L1ccqBFKzjPtiAOBC2l8xFQBomT2MtceLMvB1llp1DnSuSSMX3v+vLxCI4goiKQ+TtapdIZuYZDX1Qo0/zlcY/4QUdLWf6qeOieSZpSvV7IGbycIUmP2wDvGGcjf6AcynOCWBX4s8JxYeNwcraHsbLiV1BaPv0oIDgLwIDAQAB",
   "action": { "default_title": "Open Birdie" },
