@@ -8,7 +8,7 @@ Make the Birdie Chrome extension aware of what the lawyer is reading and highlig
 past drafting of the highlighted clause (Precedent), let the lawyer start a clean conversation, and let them
 choose the model Birdie uses through OpenRouter.
 
-Out of scope for this spec: Research and Review features, Word/Outlook add-ins, direct tracked-change
+Out of scope for this spec: the full Research feature (beyond eLitigation case lookup), Review, Word/Outlook add-ins, direct tracked-change
 insertion into Google Docs, DMS connectors, SSO.
 
 ## 1. Live selection context
@@ -98,6 +98,44 @@ Reuses existing backend routes (no backend change):
   (puts the excerpt into the chat as context), **Open** (only when `open_url` present).
 - Empty state: "No firm precedent found for this clause." Never a card without a source.
 
+## 6. Case law: eLitigation only
+
+Rule: **any case or judgment Birdie names must come from eLitigation (https://www.elitigation.sg)**, with a
+link to the judgment. Birdie must not cite a case from model memory. (This overrides the brief's
+"no external case law in v1" for this one public source.)
+
+### Backend
+
+- `app/services/elitigation_service.py`:
+  - `search_judgments(query, limit=5)` — GET
+    `https://www.elitigation.sg/gd/Home/Index?Filter=SUPCT&YearOfDecision=All&SortBy=Score&SearchPhrase=<q>&CurrentPage=1&SortAscending=False&PageSize=0&Verbose=False&SearchQueryTime=0&SearchTotalHits=0&SearchMode=True&SpanMultiplePage=False`
+    with httpx (10 s timeout), parse result cards with BeautifulSoup. Returns
+    `[{citation, title, court, decision_date, url, catchwords}]`, where `url` is
+    `https://www.elitigation.sg/gd/s/<YYYY_COURT_N>` and `citation` is taken verbatim from the card
+    (e.g. `[2011] SGCA 1`).
+  - `fetch_judgment_excerpt(url, query)` — fetch the judgment page, return the paragraphs that best match
+    the query (keyword overlap, ≤ 4,000 chars) with paragraph numbers for pinpoint citation.
+  - In-memory TTL cache (1 h) keyed by query/url; a polite `User-Agent` naming LexCatalyst.
+- Birdie gets a tool step: before answering, `birdie_service` asks the model (JSON mode) whether the
+  question needs case law and, if so, for a search phrase. It runs `search_judgments`, fetches excerpts for
+  the top 3, and injects them into the system prompt as an `eLitigation sources` block. The system prompt
+  instructs: cite only cases in that block, use the citation verbatim, link the URL, and say
+  "I couldn't find this on eLitigation" rather than citing anything else.
+- Post-check: `validate_case_citations(answer, sources)` scans the final answer for neutral-citation
+  patterns (`[YYYY] SGXX N`) and appends a warning line for any not in `sources`.
+- Streaming: a new SSE event `sources` carries the eLitigation results before tokens, so the panel can show
+  them.
+- Outbound text: only the search phrase leaves for eLitigation (a public court site); no document or
+  client text is sent there. Document this in README.
+- Before shipping: confirm that eLitigation's terms of use permit automated search queries at this rate;
+  if not, fall back to opening the search URL in a new tab for the user.
+
+### Extension
+
+- A **Cases** list under each Birdie answer that used eLitigation: citation, title, decision date, and a link
+  that opens the judgment in a new tab.
+- A "Search eLitigation" quick action uses the current selection as the query.
+
 ## Error handling
 
 - 401 anywhere → signed-out view (existing `UnauthorizedError`).
@@ -110,5 +148,5 @@ Reuses existing backend routes (no backend change):
 - Extension (vitest): selection normalising/debounce, context priority (selection over page),
   settings payload mapping.
 - Backend (pytest): `summarise_terms`, `extract_terms` regexes, `/precedent/search` returns only documents
-  the user can access and redacts other-matter client names, audit row written.
+  the user can access and redacts other-matter client names, audit row written; eLitigation result parsing against a saved HTML fixture; `validate_case_citations` flags citations not in sources.
 - Manual: load unpacked build, verify chip on a normal page and Google Docs, New chat, model switch.
