@@ -1620,6 +1620,7 @@ export async function streamBirdieMessage({
   model,
   signal,
   onToken,
+  onWorkboardChange,
   onDone,
   onError,
 }: {
@@ -1629,6 +1630,7 @@ export async function streamBirdieMessage({
   matterId: string | null
   pageContext?: BirdiePageContext
   signal?: AbortSignal
+  onWorkboardChange?: () => void
   onToken: (content: string) => void
   onDone: (fullContent: string) => void
   onError: (detail: string) => void
@@ -1661,7 +1663,8 @@ export async function streamBirdieMessage({
     const data = raw.split('\n').find((line) => line.startsWith('data: '))?.slice(6)
     if (!eventName || !data) return
     const payload = JSON.parse(data) as Record<string, string>
-    if (eventName === 'token') onToken(payload.content)
+    if (eventName === 'workboard_changed') onWorkboardChange?.()
+    else if (eventName === 'token') onToken(payload.content)
     else if (eventName === 'done') {
       completed = true
       onDone(payload.content)

@@ -25,16 +25,13 @@ import {
 } from '../../shared/api/api'
 import type { ChatThread, Matter } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
-import birdieLogo from '../../assets/Birdie.png'
 import { MatterSelect } from '../../shared/ui/MatterSelect'
 import { ChatsByMatter } from './ChatsByMatter'
 
 export type SidebarProps = {
   threads: ChatThread[]
   matters: Matter[]
-  isBirdieOpen: boolean
   selectedMatterId: string | null
-  onBirdieToggle: () => void
   onMatterChange: (matterId: string | null) => void
   onNewChat: () => void
   isOpen: boolean
@@ -72,9 +69,7 @@ const sidebarNavActiveClass = 'bg-white/10 text-white'
 export function Sidebar({
   threads,
   matters,
-  isBirdieOpen,
   selectedMatterId,
-  onBirdieToggle,
   onMatterChange,
   onNewChat,
   isOpen,
@@ -300,37 +295,6 @@ export function Sidebar({
             <NavItem icon={CheckSquare} label="Workboard" collapsed={isCollapsed} active={current.view === 'actions'}
               badge={pendingTaskCount} onPrefetch={() => prefetchWorkspace('actions')}
               onClick={() => { selectActions(); closeMobile() }} />
-            <button
-              aria-label={isBirdieOpen ? 'Close Birdie' : 'Open Birdie'}
-              aria-pressed={isBirdieOpen}
-              title={isCollapsed ? 'Birdie' : undefined}
-              className={`mt-1 flex min-h-10 w-full items-center gap-3 rounded-[9px] border px-3 py-2 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
-                isCollapsed ? 'justify-center px-0' : ''
-              } ${
-                isBirdieOpen
-                  ? 'border-[#2d9e6b]/55 bg-[#2d9e6b]/15 text-[#6ed6a4]'
-                  : 'border-white/10 bg-white/[0.04] text-white/65 hover:bg-white/[0.1] hover:text-white'
-              }`}
-              onClick={() => {
-                onBirdieToggle()
-                closeMobile()
-              }}
-              type="button"
-            >
-              <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full border border-[#2d9e6b]/45 bg-[#fff8d8]">
-                <img alt="" aria-hidden="true" className="h-auto w-[250%] max-w-none" src={birdieLogo} />
-              </span>
-              {!isCollapsed && (
-                <>
-                  <span className="flex-1">Birdie</span>
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      isBirdieOpen ? 'animate-pulse bg-[#2d9e6b]' : 'bg-white/25'
-                    }`}
-                  />
-                </>
-              )}
-            </button>
           </nav>
 
           {/* Chats by matter: only on the LexChat page */}
@@ -397,22 +361,6 @@ export function Sidebar({
                     onClick={() => {
                       setUserMenuOpen(false)
                       selectWellbeing()
-                      closeMobile()
-                    }}
-                  />
-                  <UserMenuItem
-                    label="Birdie"
-                    hint={
-                      <span className="flex items-center gap-1.5">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${isBirdieOpen ? 'bg-[#2d9e6b]' : 'bg-white/25'}`}
-                        />
-                        {isBirdieOpen ? 'Open' : 'Closed'}
-                      </span>
-                    }
-                    onClick={() => {
-                      setUserMenuOpen(false)
-                      onBirdieToggle()
                       closeMobile()
                     }}
                   />

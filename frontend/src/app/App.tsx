@@ -10,6 +10,7 @@ import { ModelPicker } from '../shared/ui/ModelPicker'
 import { MISSING_KEY_MESSAGE, useModelChoice } from '../shared/lib/llm'
 import { PanelErrorBoundary } from '../shared/ui/PanelErrorBoundary'
 import { Sidebar } from '../features/navigation/Sidebar'
+import birdieLogo from '../assets/Birdie.png'
 import { DemoBar } from '../features/demo/DemoBar'
 import { DemoSwitcher } from '../features/demo/DemoSwitcher'
 import { LoginPage } from '../features/auth/LoginPage'
@@ -575,9 +576,7 @@ function App() {
     <div className="flex h-dvh min-h-0 w-full overflow-hidden overscroll-none bg-surface text-neutral-900">
       <Sidebar
         isOpen={isSidebarOpen}
-        isBirdieOpen={isBirdieOpen}
         matters={matters}
-        onBirdieToggle={() => setIsBirdieOpen((open) => !open)}
         onClose={() => setIsSidebarOpen(false)}
         onMatterChange={handleMatterChange}
         onNewChat={handleNewChat}
@@ -597,13 +596,29 @@ function App() {
         }
       />
 
-      {/* Birdie floating PiP — outside layout flow */}
+      <button
+        type="button"
+        aria-label={isBirdieOpen ? 'Close Birdie' : 'Open Birdie'}
+        aria-expanded={isBirdieOpen}
+        aria-controls="birdie-panel"
+        title="Birdie"
+        onClick={() => setIsBirdieOpen((open) => !open)}
+        className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[60] grid h-12 w-12 place-items-center overflow-hidden rounded-full border border-[#2d9e6b]/45 bg-[#fff8d8] shadow-lg hover:ring-2 hover:ring-[#2d9e6b]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d9e6b] focus-visible:ring-offset-2"
+      >
+        <img alt="" aria-hidden="true" className="h-auto w-[250%] max-w-none" src={birdieLogo} />
+      </button>
+
+      {/* Birdie stays mounted so closing it preserves the conversation. */}
       <Suspense fallback={null}>
         <BirdiePanel
           key={currentUser?.id ?? user?.id ?? 'anonymous'}
           isOpen={isBirdieOpen}
           onToggle={() => setIsBirdieOpen((o) => !o)}
-          matterId={selectedMatterId}
+          matterId={current.view === 'matter'
+            ? current.matterId
+            : current.view === 'chat' && activeThread
+              ? activeThread.matterId
+              : selectedMatterId}
           onOpenSettings={() => selectSettings()}
           pageContext={buildBirdiePageContext(current, activeThread?.title ?? null)}
         />

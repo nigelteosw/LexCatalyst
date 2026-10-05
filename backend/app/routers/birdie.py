@@ -1,6 +1,7 @@
 """Birdie — the stateless mentor agent. Separate from /chat."""
 
 import json
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.services.birdie_workboard_service import _require_matter
 from app.models import User
 from app.providers.openrouter import OpenRouterError, OpenRouterKeyMissing
 from app.services.error_reporting import unexpected_error_detail
@@ -22,8 +24,8 @@ router = APIRouter(tags=["birdie"])
 
 
 class BirdieMessage(BaseModel):
-    role: str
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=20_000)
 
 
 
@@ -43,6 +45,11 @@ async def birdie_stream(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
+    try:
+        _require_matter(db, current_user, request.matter_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     def event(name: str, payload: dict) -> str:
         return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 
@@ -59,7 +66,7 @@ async def birdie_stream(
                 yield event("sources", {"cases": [case_source_payload(s) for s in case_sources]})
 
             chunks: list[str] = []
-            async for token in stream_birdie_response(
+            async for event_name, payload in stream_birdie_response(
                 db,
                 user=current_user,
                 user_message=request.message,
@@ -71,8 +78,9 @@ async def birdie_stream(
                 tier=request.tier,
                 model=request.model,
             ):
-                chunks.append(token)
-                yield event("token", {"content": token})
+                if event_name == 'token':
+                    chunks.append(payload['content'])
+                yield event(event_name, payload)
 
             full_response = "".join(chunks).strip()
             if not full_response:

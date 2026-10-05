@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUp, BookMarked, Lightbulb, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
+import { clampBirdieFrame, defaultBirdieFrame } from './panelFrame'
+import type { BirdieFrame } from './panelFrame'
+import { ArrowUp, BookMarked, Lightbulb, MoveDiagonal, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   distillBirdieLessons,
@@ -54,7 +57,8 @@ const BIRDIE_HELP: HelpContent = {
   tips: [
     'Birdie uses your firm\'s Knowledge Bank and your personal memories to give grounded, specific answers.',
     'Birdie is confidential to you. Your questions are not logged or shared with supervisors.',
-    'Drag Birdie anywhere on screen — it remembers its position within the session.',
+    'Open Birdie from the bottom-right button. Drag its header to move it; drag the bottom-right corner to resize it.',
+    'Ask Birdie to manage your assigned Workboard tickets or report their recorded progress.',
   ],
 }
 
@@ -136,54 +140,38 @@ function playTweet(pitch = 1300) {
   } catch { /* AudioContext blocked (e.g. no prior user gesture) */ }
 }
 
-const PANEL_WIDTH = 320
-const PANEL_HEIGHT = 480
-const PANEL_MARGIN = 16
-
-function getDefaultPosition() {
-  return {
-    x: Math.max(PANEL_MARGIN, window.innerWidth - PANEL_MARGIN - PANEL_WIDTH),
-    y: Math.max(PANEL_MARGIN, window.innerHeight - PANEL_MARGIN - PANEL_HEIGHT),
-  }
-}
-
 export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSettings }: BirdiePanelProps) {
-  const [pos, setPos] = useState(getDefaultPosition)
-  const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null)
-
-  const startDrag = useCallback((e: React.MouseEvent) => {
-    if (window.innerWidth < 640) return
-    if ((e.target as HTMLElement).closest('button, input, textarea, select')) return
-    e.preventDefault()
-    dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y }
-  }, [pos])
+  const [frame, setFrame] = useState(() => defaultBirdieFrame(window.innerWidth, window.innerHeight))
+  const interactionRef = useRef<{ mode: 'drag' | 'resize'; pointerId: number; x: number; y: number; frame: BirdieFrame } | null>(null)
 
   useEffect(() => {
-    function onMove(e: MouseEvent) {
-      if (!dragRef.current) return
-      const dx = e.clientX - dragRef.current.startX
-      const dy = e.clientY - dragRef.current.startY
-      setPos({
-        x: Math.max(PANEL_MARGIN, Math.min(window.innerWidth - PANEL_WIDTH - PANEL_MARGIN, dragRef.current.startPosX + dx)),
-        y: Math.max(PANEL_MARGIN, Math.min(window.innerHeight - PANEL_HEIGHT - PANEL_MARGIN, dragRef.current.startPosY + dy)),
-      })
-    }
-    function onUp() { dragRef.current = null }
-    function onResize() {
-      setPos((current) => ({
-        x: Math.max(PANEL_MARGIN, Math.min(window.innerWidth - PANEL_WIDTH - PANEL_MARGIN, current.x)),
-        y: Math.max(PANEL_MARGIN, Math.min(window.innerHeight - PANEL_HEIGHT - PANEL_MARGIN, current.y)),
-      }))
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    const onResize = () => setFrame((current) => clampBirdieFrame(current, window.innerWidth, window.innerHeight))
     window.addEventListener('resize', onResize)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      window.removeEventListener('resize', onResize)
-    }
+    return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  function startInteraction(event: ReactPointerEvent<HTMLElement>, mode: 'drag' | 'resize') {
+    if (event.button !== 0) return
+    if (mode === 'drag' && (event.target as HTMLElement).closest('button, input, textarea, a')) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    interactionRef.current = { mode, pointerId: event.pointerId, x: event.clientX, y: event.clientY, frame }
+  }
+
+  function moveInteraction(event: ReactPointerEvent<HTMLElement>) {
+    const start = interactionRef.current
+    if (!start || event.pointerId !== start.pointerId) return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    const next = start.mode === 'drag'
+      ? { ...start.frame, x: start.frame.x + dx, y: start.frame.y + dy }
+      : { ...start.frame, width: start.frame.width + dx, height: start.frame.height + dy }
+    setFrame(clampBirdieFrame(next, window.innerWidth, window.innerHeight))
+  }
+
+  function endInteraction() {
+    interactionRef.current = null
+  }
 
   const queryClient = useQueryClient()
   useEffect(() => {
@@ -206,13 +194,20 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSet
   // Stay mounted when closed (just hidden) so the conversation and any in-flight answer survive.
   return (
     <div
+      id="birdie-panel"
+      role="region"
+      aria-label="Birdie mentor"
       aria-hidden={!isOpen}
-      className={`${isOpen ? '' : 'hidden '}birdie-enter fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[60] flex h-[min(75dvh,34rem)] max-h-[calc(100dvh-1rem)] select-none flex-col overflow-hidden overscroll-none rounded-2xl border border-black/10 bg-white shadow-2xl max-sm:!left-2 max-sm:!right-2 max-sm:!top-auto sm:inset-auto sm:h-[480px] sm:w-[320px]`}
-      style={{ left: pos.x, top: pos.y }}
+      className={`${isOpen ? '' : 'hidden '}birdie-enter fixed z-[60] flex flex-col overflow-hidden overscroll-none rounded-2xl border border-black/10 bg-white shadow-2xl`}
+      style={{ left: frame.x, top: frame.y, width: frame.width, height: frame.height }}
+      onPointerMove={moveInteraction}
+      onPointerUp={endInteraction}
+      onPointerCancel={endInteraction}
+      onLostPointerCapture={endInteraction}
     >
       <header
-        className="flex shrink-0 items-center gap-2.5 border-b border-black/10 bg-white px-3 py-2.5 sm:cursor-grab sm:active:cursor-grabbing"
-        onMouseDown={startDrag}
+        className="flex shrink-0 touch-none select-none cursor-grab items-center gap-2.5 border-b border-black/10 bg-white px-3 py-2.5 active:cursor-grabbing"
+        onPointerDown={(event) => startInteraction(event, 'drag')}
       >
         <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full border border-[#2d9e6b]/35 bg-[#fff8d8]">
           <img
@@ -249,6 +244,22 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSet
 
       {/* Tabs + content */}
       <BirdiePanelBody matterId={matterId} onOpenSettings={onOpenSettings} pageContext={pageContext} />
+      <button
+        type="button"
+        aria-label="Resize Birdie (drag or use arrow keys)"
+        title="Drag to resize"
+        className="absolute bottom-0 right-0 grid h-5 w-5 touch-none cursor-nwse-resize place-items-center text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2d9e6b]"
+        onPointerDown={(event) => startInteraction(event, 'resize')}
+        onKeyDown={(event) => {
+          const deltas: Record<string, [number, number]> = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] }
+          const delta = deltas[event.key]
+          if (!delta) return
+          event.preventDefault()
+          setFrame((current) => clampBirdieFrame({ ...current, width: current.width + delta[0], height: current.height + delta[1] }, window.innerWidth, window.innerHeight))
+        }}
+      >
+        <MoveDiagonal size={12} />
+      </button>
     </div>
   )
 }
@@ -616,6 +627,7 @@ function AskTab({
   pendingPrompt: { id: string; text: string } | null
   onPromptConsumed: () => void
 }) {
+  const queryClient = useQueryClient()
   const { choice, setChoice, settings, needsKey } = useModelChoice('lex.birdie.tier', 'birdie')
   const [messages, setMessages] = useState<BirdieMsg[]>([])
   const [prompt, setPrompt] = useState('')
@@ -664,7 +676,7 @@ function AskTab({
     abortRef.current = controller
 
     // Build history from current messages (exclude the draft we just appended)
-    const history = messages.map((m) => ({ role: m.role, content: m.body }))
+    const history = messages.slice(-40).map((m) => ({ role: m.role, content: m.body }))
 
     try {
       await streamBirdieMessage({
@@ -674,6 +686,10 @@ function AskTab({
         pageContext,
         model: choice,
         signal: controller.signal,
+        onWorkboardChange: () => {
+          void queryClient.invalidateQueries({ queryKey: ['actions'] })
+          void queryClient.invalidateQueries({ queryKey: ['resourceMetadata'] })
+        },
         onToken: (content) => {
           setMessages((m) =>
             m.map((msg) => (msg.id === draftId ? { ...msg, body: msg.body + content } : msg)),
@@ -696,6 +712,8 @@ function AskTab({
         setError(caughtError instanceof Error ? caughtError.message : 'Birdie could not respond.')
       }
     } finally {
+      // A mutation may commit just before the browser aborts the stream.
+      void queryClient.invalidateQueries({ queryKey: ['actions'] })
       setIsResponding(false)
       abortRef.current = null
     }

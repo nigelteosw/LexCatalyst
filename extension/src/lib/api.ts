@@ -65,6 +65,7 @@ export async function streamBirdie(opts: {
   webContext: WebContext | null
   signal?: AbortSignal
   onSources?: (cases: CaseLink[]) => void
+  onWorkboardChange?: () => void
   onToken: (token: string) => void
 }): Promise<string> {
   const webContext = opts.webContext && {
@@ -96,6 +97,7 @@ export async function streamBirdie(opts: {
     buffer = rest
     for (const { event, data } of events) {
       if (event === 'sources') opts.onSources?.(toCaseLinks(data.cases))
+      else if (event === 'workboard_changed') opts.onWorkboardChange?.()
       else if (event === 'token') opts.onToken(String(data.content ?? ''))
       else if (event === 'done') return String(data.content ?? '')
       else if (event === 'error') throw new Error(String(data.detail ?? 'Birdie failed'))
