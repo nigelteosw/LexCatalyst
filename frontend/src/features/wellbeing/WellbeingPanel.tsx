@@ -20,7 +20,7 @@ import {
 } from '../../shared/api/api'
 import type { CurrentUser, SurveyCategory, SurveyQuestion } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
-import { PanelHeader } from '../../shared/ui/PanelHeader'
+import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
 
 const WELLBEING_HELP: HelpContent = {
@@ -91,36 +91,40 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]">
-      <PanelHeader
-        className="items-stretch sm:items-center"
-        description="Weekly team check-in"
-        helpContent={WELLBEING_HELP}
-        icon={ClipboardList}
-        title="Wellbeing"
-      >
-        <nav className="flex gap-0.5 overflow-x-auto sm:ml-2">
-          <TabButton active={visibleTab === 'survey'} onClick={() => setActiveTab('survey')}>
-            <ClipboardList size={12} />
-            My check-in
-          </TabButton>
-          {isPartner && (
-            <TabButton active={visibleTab === 'results'} onClick={() => setActiveTab('results')}>
-              <Users size={12} />
-              Results
+      <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-14 lg:px-12 lg:pt-20">
+        <div className="mx-auto max-w-5xl">
+          <header>
+            <div className="flex items-center gap-2">
+              <h1 className="font-serif text-4xl tracking-tight text-neutral-950">Wellbeing</h1>
+              <FeatureHelp title="Wellbeing" content={WELLBEING_HELP} />
+            </div>
+            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-neutral-500">
+              Weekly team check-in
+            </p>
+          </header>
+          <nav aria-label="Wellbeing sections" className="mt-10 flex flex-wrap gap-x-6 gap-y-2 border-b border-neutral-200 pb-3">
+            <TabButton active={visibleTab === 'survey'} onClick={() => setActiveTab('survey')}>
+              <ClipboardList size={12} />
+              My check-in
             </TabButton>
-          )}
-          {isPartner && (
-            <TabButton active={visibleTab === 'manage'} onClick={() => setActiveTab('manage')}>
-              Manage questions
-            </TabButton>
-          )}
-        </nav>
-      </PanelHeader>
-
-      <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
-        {visibleTab === 'survey' && <SurveyTab />}
-        {visibleTab === 'results' && <ResultsTab />}
-        {visibleTab === 'manage' && <ManageQuestionsTab />}
+            {isPartner && (
+              <TabButton active={visibleTab === 'results'} onClick={() => setActiveTab('results')}>
+                <Users size={12} />
+                Results
+              </TabButton>
+            )}
+            {isPartner && (
+              <TabButton active={visibleTab === 'manage'} onClick={() => setActiveTab('manage')}>
+                Manage questions
+              </TabButton>
+            )}
+          </nav>
+          <div className="mt-6">
+            {visibleTab === 'survey' && <SurveyTab />}
+            {visibleTab === 'results' && <ResultsTab />}
+            {visibleTab === 'manage' && <ManageQuestionsTab />}
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -137,8 +141,9 @@ function TabButton({
 }) {
   return (
     <button
-      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-        active ? 'bg-[#0f0f0f] text-white' : 'text-[#6f6f69] hover:bg-[#f4f3ef]'
+      aria-current={active ? 'page' : undefined}
+      className={`inline-flex items-center gap-1.5 py-1 text-[15px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] ${
+        active ? 'text-[#1e3a8a]' : 'text-neutral-500 hover:text-neutral-800'
       }`}
       onClick={onClick}
       type="button"
@@ -190,7 +195,7 @@ function SurveyTab() {
 
   if (questions.length === 0) {
     return (
-      <div className="rounded-[14px] border border-dashed border-black/15 bg-white p-8 text-center">
+      <div className="rounded-xl border border-dashed border-black/15 bg-white p-8 text-center">
         <ClipboardList size={24} className="mx-auto text-[#8a8a84]" />
         <p className="mt-3 text-sm text-[#6f6f69]">No survey questions yet.</p>
         <p className="mt-1 text-xs text-[#76766f]">A partner can add questions in the Manage tab.</p>
@@ -200,7 +205,7 @@ function SurveyTab() {
 
   if (submitted) {
     return (
-      <div className="rounded-[14px] border border-[#2d9e6b]/30 bg-[#e8f5ee] p-8 text-center">
+      <div className="rounded-xl border border-[#2d9e6b]/30 bg-[#e8f5ee] p-8 text-center">
         <Check size={28} className="mx-auto text-[#1a6b4a]" />
         <p className="mt-3 text-base font-semibold text-[#1a6b4a]">Check-in submitted</p>
         <p className="mt-1 text-xs text-[#2d9e6b]">
@@ -218,10 +223,10 @@ function SurveyTab() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[14px] border border-black/10 bg-white p-6 space-y-4">
+      <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-6">
         <div>
-          <h3 className="text-sm font-semibold text-[#0f0f0f]">Purpose</h3>
-          <p className="mt-2 text-xs leading-5 text-[#5a5a56]">
+          <h3 className="font-serif text-xl text-neutral-900">Purpose</h3>
+          <p className="mt-2 text-sm leading-relaxed text-neutral-500">
             This short questionnaire is designed to help the organisation identify workload pressure, burnout risk, team frictions, and barriers to learning and growth. It is not a clinical diagnosis and should not be used to evaluate individual performance.
           </p>
         </div>
@@ -230,8 +235,8 @@ function SurveyTab() {
             Recall period: <span className="font-normal text-[#5a5a56]">Past 2 weeks</span>
           </p>
           <div className="flex items-center gap-2">
-            <ShieldCheck size={13} className="text-[#4a3db0]" />
-            <p className="text-[11px] text-[#4a3db0]">
+            <ShieldCheck size={13} className="text-[#1e3a8a]" />
+            <p className="text-[11px] text-[#1e3a8a]">
               Anonymous responses (redacted contributor list)
             </p>
           </div>
@@ -239,15 +244,15 @@ function SurveyTab() {
       </div>
 
       {Object.entries(byCategory).map(([category, qs]) => (
-        <section key={category} className="rounded-[14px] border border-black/10 bg-white p-5">
-          <h3 className="mb-4 text-sm font-semibold text-[#0f0f0f]">
+        <section key={category} className="border-b border-neutral-200 pb-6">
+          <h3 className="mb-4 border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">
             {categoryLabels[category as SurveyCategory] ?? category}
           </h3>
           <div className="space-y-5">
             {qs.map((q) => (
               <label key={q.id} className="block">
                 <span className="text-sm text-[#171717]">{q.text}</span>
-                <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[10px] text-[#8a8a84]">Strongly disagree</span>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map((n) => (
@@ -255,10 +260,10 @@ function SurveyTab() {
                         key={n}
                         type="button"
                         onClick={() => setScores((s) => ({ ...s, [q.id]: n }))}
-                        className={`h-5 w-5 rounded-full border-2 transition-colors ${
+                        className={`h-5 w-5 rounded-full border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] ${
                           (scores[q.id] ?? 3) === n
-                            ? 'border-[#1a6b4a] bg-[#1a6b4a]'
-                            : 'border-[#ccc] hover:border-[#1a6b4a]'
+                            ? 'border-[#1e3a8a] bg-[#1e3a8a]'
+                            : 'border-neutral-300 hover:border-[#1e3a8a]'
                         }`}
                         aria-label={`Score ${n}`}
                       />
@@ -277,7 +282,7 @@ function SurveyTab() {
       )}
 
       <button
-        className="w-full rounded-[10px] bg-[#0f0f0f] px-4 py-3 text-sm font-medium text-white disabled:bg-[#aaa9a3]"
+        className="h-10 w-full rounded-lg bg-[#1e3a8a] px-4 text-sm font-medium text-white transition-colors hover:bg-[#172e6e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] disabled:opacity-50 sm:w-auto"
         disabled={submitMutation.isPending}
         onClick={() => submitMutation.mutate()}
         type="button"
@@ -304,7 +309,7 @@ function ResultsTab() {
   }
   if (!resultsQuery.data) {
     return (
-      <div className="rounded-[14px] border border-dashed border-black/15 bg-white p-8 text-center">
+      <div className="rounded-xl border border-dashed border-black/15 bg-white p-8 text-center">
         <p className="text-sm text-[#6f6f69]">No survey data is available.</p>
       </div>
     )
@@ -312,9 +317,9 @@ function ResultsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-3 rounded-[12px] border border-[#4a3db0]/15 bg-[#eeecff] px-4 py-3">
-        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#4a3db0]" />
-        <p className="text-xs leading-5 text-[#4a3db0]">
+      <div className="flex items-start gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3">
+        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#1e3a8a]" />
+        <p className="text-xs leading-5 text-[#1e3a8a]">
           Current week starting{' '}
           {new Date(resultsQuery.data.currentWeekOf).toLocaleDateString(undefined, {
             month: 'short',
@@ -328,23 +333,23 @@ function ResultsTab() {
       </div>
 
       <div>
-        <h3 className="text-sm font-semibold text-[#0f0f0f]">Question trends</h3>
+        <h3 className="font-serif text-xl text-neutral-900">Question trends</h3>
         <p className="mt-0.5 text-[11px] text-[#8c8c86]">
           Cohort averages normalized so higher scores always mean greater concern
         </p>
       </div>
 
       {resultsQuery.data.questions.length === 0 && (
-        <div className="rounded-[14px] border border-dashed border-black/15 bg-white p-8 text-center">
+        <div className="rounded-xl border border-dashed border-black/15 bg-white p-8 text-center">
           <p className="text-sm text-[#6f6f69]">No survey questions yet.</p>
         </div>
       )}
       {resultsQuery.data.questions.map((q) => (
-        <section key={q.questionId} className="rounded-[14px] border border-black/10 bg-white p-5">
+        <section key={q.questionId} className="border-b border-neutral-200 pb-6">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             {categoryLabels[q.category as SurveyCategory] ?? q.category}
           </div>
-          <h3 className="mb-4 text-sm font-semibold text-[#0f0f0f]">{q.questionText}</h3>
+          <h3 className="mb-4 border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">{q.questionText}</h3>
           {q.weeks.length === 0 ? (
             <p className="text-xs text-[#76766f]">No responses yet.</p>
           ) : (
@@ -356,7 +361,7 @@ function ResultsTab() {
                   </span>
                   <div className="flex-1 overflow-hidden rounded-full bg-[#eeecea] h-2">
                     <div
-                      className="h-full rounded-full bg-[#4aa073]"
+                      className="h-full rounded-full bg-[#1e3a8a]"
                       style={{ width: `${(w.avgScore / 5) * 100}%` }}
                     />
                   </div>
@@ -441,10 +446,10 @@ function ManageQuestionsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#0f0f0f]">Survey questions</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-serif text-xl text-neutral-900">Survey questions</h3>
         <button
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#0f0f0f] px-3 text-xs font-medium text-white hover:bg-[#333]"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#1e3a8a] px-4 text-sm font-medium text-white transition-colors hover:bg-[#172e6e]"
           onClick={() => setIsAdding(true)}
           type="button"
         >
@@ -454,7 +459,7 @@ function ManageQuestionsTab() {
       </div>
 
       {isAdding && (
-        <div className="rounded-[14px] border border-black/10 bg-white p-4 space-y-3 shadow-sm">
+        <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             New question
           </div>
@@ -495,7 +500,7 @@ function ManageQuestionsTab() {
               Cancel
             </button>
             <button
-              className="rounded-lg bg-[#0f0f0f] px-3 py-2 text-xs text-white disabled:bg-[#aaa9a3]"
+              className="rounded-lg bg-[#1e3a8a] px-3 py-2 text-xs text-white disabled:bg-[#aaa9a3]"
               disabled={!newText.trim() || createMutation.isPending}
               onClick={() => createMutation.mutate()}
               type="button"
@@ -517,12 +522,12 @@ function ManageQuestionsTab() {
       ) : questions.length === 0 && !isAdding ? (
         <p className="text-sm text-[#8c8c86]">No questions yet. Add the first one.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-neutral-200/70">
           {questions.map((q) => (
             <div
               key={q.id}
-              className={`rounded-[12px] border px-4 py-3 transition-all ${
-                q.isActive ? 'border-black/10 bg-white' : 'border-black/8 bg-[#f8f8f6] opacity-60'
+              className={`py-4 transition-colors ${
+                q.isActive ? '' : 'opacity-60'
               }`}
             >
               {editingId === q.id ? (
@@ -563,7 +568,7 @@ function ManageQuestionsTab() {
                       Cancel
                     </button>
                     <button
-                      className="rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                      className="rounded-lg bg-[#1e3a8a] px-3 py-1.5 text-xs text-white disabled:opacity-50"
                       disabled={!editText.trim() || updateMutation.isPending}
                       onClick={() =>
                         updateMutation.mutate({
@@ -580,7 +585,7 @@ function ManageQuestionsTab() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-[#0f0f0f]">{q.text}</p>
                     <p className="mt-0.5 text-[10px] text-[#76766f]">

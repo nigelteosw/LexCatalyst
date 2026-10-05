@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, Menu, MessageSquare } from 'lucide-react'
+import { Brain, Menu } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'

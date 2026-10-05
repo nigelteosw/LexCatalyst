@@ -67,19 +67,19 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
   }
 
   return (
-    <div className="app-scroll-region h-full overflow-y-auto bg-white">
+    <div className="app-scroll-region h-full overflow-y-auto bg-[#fafaf8] px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
 
       {/* ------------------------------------------------------------------ */}
       {/* Hero */}
       {/* ------------------------------------------------------------------ */}
-      <div className="border-b border-neutral-200 bg-neutral-50 px-6 py-8 sm:px-10 lg:px-16">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500">
+      <div className="mx-auto max-w-5xl">
+        <p className="mb-3 text-sm text-neutral-500">
           {getGreeting()} · {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
+        <h1 className="break-words font-serif text-4xl tracking-tight text-neutral-950">
           {name}
         </h1>
-        <p className="mt-1 text-sm text-neutral-500">{roleLabel(currentUser)}</p>
+        <p className="mt-3 text-[15px] leading-relaxed text-neutral-500">{roleLabel(currentUser)}</p>
 
         {/* Inline stat strip */}
         <div className="mt-6 flex flex-wrap gap-3">
@@ -96,35 +96,35 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
       {/* ------------------------------------------------------------------ */}
       {/* Body */}
       {/* ------------------------------------------------------------------ */}
-      <div className="mx-auto max-w-5xl px-6 py-8 sm:px-10 lg:px-16">
-        <div className="grid gap-10 lg:grid-cols-[1fr_320px]">
+      <div className="mx-auto mt-10 max-w-5xl">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)] xl:grid-cols-[minmax(0,1fr)_320px]">
 
           {/* Left — features + matters */}
-          <div className="space-y-10">
+          <div className="min-w-0 space-y-9">
 
             {/* Feature list */}
             <section>
-              <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+              <h2 className="border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">
                 Workspace
               </h2>
-              <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+              <div className="divide-y divide-neutral-200/70">
                 {FEATURES.map(({ icon: Icon, label, description, nav: navKey }) => (
                   <button
                     key={label}
-                    className="group flex w-full items-center gap-4 py-5 text-left transition-colors hover:bg-neutral-50"
+                    className="group flex w-full items-center gap-3 py-4 text-left transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a]"
                     onClick={() => navigate(navKey)}
                     type="button"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center text-neutral-500 transition group-hover:text-neutral-700">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center text-neutral-500 transition-colors group-hover:text-[#1e3a8a]">
                       <Icon size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-neutral-900">{label}</span>
-                      <span className="block text-xs text-neutral-500">{description}</span>
+                      <span className="block text-[15px] font-medium text-neutral-900 group-hover:text-[#1e3a8a]">{label}</span>
+                      <span className="mt-1 block text-sm leading-relaxed text-neutral-500">{description}</span>
                     </div>
                     <ArrowRight
                       size={13}
-                      className="mr-1 shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-500"
+                      className="mr-1 shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-[#1e3a8a]"
                     />
                   </button>
                 ))}
@@ -134,27 +134,27 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
             {/* Matters */}
             {matters.length > 0 && (
               <section>
-                <div className="mb-4 flex items-baseline justify-between">
-                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                <div className="flex items-baseline justify-between border-b border-neutral-200 pb-3">
+                  <h2 className="font-serif text-xl text-neutral-900">
                     Matters
                   </h2>
                   <span className="text-[11px] text-neutral-400">{matters.length}</span>
                 </div>
-                <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+                <div className="divide-y divide-neutral-200/70">
                   {matters.slice(0, 8).map((m) => (
                     <button
                       key={m.id}
-                      className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-neutral-50"
+                      className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a]"
                       onClick={() => { onMatterChange(m.id); nav.selectKnowledgeBank() }}
                       type="button"
                     >
                       <span className="w-14 shrink-0 truncate text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
                         {m.caseNumber ?? '—'}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-sm text-neutral-700 group-hover:text-neutral-900">
+                      <span className="min-w-0 flex-1 truncate text-sm text-neutral-700 group-hover:text-[#1e3a8a]">
                         {m.title}
                       </span>
-                      <ArrowRight size={12} className="shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-500" />
+                      <ArrowRight size={12} className="shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-[#1e3a8a]" />
                     </button>
                   ))}
                 </div>
@@ -163,7 +163,7 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
           </div>
 
           {/* Right — recent conversations + AI context */}
-          <aside className="space-y-10">
+          <aside className="min-w-0 space-y-9">
             <RecentThreadsSection onClick={(id) => nav.selectThread(id)} />
             <AIContextSection
               currentUser={currentUser}
@@ -178,7 +178,7 @@ export function HomePanel({ currentUser, matters, onMatterChange }: Props) {
 }
 
 // ---------------------------------------------------------------------------
-// Inline stat components — text-only, no card chrome
+// Summary statistics
 // ---------------------------------------------------------------------------
 
 function Stat({
@@ -194,14 +194,14 @@ function Stat({
 }) {
   return (
     <button
-      className="min-w-36 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-neutral-300"
+      className="min-w-36 flex-1 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-left transition-colors hover:border-neutral-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] sm:flex-none"
       onClick={onClick}
       type="button"
     >
-      <p className={`text-xl font-semibold tabular-nums leading-none ${active ? 'text-neutral-900' : 'text-neutral-500'}`}>
+      <p className={`text-xl font-semibold tabular-nums leading-none ${active ? 'text-[#1e3a8a]' : 'text-neutral-500'}`}>
         {value}
       </p>
-      <p className="mt-1.5 text-[11px] uppercase tracking-[0.08em] text-neutral-500">{label}</p>
+      <p className="mt-1.5 text-xs text-neutral-500">{label}</p>
     </button>
   )
 }
@@ -255,8 +255,8 @@ function RecentThreadsSection({ onClick }: { onClick: (threadId: string) => void
 
   return (
     <section>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+      <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+        <h2 className="font-serif text-xl text-neutral-900">
           Recent conversations
         </h2>
         {q.isPending && <Loader2 size={12} className="animate-spin text-neutral-400" />}
@@ -265,19 +265,19 @@ function RecentThreadsSection({ onClick }: { onClick: (threadId: string) => void
       {threads.length === 0 && !q.isPending ? (
         <p className="py-6 text-center text-xs text-neutral-400">No conversations yet</p>
       ) : (
-        <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+        <div className="divide-y divide-neutral-200/70">
           {threads.map((t) => (
             <button
               key={t.id}
-              className="group flex w-full items-start gap-2 py-3 text-left transition-colors hover:bg-neutral-50"
+              className="group flex w-full items-start gap-2 py-3 text-left transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a]"
               onClick={() => onClick(t.id)}
               type="button"
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-neutral-700 group-hover:text-neutral-900">{t.title}</p>
+                <p className="truncate text-sm text-neutral-700 group-hover:text-[#1e3a8a]">{t.title}</p>
                 <p className="mt-0.5 text-[11px] text-neutral-400">{formatRelative(t.updatedAt)}</p>
               </div>
-              <ArrowRight size={12} className="mt-1 shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-neutral-500" />
+              <ArrowRight size={12} className="mt-1 shrink-0 text-neutral-200 transition group-hover:translate-x-0.5 group-hover:text-[#1e3a8a]" />
             </button>
           ))}
         </div>
@@ -311,29 +311,29 @@ function AIContextSection({
 
   return (
     <section>
-      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+      <h2 className="border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">
         AI context
       </h2>
-      <p className="mb-3 text-xs leading-relaxed text-neutral-500">
+      <p className="mb-3 mt-4 text-sm leading-relaxed text-neutral-500">
         LexChat and Birdie automatically search these before every response — no need to paste anything in.
       </p>
-      <div className="divide-y divide-black/[0.06] border-y border-black/[0.06]">
+      <div className="divide-y divide-neutral-200/70">
         <button
-          className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-neutral-50"
+          className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a]"
           onClick={onKbClick}
           type="button"
         >
           <BookMarked size={14} className="shrink-0 text-neutral-400 transition group-hover:text-neutral-600" />
-          <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900">Knowledge Bank</span>
+          <span className="flex-1 text-sm text-neutral-700 group-hover:text-[#1e3a8a]">Knowledge Bank</span>
           <span className="text-xs text-neutral-500">{kbQ.isPending ? '…' : `${kbCount} ${kbCount === 1 ? 'entry' : 'entries'}`}</span>
         </button>
         <button
-          className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-neutral-50"
+          className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a]"
           onClick={onWorkboardClick}
           type="button"
         >
           <CheckSquare size={14} className="shrink-0 text-neutral-400 transition group-hover:text-neutral-600" />
-          <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900">Workboard</span>
+          <span className="flex-1 text-sm text-neutral-700 group-hover:text-[#1e3a8a]">Workboard</span>
           <span className="text-xs text-neutral-500">{actionsQ.isPending ? '…' : `${openCount} open`}</span>
         </button>
       </div>

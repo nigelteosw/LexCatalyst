@@ -6,18 +6,43 @@ export type ToolStep = {
   status: 'running' | 'done'
 }
 
+/** A numbered footnote source behind a LexChat answer; the answer cites it as [n]. */
+export type MessageSource = {
+  n: number
+  kind: 'document' | 'kb_entry'
+  id: string
+  title: string
+  locator: string | null
+  matterId: string | null
+  /** firm_wide | team | matter | private */
+  scope: string | null
+  /** The passage the answer relied on. */
+  excerpt: string | null
+}
+
 export type Message = {
   id?: string
   role: 'assistant' | 'user'
   body: string
   meta?: string
   steps?: ToolStep[]
+  sources?: MessageSource[]
 }
 
 export type ChatThread = {
   id: string
   title: string
   matterId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type DocumentFolder = {
+  id: string
+  matterId: string | null
+  name: string
+  createdBy: string
+  canManage: boolean
   createdAt: string
   updatedAt: string
 }
@@ -31,6 +56,7 @@ export type WorkspaceDocument = {
   status: DocumentStatus
   errorMessage?: string | null
   matterId?: string | null
+  folderId?: string | null
   teamId?: string | null
   createdAt: string
   updatedAt: string

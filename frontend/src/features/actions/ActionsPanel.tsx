@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, CheckSquare, Plus, Tag, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Tag, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteActionItem,
@@ -16,11 +16,10 @@ import type {
   ResourceMetadata,
 } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
-import { isManager, statusColumns, userLabel } from './config'
+import { isManager, priorityColors, statusColumns, statusColors, userLabel } from './config'
 import { ActionDetailDialog } from './components/ActionDetailDialog'
 import { CreateActionDialog } from './components/CreateActionDialog'
-import { Button } from '../../shared/ui/Button'
-import { PanelHeader } from '../../shared/ui/PanelHeader'
+import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import { useWorkspaceNavigation } from '../../app/routes'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
 import { ReviewPane } from './components/ReviewPane'
@@ -261,62 +260,63 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[#fafaf8]">
-      <PanelHeader
-        actions={
-          <>
-            <select
-              aria-label="Filter by matter"
-              className="h-8 max-w-56 rounded-lg border border-black/10 bg-[#f4f3ef] px-2.5 text-xs text-[#5a5a56] outline-none focus:border-black/25"
-              onChange={(e) => setMatterFilter(e.target.value || null)}
-              value={matterFilter ?? ''}
-            >
-              <option value="">All matters</option>
-              {matters.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.caseNumber} · {m.title}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Filter by assignee"
-              className="h-8 max-w-44 rounded-lg border border-black/10 bg-[#f4f3ef] px-2.5 text-xs text-[#5a5a56] outline-none focus:border-black/25"
-              onChange={(e) => setAssigneeFilter(e.target.value || null)}
-              value={assigneeFilter ?? ''}
-            >
-              <option value="">
-                {users.length > 0 ? `Everyone (${users.length})` : 'Everyone'}
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]">
+      <header className="shrink-0 px-5 pt-10 lg:px-12 lg:pt-14">
+        <div className="flex items-center gap-2">
+          <h1 className="font-serif text-4xl tracking-tight text-neutral-950">Workboard</h1>
+          <FeatureHelp title="Workboard" content={WORKBOARD_HELP} />
+        </div>
+        <p className="mt-3 text-[15px] leading-relaxed text-neutral-500">
+          Firm-wide workload. Everyone sees the same board.
+        </p>
+        <div className="mt-6 flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-5">
+          <select
+            aria-label="Filter by matter"
+            className="h-10 max-w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 sm:max-w-56"
+            onChange={(e) => setMatterFilter(e.target.value || null)}
+            value={matterFilter ?? ''}
+          >
+            <option value="">All matters</option>
+            {matters.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.caseNumber} · {m.title}
               </option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {userLabel(u)}
-                </option>
-              ))}
-            </select>
-            {manager && (
-              <Button onClick={() => setIsCreating(true)} size="sm" variant="primary">
-                <Plus size={13} />
-                New ticket
-              </Button>
-            )}
-          </>
-        }
-        description="Firm-wide workload. Everyone sees the same board."
-        helpContent={WORKBOARD_HELP}
-        icon={CheckSquare}
-        title="Workboard"
-      />
+            ))}
+          </select>
+          <select
+            aria-label="Filter by assignee"
+            className="h-10 max-w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 sm:max-w-56"
+            onChange={(e) => setAssigneeFilter(e.target.value || null)}
+            value={assigneeFilter ?? ''}
+          >
+            <option value="">
+              {users.length > 0 ? `Everyone (${users.length})` : 'Everyone'}
+            </option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {userLabel(u)}
+              </option>
+            ))}
+          </select>
+          {manager && (
+            <button type="button" onClick={() => setIsCreating(true)} className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#1e3a8a] px-4 text-sm font-medium text-white transition-colors hover:bg-[#172e6e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+              <Plus size={13} />
+              New ticket
+            </button>
+          )}
+        </div>
+      </header>
 
       {availableTags.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-black/10 bg-white px-5 py-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pt-4 lg:px-12">
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             <Tag size={11} /> Tags
           </span>
           <button
             className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-medium transition-colors ${
               tagFilter === null
-                ? 'bg-[#0f0f0f] text-white'
-                : 'bg-[#f4f3ef] text-[#5a5a56] hover:bg-[#eeecea]'
+                ? 'bg-[#1e3a8a] text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
             onClick={() => setTagFilter(null)}
             type="button"
@@ -328,8 +328,8 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
               key={tag}
               className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-medium transition-colors ${
                 tagFilter === tag
-                  ? 'bg-[#0f0f0f] text-white'
-                  : 'bg-[#f4f3ef] text-[#5a5a56] hover:bg-[#eeecea]'
+                  ? 'bg-[#1e3a8a] text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
               onClick={() => setTagFilter(tag === tagFilter ? null : tag)}
               type="button"
@@ -350,7 +350,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden">
+      <div className="app-scroll-region flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-6 sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden lg:px-12">
         {isInitialLoading ? (
           <BoardSkeleton />
         ) : actionsQuery.isError ? (
@@ -359,10 +359,10 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           </div>
         ) : (
           statusColumns.map((col) => (
-            <div key={col.id} className="flex w-full shrink-0 flex-col sm:w-64 sm:min-h-0 lg:w-auto lg:min-w-[15rem] lg:flex-1">
+            <div key={col.id} className="flex w-full shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-100/80 p-3 sm:min-h-0 sm:w-72 xl:w-auto xl:min-w-[15rem] xl:flex-1">
               <div className="mb-3 flex items-center gap-2">
-                <h3 className="text-xs font-semibold text-[#5a5a56]">{col.label}</h3>
-                <span className="rounded-full bg-[#f4f3ef] px-1.5 py-0.5 text-[11px] text-[#76766f]">
+                <h3 className={`rounded-md px-2 py-1 text-xs font-semibold ${statusColors[col.id]}`}>{col.label}</h3>
+                <span className="rounded-md bg-white px-1.5 py-0.5 text-xs font-medium tabular-nums text-slate-500">
                   {grouped[col.id].length}
                 </span>
               </div>
@@ -380,7 +380,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
                   />
                 ))}
                 {grouped[col.id].length === 0 && (
-                  <div className="rounded-[10px] border border-dashed border-black/10 px-3 py-5 text-center text-[11px] text-[#8a8a84]">
+                  <div className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-xs text-slate-500">
                     No {col.label.toLowerCase()} tickets
                   </div>
                 )}
@@ -449,7 +449,7 @@ function BoardSkeleton() {
               >
                 <div className="h-3 w-3/4 rounded bg-[#eeecea]" />
                 <div className="mt-2 h-2.5 w-1/2 rounded bg-[#f4f3ef]" />
-                <div className="mt-3 flex items-center gap-2">
+                <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
                   <div className="h-5 w-5 rounded-full bg-[#f4f3ef]" />
                   <div className="h-2.5 w-20 rounded bg-[#f4f3ef]" />
                 </div>
@@ -473,10 +473,10 @@ function ActionCard({
 }) {
   const priorityBorderColor =
     item.priority === 'high'
-      ? 'border-l-red-300'
+      ? 'border-l-rose-700'
       : item.priority === 'medium'
-        ? 'border-l-amber-300'
-        : 'border-l-black/15'
+        ? 'border-l-blue-600'
+        : 'border-l-slate-400'
 
   const assigneeInitials = item.assignee
     ? (item.assignee.fullName ?? item.assignee.email)
@@ -492,26 +492,29 @@ function ActionCard({
 
   return (
     <article
-      className={`group relative rounded-[10px] border border-l-[3px] bg-white transition-all hover:border-black/20 hover:shadow-sm ${priorityBorderColor} border-black/8`}
+      className={`group relative rounded-lg border border-slate-200 border-l-[3px] bg-white shadow-sm transition-shadow hover:shadow-md focus-within:ring-2 focus-within:ring-blue-600 ${priorityBorderColor}`}
     >
       <button
-        className="w-full p-4 pr-10 text-left"
+        className="w-full p-4 pr-10 text-left focus-visible:outline-none"
         onClick={onClick}
         type="button"
       >
-        <p className="line-clamp-2 text-sm font-medium leading-5 text-[#0f0f0f]">
+        <span className={`mb-2 inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold capitalize ${priorityColors[item.priority]}`}>
+          {item.priority} priority
+        </span>
+        <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900">
           {item.title}
         </p>
 
         {item.activeHandoffId && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-indigo-800">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-slate-1000" />
             {item.status === 'in_progress' ? 'Returned for rework' : 'Review ready'}
           </div>
         )}
 
         {item.description && (
-          <p className="mt-1.5 line-clamp-2 text-[11px] leading-4 text-[#8c8c86]">
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
             {item.description}
           </p>
         )}
@@ -521,7 +524,7 @@ function ActionCard({
             {item.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-md bg-[#eeecff] px-1.5 py-0.5 text-[11px] font-medium text-[#4a3db0]"
+                className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
               >
                 {tag}
               </span>
@@ -529,7 +532,7 @@ function ActionCard({
           </div>
         )}
 
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
           <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#e8f0fe] text-[9px] font-semibold text-[#1a4a8a]">
             {assigneeInitials}
           </div>
@@ -549,7 +552,7 @@ function ActionCard({
 
       <button
         aria-label={`Delete ${item.title}`}
-        className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded text-[#8a8a84] opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"
+        className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded text-[#8a8a84] opacity-100 transition-colors sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 hover:bg-red-50 hover:text-red-500"
         onClick={onDelete}
         title="Delete ticket"
         type="button"

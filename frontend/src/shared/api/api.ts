@@ -2,9 +2,11 @@ import type {
   ActionItem,
   ActionPriority,
   ActionStatus,
+  MessageSource,
   ModelChoice,
   ChatThread,
   CurrentUser,
+  DocumentFolder,
   DreamJobStatus,
   DreamProposal,
   DocumentComment,
@@ -61,7 +63,33 @@ type BackendMessage = {
   content: string
   model: string | null
   tool_steps: Array<{ id?: string; tool: string; args: Record<string, unknown>; summary: string | null; status: 'running' | 'done' }> | null
+  sources?: BackendMessageSource[] | null
   created_at: string
+}
+
+type BackendMessageSource = {
+  n: number
+  kind: 'document' | 'kb_entry'
+  id: string
+  title: string
+  locator: string | null
+  matter_id: string | null
+  scope?: string | null
+  excerpt?: string | null
+}
+
+function mapMessageSources(sources: BackendMessageSource[] | null | undefined): MessageSource[] | undefined {
+  if (!sources?.length) return undefined
+  return sources.map((source) => ({
+    n: source.n,
+    kind: source.kind,
+    id: source.id,
+    title: source.title,
+    locator: source.locator,
+    matterId: source.matter_id,
+    scope: source.scope ?? null,
+    excerpt: source.excerpt ?? null,
+  }))
 }
 
 type BackendChatResponse = {
@@ -77,6 +105,7 @@ type BackendDocument = {
   status: WorkspaceDocument['status']
   error_message: string | null
   matter_id: string | null
+  folder_id: string | null
   team_id: string | null
   created_at: string
   updated_at: string
@@ -163,6 +192,7 @@ type StreamChatOptions = {
   onThread: (threadId: string, title: string) => void
   onToolCall: (stepId: string, tool: string, args: Record<string, unknown>) => void
   onToolResult: (stepId: string, tool: string, summary: string) => void
+  onSources?: (sources: MessageSource[]) => void
   onToken: (content: string) => void
   onDone: (payload: { threadId: string; message: Message; model: string }) => void
 }
@@ -329,6 +359,7 @@ function mapMessage(message: BackendMessage): Message {
     // Messages from before the OpenRouter switch carry a retired provider's model id.
     meta: message.model ? `Model: ${message.model.startsWith('deepseek') ? 'DeepSeek (retired)' : message.model}` : undefined,
     steps: message.tool_steps ?? undefined,
+    sources: mapMessageSources(message.sources),
   }
 }
 
@@ -340,6 +371,7 @@ function mapDocument(document: BackendDocument): WorkspaceDocument {
     status: document.status,
     errorMessage: document.error_message,
     matterId: document.matter_id,
+    folderId: document.folder_id ?? null,
     teamId: document.team_id,
     createdAt: document.created_at,
     updatedAt: document.updated_at,
@@ -551,10 +583,15 @@ export async function listDocuments(): Promise<WorkspaceDocument[]> {
   return documents.map(mapDocument)
 }
 
-export async function uploadDocument(file: File): Promise<WorkspaceDocument> {
+export async function uploadDocument(
+  file: File,
+  target?: { matterId?: string | null; folderId?: string | null },
+): Promise<WorkspaceDocument> {
   const token = localStorage.getItem('token')
   const body = new FormData()
   body.append('file', file)
+  if (target?.matterId) body.append('matter_id', target.matterId)
+  if (target?.folderId) body.append('folder_id', target.folderId)
 
   const headers = new Headers()
   if (token) {
@@ -575,6 +612,68 @@ export async function uploadDocument(file: File): Promise<WorkspaceDocument> {
   }
 
   return mapDocument(await response.json() as BackendDocument)
+}
+
+type BackendDocumentFolder = {
+  id: string
+  matter_id: string | null
+  name: string
+  created_by: string
+  can_manage: boolean
+  created_at: string
+  updated_at: string
+}
+
+function mapDocumentFolder(folder: BackendDocumentFolder): DocumentFolder {
+  return {
+    id: folder.id,
+    matterId: folder.matter_id,
+    name: folder.name,
+    createdBy: folder.created_by,
+    canManage: folder.can_manage,
+    createdAt: folder.created_at,
+    updatedAt: folder.updated_at,
+  }
+}
+
+/** matterId null = the caller's General folders. */
+export async function listDocumentFolders(matterId: string | null): Promise<DocumentFolder[]> {
+  const folders = await request<BackendDocumentFolder[]>(
+    `/document-folders?matter_id=${encodeURIComponent(matterId ?? 'general')}`,
+  )
+  return folders.map(mapDocumentFolder)
+}
+
+export async function createDocumentFolder(name: string, matterId: string | null): Promise<DocumentFolder> {
+  return mapDocumentFolder(
+    await request<BackendDocumentFolder>('/document-folders', {
+      method: 'POST',
+      body: JSON.stringify({ name, matter_id: matterId }),
+    }),
+  )
+}
+
+export async function renameDocumentFolder(id: string, name: string): Promise<DocumentFolder> {
+  return mapDocumentFolder(
+    await request<BackendDocumentFolder>(`/document-folders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    }),
+  )
+}
+
+export async function deleteDocumentFolder(id: string): Promise<void> {
+  await request<void>(`/document-folders/${id}`, { method: 'DELETE' })
+}
+
+/** folderId null = back to the matter root. */
+export async function moveDocumentToFolder(id: string, folderId: string | null): Promise<WorkspaceDocument> {
+  return mapDocument(
+    await request<BackendDocument>(`/documents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ folder_id: folderId }),
+    }),
+  )
 }
 
 export async function deleteDocument(id: string): Promise<void> {
@@ -764,6 +863,7 @@ export async function streamChatMessage({
   onThread,
   onToolCall,
   onToolResult,
+  onSources,
   onToken,
   onDone,
 }: StreamChatOptions) {
@@ -811,14 +911,14 @@ export async function streamChatMessage({
 
     for (const rawEvent of events) {
       completed =
-        handleStreamEvent(rawEvent, { onThread, onToolCall, onToolResult, onToken, onDone }) ===
+        handleStreamEvent(rawEvent, { onThread, onToolCall, onToolResult, onSources, onToken, onDone }) ===
           'done' || completed
     }
   }
 
   if (buffer.trim()) {
     completed =
-      handleStreamEvent(buffer, { onThread, onToolCall, onToolResult, onToken, onDone }) ===
+      handleStreamEvent(buffer, { onThread, onToolCall, onToolResult, onSources, onToken, onDone }) ===
         'done' || completed
   }
   if (!completed) throw new Error('The response stream ended before completion. Please try again.')
@@ -1072,7 +1172,7 @@ export async function listKnowledgeBankAuditLog(): Promise<KnowledgeBankAccessLo
 
 function handleStreamEvent(
   rawEvent: string,
-  callbacks: Pick<StreamChatOptions, 'onThread' | 'onToolCall' | 'onToolResult' | 'onToken' | 'onDone'>,
+  callbacks: Pick<StreamChatOptions, 'onThread' | 'onToolCall' | 'onToolResult' | 'onSources' | 'onToken' | 'onDone'>,
 ): string | null {
   const eventName = rawEvent
     .split('\n')
@@ -1112,6 +1212,11 @@ function handleStreamEvent(
       summary: string
     }
     callbacks.onToolResult(step_id, tool, summary)
+    return eventName
+  }
+
+  if (eventName === 'sources') {
+    callbacks.onSources?.(mapMessageSources((payload as { sources: BackendMessageSource[] }).sources) ?? [])
     return eventName
   }
 

@@ -4,7 +4,9 @@ import { AlertCircle, ArrowDown, BookMarked, Brain, Check, ChevronDown, Copy, Fi
 import { Button } from '../../shared/ui/Button'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
-import type { Message, ToolStep } from '../../shared/types/workspace'
+import type { Matter, Message, MessageSource, ToolStep } from '../../shared/types/workspace'
+import { SourcePanel } from './SourcePanel'
+import { citedSources, describeSource } from './sourceLabels'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
 
 const CHAT_HELP: HelpContent = {
@@ -44,6 +46,7 @@ const CHAT_HELP: HelpContent = {
 }
 
 export type ChatPanelProps = {
+  matters: Matter[]
   attachmentStatus?: string | null
   error: string | null
   inputLabel: string
@@ -74,6 +77,7 @@ const SUGGESTED_PROMPTS = [
 ]
 
 export function ChatPanel({
+  matters,
   attachmentStatus,
   error,
   inputLabel,
@@ -101,6 +105,14 @@ export function ChatPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isNearBottomRef = useRef(true)
   const [showJumpToLatest, setShowJumpToLatest] = useState(false)
+  // The footnote whose passage is open in the side panel, scoped to its message.
+  const [openSource, setOpenSource] = useState<{ messageKey: string; n: number } | null>(null)
+  const openSourceData = openSource
+    ? messages
+        .map((m, i) => ({ m, key: m.id ?? `${m.role}-${i}` }))
+        .find(({ key }) => key === openSource.messageKey)
+        ?.m.sources?.find((s) => s.n === openSource.n)
+    : undefined
 
   const scrollToBottom = () => {
     const container = scrollContainerRef.current
@@ -152,7 +164,16 @@ export function ChatPanel({
               {messages.map((message, index) => (
                 <ChatMessage
                   key={message.id ?? `${message.role}-${index}`}
+                  matters={matters}
                   message={message}
+                  openSourceN={
+                    openSource?.messageKey === (message.id ?? `${message.role}-${index}`)
+                      ? openSource.n
+                      : null
+                  }
+                  onOpenSource={(n) =>
+                    setOpenSource({ messageKey: message.id ?? `${message.role}-${index}`, n })
+                  }
                   userInitials={userInitials}
                   onDelete={
                     onDeleteMessage && message.id && !isResponding
@@ -195,6 +216,10 @@ export function ChatPanel({
           )}
         </div>
       </div>
+
+      {openSourceData && (
+        <SourcePanel matters={matters} onClose={() => setOpenSource(null)} source={openSourceData} />
+      )}
 
       {showJumpToLatest && (
         <div className="pointer-events-none relative">
@@ -312,12 +337,15 @@ export function ChatPanel({
 }
 
 type ChatMessageProps = {
+  matters: Matter[]
   message: Message
+  openSourceN: number | null
+  onOpenSource: (n: number) => void
   userInitials: string
   onDelete?: () => void
 }
 
-function ChatMessage({ message, userInitials, onDelete }: ChatMessageProps) {
+function ChatMessage({ matters, message, openSourceN, onOpenSource, userInitials, onDelete }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const [copied, setCopied] = useState(false)
 
@@ -410,12 +438,62 @@ function ChatMessage({ message, userInitials, onDelete }: ChatMessageProps) {
           </span>
         ) : (
           message.body && (
-            <MarkdownContent markdown={message.body} className="font-serif text-[17px] leading-8 text-neutral-900" />
+            <MarkdownContent
+              className="font-serif text-[17px] leading-8 text-neutral-900"
+              footnotes={message.sources?.map((s) => s.n)}
+              markdown={message.body}
+              onFootnoteClick={onOpenSource}
+            />
           )
         )}
+        <SourceList
+          cited={citedSources(message.body, message.sources)}
+          matters={matters}
+          onOpen={onOpenSource}
+          openN={openSourceN}
+        />
         {actions}
       </div>
     </article>
+  )
+}
+
+function SourceList({
+  cited,
+  matters,
+  onOpen,
+  openN,
+}: {
+  cited: MessageSource[]
+  matters: Matter[]
+  onOpen: (n: number) => void
+  openN: number | null
+}) {
+  if (cited.length === 0) return null
+  return (
+    <section aria-label="Sources" className="mt-6 border-t border-neutral-200 pt-4">
+      <h4 className="text-sm text-neutral-500">Sources</h4>
+      <ol className="mt-2 space-y-0.5">
+        {cited.map((source) => (
+          <li key={source.n}>
+            <button
+              aria-pressed={openN === source.n}
+              className={`flex w-full items-start gap-5 rounded-md px-2 py-2 text-left transition-colors ${
+                openN === source.n ? 'bg-indigo-50' : 'hover:bg-neutral-50'
+              }`}
+              onClick={() => onOpen(source.n)}
+              type="button"
+            >
+              <span className="w-3 shrink-0 text-sm font-semibold text-[#16224f]">{source.n}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-medium text-neutral-900">{source.title}</span>
+                <span className="block truncate text-sm text-neutral-500">{describeSource(source, matters)}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 

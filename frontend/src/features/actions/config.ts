@@ -8,9 +8,16 @@ export const statusColumns: Array<{ id: ActionStatus; label: string }> = [
 ]
 
 export const priorityColors: Record<ActionPriority, string> = {
-  low: 'bg-[#f4f3ef] text-[#6f6f69]',
-  medium: 'bg-[#fef3dc] text-[#8a5a00]',
-  high: 'bg-[#fdeeed] text-[#8a1f1f]',
+  low: 'bg-slate-100 text-slate-600',
+  medium: 'bg-blue-50 text-blue-800',
+  high: 'bg-rose-700 text-white',
+}
+
+export const statusColors: Record<ActionStatus, string> = {
+  pending: 'bg-slate-200 text-slate-700',
+  in_progress: 'bg-blue-100 text-blue-800',
+  review: 'bg-indigo-100 text-indigo-800',
+  done: 'bg-teal-100 text-teal-800',
 }
 
 export function isManager(user: CurrentUser | null) {
