@@ -37,7 +37,7 @@ extensions/
 
 Manifest permissions: `sidePanel`, `contextMenus`, `activeTab`, `scripting`, `storage`, `identity`. No `<all_urls>` host permission; `activeTab` grants access only after user action. `host_permissions` covers the backend API origin only.
 
-Shared code: stream parsing and `MarkdownContent` are copied or imported from `frontend/src/shared` via a Vite alias; keep the extension self-contained if the alias causes build friction.
+Shared code: the SSE parsing mirrors `streamBirdie` in `frontend/src/shared/api/api.ts` (`event: token|done|error`). Copy it into `extensions/src/lib/api.ts` rather than importing across packages; copy `MarkdownContent` likewise. The extension stays a self-contained Bun package.
 
 ## Data flow
 
@@ -45,13 +45,14 @@ Shared code: stream parsing and `MarkdownContent` are copied or imported from `f
 2. Not signed in → "Sign in with Google" → `launchWebAuthFlow` → ID token → `POST /auth/google` → JWT saved → `GET /me` shows name.
 3. User highlights text → right-click "Ask Birdie about this" → background stores `{url, title, selection}` → side panel shows a removable context chip.
 4. Or "Ask about this page" → `chrome.scripting.executeScript` returns `document.body.innerText` (truncated to 20k chars).
-5. Send → `POST /birdie/stream` with `{message, history, page_context}` → streamed answer rendered as markdown.
+5. Send → `POST /birdie/stream` with `{message, history, web_context}` → streamed answer rendered as markdown.
 
 ## Backend changes
 
 - `CORS_ORIGINS`: add `chrome-extension://<extension-id>` (pin the ID with a `key` in the manifest so it is stable).
-- `/birdie/stream`: accept optional `page_context: {url, title, text}`; validate the length server-side (max 20k chars); inject into the prompt clearly labelled as user-supplied web content, not instructions.
-- `/auth/google`: accept the extension's Google OAuth client ID as an allowed audience (new env `GOOGLE_EXTENSION_CLIENT_ID`) if it differs from the web client.
+- `/birdie/stream`: add a new optional `web_context: WebContext` field (`url` ≤ 2048, `title` ≤ 500, `text` ≤ 20,000 chars, `source: "selection" | "page"`). Do **not** reuse `page_context` — that field already exists and describes which LexCatalyst view the user is on (`PageContext` in `app/schemas.py`, formatted by `_format_page_context` in `birdie_service.py`).
+- `birdie_service.build_birdie_messages`: add `web_context` param and a `_format_web_context` helper that appends a block to the system prompt, fenced and labelled as untrusted user-supplied web content to analyse, never as instructions.
+- `app/auth.verify_google_token`: currently verifies against `GOOGLE_CLIENT_ID` only. Accept a second audience from new env `GOOGLE_EXTENSION_CLIENT_ID` (Chrome extensions need their own OAuth client of type "Chrome extension" or "Web application" with the `https://<ext-id>.chromiumapp.org/` redirect).
 - Document the new field, env var, and extension setup in README and AGENTS.md.
 
 ## Disclosure
@@ -67,7 +68,7 @@ The side panel shows a one-line notice: selected/page text is sent to DeepSeek, 
 
 ## Testing
 
-- Backend: pytest for `page_context` validation, the length cap, and prompt labelling.
+- Backend: pytest in `backend/tests/test_birdie_web_context.py` for `WebContext` validation, the length cap, prompt labelling, and the extra Google audience.
 - Extension: manual checklist — load `dist/`, sign in, selection flow, page flow, restricted page, expired token.
 
 ## Out of scope
