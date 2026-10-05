@@ -1104,6 +1104,86 @@ class ReviewLesson(Base):
     )
 
 
+class BirdieReview(Base):
+    """A Birdie review of a draft shared from the extension. Suggestions anchor into source_text."""
+
+    __tablename__ = "birdie_reviews"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    matter_id: Mapped[str | None] = mapped_column(
+        ForeignKey("matters.id", ondelete="SET NULL"), nullable=True
+    )
+    source_url: Mapped[str] = mapped_column(String(2048), index=True, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    source_text: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="processing")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stats: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    suggestions: Mapped[list["BirdieSuggestion"]] = relationship(
+        back_populates="review",
+        cascade="all, delete-orphan",
+        order_by="BirdieSuggestion.anchor_start",
+    )
+
+
+class BirdieSuggestion(Base):
+    """One inline suggestion: replace, insert or comment. Nothing applies until accepted."""
+
+    __tablename__ = "birdie_suggestions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    review_id: Mapped[str] = mapped_column(
+        ForeignKey("birdie_reviews.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    clause_ref: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    anchor_text: Mapped[str] = mapped_column(Text, nullable=False)
+    anchor_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    anchor_end: Mapped[int] = mapped_column(Integer, nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)  # replace | insert | comment
+    suggested_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(20), nullable=False)  # style | substance | question
+    source: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    decided_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    review: Mapped[BirdieReview] = relationship(back_populates="suggestions")
+    replies: Mapped[list["BirdieSuggestionReply"]] = relationship(
+        back_populates="suggestion",
+        cascade="all, delete-orphan",
+        order_by="BirdieSuggestionReply.created_at",
+    )
+
+
+class BirdieSuggestionReply(Base):
+    __tablename__ = "birdie_suggestion_replies"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    suggestion_id: Mapped[str] = mapped_column(
+        ForeignKey("birdie_suggestions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    author_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    suggestion: Mapped[BirdieSuggestion] = relationship(back_populates="replies")
+
+
 class UserSetting(Base):
     """Per-user preferences. The user's OpenRouter key, High/Mid model choices and per-feature tiers."""
 

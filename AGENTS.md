@@ -41,7 +41,7 @@ backend/
     routers/          # thin HTTP handlers — one file per domain
     services/         # business logic — keep route handlers thin
     providers/        # LLM and embedding adapters (openrouter, embeddings)
-  migrations/         # Alembic; current head: y0b1c2d3e4f5
+  migrations/         # Alembic; current head: z1c2d3e4f5a6
   Makefile
   requirements.txt
 
@@ -135,6 +135,7 @@ app/services/
   agent_service.py        # Tool dispatch inside streamed chat (search, KB, memory)
   action_service.py       # Action board items
   birdie_service.py       # Birdie AI mentor
+  birdie_review_service.py # Draft review: anchored replace/insert/comment suggestions (extension)
   llm_service.py          # Per-user OpenRouter key + High/Mid tier model resolution; FEATURES list
   lesson_service.py       # Reviewer feedback → Birdie lessons (submitter-only)
   user_settings_service.py # Per-user settings (OpenRouter key/model, encrypted)
@@ -174,7 +175,7 @@ Do not add a tool registry unless it removes real duplication.
 
 All schema changes go through Alembic (`backend/migrations/`). Never add new tables or indexes only to `create_db_tables()` — that path runs only when `AUTO_CREATE_TABLES=true`, which is not the case in production.
 
-Current head: `y0b1c2d3e4f5`
+Current head: `z1c2d3e4f5a6`
 
 ```sh
 cd backend && source .venv/bin/activate

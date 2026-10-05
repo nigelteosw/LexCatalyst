@@ -21,10 +21,11 @@ import { ContextChips } from './ContextChips'
 import { MarkdownContent } from './MarkdownContent'
 import { loadSavedChoice, ModelPicker, saveChoice } from './ModelPicker'
 import { PrecedentTab } from './PrecedentTab'
+import { ReviewTab } from './ReviewTab'
 import { useBrowserContext } from './useBrowserContext'
 
 type AuthState = { status: 'loading' } | { status: 'signedOut' } | { status: 'signedIn'; user: ExtensionUser }
-type View = 'chat' | 'precedent'
+type View = 'chat' | 'precedent' | 'review'
 
 const CASE_SEARCH_PROMPT = 'Find Singapore judgments on eLitigation relevant to the highlighted text.'
 
@@ -202,11 +203,18 @@ export function BirdieSidePanel() {
           <button className={tabClass(view === 'precedent')} onClick={() => setView('precedent')}>
             Precedent
           </button>
+          <button className={tabClass(view === 'review')} onClick={() => setView('review')}>
+            Review
+          </button>
         </nav>
       </header>
 
       {view === 'precedent' && (
         <PrecedentTab selectionText={browser.selection?.text ?? null} onUseInChat={useInChat} onError={handleError} />
+      )}
+
+      {view === 'review' && (
+        <ReviewTab browser={browser} model={choice} needsKey={needsKey} onError={handleError} />
       )}
 
       {view === 'chat' && (

@@ -876,3 +876,61 @@ class PrecedentSearchResponse(BaseModel):
     clause_type: str
     terms_summary: list[PrecedentTermCount]
     results: list[PrecedentResultResponse]
+
+
+class BirdieReviewCreate(BaseModel):
+    url: str = Field(min_length=1, max_length=2048)
+    title: str | None = Field(default=None, max_length=500)
+    text: str = Field(min_length=1, max_length=60_000)
+    matter_id: str | None = None
+    tier: LlmTier | None = None
+    model: str | None = Field(default=None, max_length=200)
+
+
+class BirdieSuggestionReplyResponse(BaseModel):
+    id: str
+    author_user_id: str | None = None
+    body: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BirdieSuggestionResponse(BaseModel):
+    id: str
+    clause_ref: str | None = None
+    anchor_text: str
+    anchor_start: int
+    anchor_end: int
+    type: Literal["replace", "insert", "comment"]
+    suggested_text: str | None = None
+    reason: str
+    category: Literal["style", "substance", "question"]
+    source: dict | None = None
+    status: Literal["pending", "accepted", "rejected"]
+    decided_at: datetime | None = None
+    replies: list[BirdieSuggestionReplyResponse] = []
+
+    model_config = {"from_attributes": True}
+
+
+class BirdieReviewResponse(BaseModel):
+    id: str
+    source_url: str
+    title: str | None = None
+    status: Literal["processing", "ready", "failed"]
+    error: str | None = None
+    model: str | None = None
+    stats: dict = {}
+    source_text: str
+    current_text: str
+    created_at: datetime
+    suggestions: list[BirdieSuggestionResponse] = []
+
+
+class BirdieSuggestionDecision(BaseModel):
+    status: Literal["pending", "accepted", "rejected"]
+
+
+class BirdieSuggestionReplyCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)

@@ -25,6 +25,7 @@ DEFAULT_HIGH_MODEL = "anthropic/claude-opus-5.5"
 FEATURES: dict[str, tuple[str, Tier]] = {
     "lexchat": ("LexChat", "mid"),
     "birdie": ("Birdie", "mid"),
+    "birdie_review": ("Birdie draft review (extension)", "high"),
     "lessons": ("Birdie lessons from review feedback", "mid"),
     "dream": ("Memory consolidation (Dream)", "high"),
     "wiki": ("Wiki page generation", "mid"),

@@ -386,6 +386,11 @@ embedded worker claims it from the durable Postgres queue.
 |---|---|---|
 | `GET /birdie/lessons` | signed-in user | reviewer feedback on rounds the user submitted (returned/completed), with stored lessons |
 | `POST /birdie/lessons/{handoff_id}/distill` | signed-in submitter of that round | idempotent; returns stored lessons or distils them once. 404 for anyone else |
+| `POST /birdie/reviews` | signed-in user (matter access if `matter_id`) | review a draft shared from the extension; runs in the background on the caller's OpenRouter key, 409 without a key; returns `202` with the review |
+| `GET /birdie/reviews?url=` / `GET /birdie/reviews/{id}` | owner only | the review with its suggestions (`replace`/`insert`/`comment`, each with anchor offsets, reason, category, source) and `current_text` with accepted edits applied |
+| `PATCH /birdie/suggestions/{id}` | owner only | accept, reject or reset a suggestion; logged to the retrieval audit |
+| `POST /birdie/reviews/{id}/accept-style` | owner only | bulk accept mechanical `style` replacements only; substance is never bulk-accepted |
+| `POST /birdie/suggestions/{id}/replies` | owner only | reply on a suggestion |
 | `GET /settings/llm` | signed-in user | `{has_key, key_last4, key_source, custom_models, models, feature_tiers, features}`; never the key |
 | `PUT /settings/llm` | signed-in user | save `openrouter_api_key`, `model_high`, `model_mid` and/or `feature_tiers` (422 on unknown feature or tier) |
 | `DELETE /settings/llm/openrouter-key` | signed-in user | remove the key |
