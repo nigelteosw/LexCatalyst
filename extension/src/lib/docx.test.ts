@@ -1,6 +1,6 @@
 import { deflateRawSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { docxToText, wordXmlToText } from './docx'
+import { base64ToArrayBuffer, docxToText, wordXmlToText } from './docx'
 
 function zip(files: Record<string, { data: Buffer; method: 0 | 8 }>): ArrayBuffer {
   const parts: Buffer[] = []
@@ -53,5 +53,10 @@ describe('docx text', () => {
   it('reads a stored entry and returns null when missing', async () => {
     expect(await docxToText(zip({ 'word/document.xml': { data: Buffer.from(XML), method: 0 } }))).toContain('second')
     expect(await docxToText(zip({ 'other.xml': { data: Buffer.from('x'), method: 0 } }))).toBeNull()
+  })
+
+  it('round-trips a base64 docx like the in-tab fetch returns', async () => {
+    const buf = Buffer.from(zip({ 'word/document.xml': { data: Buffer.from(XML), method: 8 } }))
+    expect(await docxToText(base64ToArrayBuffer(buf.toString('base64')))).toContain('[●] second')
   })
 })
