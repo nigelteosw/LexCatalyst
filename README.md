@@ -205,6 +205,25 @@ bun install
 bun run dev
 ```
 
+### 4. Birdie Chrome extension (optional)
+
+`extension/` builds a Chrome side-panel extension that brings Birdie to any webpage.
+
+```bash
+cd extension
+cp .env.example .env   # set VITE_GOOGLE_CLIENT_ID (same as the frontend)
+bun install
+bun run build          # -> extension/dist, talks to https://lexcatalyst-production.up.railway.app
+bun run build:local    # -> extension/dist, talks to http://127.0.0.1:8000
+bun run package        # -> extension/birdie-extension.zip
+```
+
+Load it at `chrome://extensions` -> Developer mode -> Load unpacked -> `extension/dist`.
+
+Sign-in reuses the web Google OAuth client; `https://<extension-id>.chromiumapp.org/` must be an authorised redirect URI on it. The extension ID is pinned by the `key` in `extension/public/manifest.json` (the matching private key, `extension/key.pem`, is git-ignored).
+
+Birdie only sees webpage text when the user highlights text and picks "Ask Birdie about this", or clicks "Ask about this page". That text is sent to `POST /birdie/stream` (JWT required) as `web_context` (max 20,000 chars) and then to DeepSeek, or OpenRouter when the user has saved their own key.
+
 ---
 
 ## Environment Variables

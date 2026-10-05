@@ -66,6 +66,12 @@ frontend/
       lib/            # errors.ts, async.ts
       types/workspace.ts
       ui/             # Button, Dialog, ErrorBanner, MarkdownContent, StatusBadge
+
+extension/            # Birdie Chrome extension (MV3 side panel); bun run build -> extension/dist
+  public/manifest.json
+  src/background.ts   # context menu + side panel behaviour
+  src/sidepanel/      # Birdie side panel UI
+  src/lib/            # auth, api, SSE parsing, web context
   package.json
   bun.lock
 ```
@@ -275,6 +281,8 @@ If a new backend route is added, document the route and expected authentication 
 If the LLM or embedding provider changes, update both `README.md` and this file.
 
 Birdie uses DeepSeek by default and OpenRouter when a user saves their own key (Settings → Birdie model). Birdie prompts then leave for OpenRouter and the chosen model provider; keep that disclosure in the UI and README.
+
+The Chrome extension (`extension/`) sends user-shared webpage text to Birdie as `web_context` on `POST /birdie/stream`; keep the side-panel disclosure in sync with the provider line above.
 
 `DEMO_MODE=true` enables `/demo/*` (admin-only, 404 otherwise) for user switching and seeding. Never enable it in a deployment with real client data.
 
