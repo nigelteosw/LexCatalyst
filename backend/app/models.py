@@ -117,6 +117,8 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     tool_steps: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Numbered footnote sources ([n] markers in the answer) as [{n, kind, id, title, locator, matter_id}].
+    sources: Mapped[list | None] = mapped_column(JSON, nullable=True)
     prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)

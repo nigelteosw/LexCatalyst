@@ -70,6 +70,7 @@ def add_message(
     content: str,
     model: str | None = None,
     tool_steps: list | None = None,
+    sources: list | None = None,
     prompt_tokens: int | None = None,
     completion_tokens: int | None = None,
     total_tokens: int | None = None,
@@ -85,6 +86,8 @@ def add_message(
     )
     if tool_steps is not None:
         fields["tool_steps"] = tool_steps
+    if sources:
+        fields["sources"] = sources
     message = ChatMessage(**fields)
     db.add(message)
     db.flush()
@@ -367,7 +370,8 @@ async def create_chat_request(
 AGENT_SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Use your tools to search for relevant documents, knowledge bank entries, and memories before answering.
 Answer clearly and conservatively.
-When your answer draws on tool results, end your response with a **Sources** section listing the source names — one per line. Do not use bracket numbers like [1].
+Every document passage and knowledge bank entry returned by a tool is numbered like [1], [2]. When a statement relies on a source, cite it by putting its number in square brackets right after the statement, for example "caps are set at twelve months of fees [2]". Use only numbers that appeared in tool results, and never invent one.
+Do not write a Sources or References section; the application lists the sources for you.
 Do not invent citations or claim to have read documents unless you have searched for them with a tool."""
 
 
@@ -433,6 +437,7 @@ async def persist_assistant_message(
     content: str,
     model: str | None = None,
     tool_steps: list | None = None,
+    sources: list | None = None,
 ) -> ChatMessage:
     """Save the assistant message to DB only — no memory extraction or summarization."""
     # `model` is the already-resolved model id from the agent loop.
@@ -443,6 +448,7 @@ async def persist_assistant_message(
         content=content,
         model=model,
         tool_steps=tool_steps or None,
+        sources=sources or None,
     )
     thread.updated_at = datetime.now(UTC)
     db.commit()

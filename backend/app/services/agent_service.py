@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.orm import Session
 
 from app.dependencies import check_kb_read
-from app.models import User
+from app.models import Document, User
 from app.services.llm_service import get_llm
 from app.services.document_service import get_document_full_text
 from app.services.knowledge_bank_service import (
@@ -13,6 +13,40 @@ from app.services.knowledge_bank_service import (
 )
 from app.services.memory_service import list_memories
 from app.services.rag_service import search_documents
+
+class SourceRegistry:
+    """Numbers the sources a turn consults so the answer can cite them as [n] footnotes."""
+
+    def __init__(self) -> None:
+        self.sources: list[dict] = []
+        self._index: dict[tuple, int] = {}
+
+    def add(
+        self,
+        *,
+        kind: str,
+        id: str,
+        title: str,
+        locator: str | None = None,
+        matter_id: str | None = None,
+    ) -> int:
+        key = (kind, id, locator)
+        if key in self._index:
+            return self._index[key]
+        number = len(self.sources) + 1
+        self.sources.append(
+            {
+                "n": number,
+                "kind": kind,
+                "id": id,
+                "title": title,
+                "locator": locator,
+                "matter_id": matter_id,
+            }
+        )
+        self._index[key] = number
+        return number
+
 
 MAX_TOOL_ROUNDS = 4
 MAX_MEMORY_RESULTS = 6
@@ -118,8 +152,9 @@ async def _execute_tool(
     db: Session,
     user: User,
     matter_id: str | None,
+    registry: SourceRegistry,
 ) -> tuple[str, str]:
-    """Return (result_text_for_llm, short_summary_for_ui)."""
+    """Return (result_text_for_llm, short_summary_for_ui). Sources are numbered via `registry`."""
     if name == "search_documents":
         query = str(args.get("query", "")).strip()
         if not query:
@@ -132,10 +167,17 @@ async def _execute_tool(
             return f"Document search unavailable: {exc}", "search unavailable"
         if not results:
             return "No relevant document chunks found.", "no results"
-        parts = [
-            f"Source {i} — {r.citation_label}\n{r.text}"
-            for i, r in enumerate(results, start=1)
-        ]
+        parts = []
+        for r in results:
+            owner = db.get(Document, r.document_id)
+            number = registry.add(
+                kind="document",
+                id=r.document_id,
+                title=r.filename,
+                locator=f"p. {r.page_number}" if r.page_number else None,
+                matter_id=owner.matter_id if owner else None,
+            )
+            parts.append(f"[{number}] {r.citation_label}\n{r.text}")
         summary = f"{len(results)} chunk{'s' if len(results) != 1 else ''}"
         return "\n\n---\n\n".join(parts), summary
 
@@ -151,11 +193,20 @@ async def _execute_tool(
             return f"Knowledge bank search unavailable: {exc}", "search unavailable"
         if not entries:
             return "No relevant knowledge bank entries found.", "no results"
-        body = "\n\n---\n\n".join(
-            f"[KB:{e.id}] {e.title} ({e.entry_type}, {e.scope})\n"
-            f"{e.body_markdown[:MAX_KB_BODY_PREVIEW]}"
-            for e in entries
-        )
+        blocks = []
+        for e in entries:
+            number = registry.add(
+                kind="kb_entry",
+                id=e.id,
+                title=e.title,
+                locator=e.entry_type.replace("_", " "),
+                matter_id=e.matter_id,
+            )
+            blocks.append(
+                f"[{number}] {e.title} ({e.entry_type}, {e.scope}, entry_id: {e.id})\n"
+                f"{e.body_markdown[:MAX_KB_BODY_PREVIEW]}"
+            )
+        body = "\n\n---\n\n".join(blocks)
         summary = f"{len(entries)} KB entr{'ies' if len(entries) != 1 else 'y'}"
         return body, summary
 
@@ -185,7 +236,14 @@ async def _execute_tool(
                 f"You do not have access to entry '{entry_id}'.",
                 "access denied",
             )
-        header = f"# {entry.title}\nType: {entry.entry_type} | Scope: {entry.scope}"
+        number = registry.add(
+            kind="kb_entry",
+            id=entry.id,
+            title=entry.title,
+            locator=entry.entry_type.replace("_", " "),
+            matter_id=entry.matter_id,
+        )
+        header = f"[{number}] # {entry.title}\nType: {entry.entry_type} | Scope: {entry.scope}"
         if entry.source_document_id:
             header += f" | source_document_id: {entry.source_document_id}"
         body = f"{header}\n\n{entry.body_markdown}"
@@ -210,7 +268,13 @@ async def _execute_tool(
         summary = (
             f"read: {document.filename} ({len(full_text):,} chars)"
         )
-        body = f"# {document.filename}\n\n{full_text}"
+        number = registry.add(
+            kind="document",
+            id=document.id,
+            title=document.filename,
+            matter_id=document.matter_id,
+        )
+        body = f"[{number}] # {document.filename}\n\n{full_text}"
         return body, summary
 
     return f"Unknown tool: {name}", "unknown tool"
@@ -243,6 +307,7 @@ async def run_agent_loop(
       ("token",       {"content": str})
       ("tool_call",   {"step_id": str, "tool": str, "args": dict})
       ("tool_result", {"step_id": str, "tool": str, "summary": str})
+      ("sources",     {"sources": [{"n", "kind", "id", "title", "locator", "matter_id"}]})
 
     Loop design:
       - Up to MAX_TOOL_ROUNDS rounds of tool calls are allowed.
@@ -255,6 +320,7 @@ async def run_agent_loop(
     provider = get_llm(db, user.id, feature="lexchat", model=model)
     current_messages = list(messages)
     previous_fingerprints: set[str] = set()
+    registry = SourceRegistry()
 
     for round_num in range(MAX_TOOL_ROUNDS + 1):
         is_final_round = round_num == MAX_TOOL_ROUNDS
@@ -326,14 +392,17 @@ async def run_agent_loop(
 
             yield ("tool_call", {"step_id": step_id, "tool": name, "args": args})
 
+            known_sources = len(registry.sources)
             result_text, summary = await _execute_tool(
-                name, args, db=db, user=user, matter_id=matter_id,
+                name, args, db=db, user=user, matter_id=matter_id, registry=registry,
             )
 
             yield (
                 "tool_result",
                 {"step_id": step_id, "tool": name, "summary": summary},
             )
+            if len(registry.sources) != known_sources:
+                yield ("sources", {"sources": list(registry.sources)})
 
             current_messages.append({
                 "role": "tool",

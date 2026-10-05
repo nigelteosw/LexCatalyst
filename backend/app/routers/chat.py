@@ -100,6 +100,7 @@ async def chat_stream(
 
             chunks: list[str] = []
             tool_steps: list[dict] = []
+            sources: list[dict] = []
             active_matter_id = request.matter_id or thread.matter_id
 
             async for event_type, event_data in run_agent_loop(
@@ -119,6 +120,8 @@ async def chat_stream(
                         "summary": None,
                         "status": "running",
                     })
+                elif event_type == "sources":
+                    sources = event_data["sources"]
                 elif event_type == "tool_result":
                     for step in reversed(tool_steps):
                         if step["id"] == event_data["step_id"]:
@@ -141,6 +144,7 @@ async def chat_stream(
                 content=assistant_content,
                 model=selected_model,
                 tool_steps=tool_steps if tool_steps else None,
+                sources=sources or None,
             )
             yield event(
                 "done",

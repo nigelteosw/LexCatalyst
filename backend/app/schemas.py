@@ -49,6 +49,7 @@ class ChatMessageResponse(BaseModel):
     content: str
     model: str | None = None
     tool_steps: list | None = None
+    sources: list | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
