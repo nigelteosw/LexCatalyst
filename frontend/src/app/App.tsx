@@ -379,6 +379,16 @@ function App() {
               }
             : stream)
         },
+        onSources: (sources) => {
+          setActiveStream((stream) => stream
+            ? {
+                ...stream,
+                messages: stream.messages.map((message) =>
+                  message.id === assistantDraftId ? { ...message, sources } : message,
+                ),
+              }
+            : stream)
+        },
         onToken: (content) => {
           setActiveStream((stream) => stream
             ? {
@@ -400,6 +410,7 @@ function App() {
                     ? {
                         ...response.message,
                         steps: response.message.steps ?? message.steps,
+                        sources: response.message.sources ?? message.sources,
                       }
                     : message,
                 ),
@@ -583,7 +594,8 @@ function App() {
         userFullName={currentUser?.fullName ?? user?.fullName ?? ''}
         userInitials={userInitials}
         onLogout={handleLogout}
-        footerExtra={
+        userRole={(currentUser?.firmRole ?? user?.firmRole ?? '').replace('_', ' ')}
+        menuExtra={
           <DemoSwitcher
             currentUserId={currentUser?.id ?? user?.id ?? null}
             isAdmin={currentUser?.isAdmin ?? user?.isAdmin ?? false}
@@ -712,6 +724,7 @@ function App() {
               />
 
               <ChatPanel
+                matters={matters}
                 attachmentStatus={composerAttachmentStatus}
                 error={error ?? (workspaceError ? getErrorMessage(workspaceError) : null)}
                 inputLabel="Ask LexChat"

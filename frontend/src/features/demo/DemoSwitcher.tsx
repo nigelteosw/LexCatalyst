@@ -15,7 +15,7 @@ const roleLabels: Record<string, string> = {
   admin: 'Admin',
 }
 
-/** Sidebar-footer picker for demo mode. Renders nothing unless DEMO_MODE is on and the user is
+/** User-menu section for demo mode. Renders nothing unless DEMO_MODE is on and the user is
  *  the admin presenter (or is currently switched into a demo user). */
 export function DemoSwitcher({ isAdmin, currentUserId, onSwitch, onReturn }: DemoSwitcherProps) {
   const impersonating = isImpersonating()
@@ -33,10 +33,8 @@ export function DemoSwitcher({ isAdmin, currentUserId, onSwitch, onReturn }: Dem
   const users = usersQuery.data ?? []
 
   return (
-    <div className="shrink-0 border-t border-white/[0.08] px-2.5 py-2.5">
-      <div className="mb-1.5 px-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-white/40">
-        Demo · switch user
-      </div>
+    <div className="border-t border-white/[0.08] px-1.5 py-1.5">
+      <div className="mb-1 px-2 text-[10.5px] text-white/40">Switch user (demo)</div>
       <ul className="space-y-0.5" aria-label="Demo users">
         {impersonating && (
           <li>

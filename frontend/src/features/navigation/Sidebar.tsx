@@ -4,14 +4,13 @@ import {
   CheckSquare,
   ChevronsLeft,
   ChevronsRight,
+  ChevronsUpDown,
   FolderInput,
   HeartPulse,
   Home,
-  LogOut,
   MessageSquare,
   MoreHorizontal,
   Pencil,
-  Settings,
   Trash2,
   X,
 } from 'lucide-react'
@@ -43,7 +42,8 @@ export type SidebarProps = {
   onLogout: () => void
   userFullName: string
   userInitials: string
-  footerExtra?: ReactNode
+  userRole: string
+  menuExtra?: ReactNode
 }
 
 const COLLAPSED_WIDTH = 64
@@ -82,7 +82,8 @@ export function Sidebar({
   onLogout,
   userFullName,
   userInitials,
-  footerExtra,
+  userRole,
+  menuExtra,
 }: SidebarProps) {
   const {
     current,
@@ -101,6 +102,8 @@ export function Sidebar({
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
   const isCollapsed = collapsed && isDesktop
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const queryClient = useQueryClient()
 
   // Keep the Workboard badge aligned with the board: count tickets that are
@@ -151,6 +154,24 @@ export function Sidebar({
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
+
+  useEffect(() => {
+    if (!userMenuOpen) return
+    function onDocClick(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setUserMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [userMenuOpen])
 
   function toggleCollapsed() {
     setCollapsed((prev) => {
@@ -344,49 +365,102 @@ export function Sidebar({
             <div className="min-h-0 flex-1" />
           )}
 
-          {!isCollapsed && footerExtra}
-
-          {/* Sidebar Footer */}
+          {/* Sidebar Footer: user button opens the account menu */}
           <div
-            className={`flex shrink-0 border-t border-white/[0.08] py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] ${
-              isCollapsed ? 'flex-col items-center gap-2 px-2' : 'items-center gap-2 px-2.5'
-            }`}
+            ref={userMenuRef}
+            className="relative shrink-0 border-t border-white/[0.08] px-2 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
           >
+            {(
+              <div
+                aria-hidden={!userMenuOpen}
+                role="menu"
+                aria-label="Account menu"
+                className={`absolute bottom-full z-50 mb-1 origin-bottom overflow-hidden rounded-xl border border-white/10 bg-[#1a1a1a] py-1.5 shadow-xl transition-[opacity,transform,visibility] duration-150 ease-out motion-reduce:transition-none ${
+                  isCollapsed ? 'left-2 w-60' : 'inset-x-2'
+                } ${
+                  userMenuOpen
+                    ? 'visible translate-y-0 scale-100 opacity-100'
+                    : 'invisible translate-y-1 scale-95 opacity-0'
+                }`}
+              >
+                <div className="px-1.5">
+                  <UserMenuItem
+                    label="Profile settings"
+                    onClick={() => {
+                      setUserMenuOpen(false)
+                      selectSettings()
+                      closeMobile()
+                    }}
+                  />
+                  <UserMenuItem
+                    label="Wellbeing"
+                    onClick={() => {
+                      setUserMenuOpen(false)
+                      selectWellbeing()
+                      closeMobile()
+                    }}
+                  />
+                  <UserMenuItem
+                    label="Birdie"
+                    hint={
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${isBirdieOpen ? 'bg-[#2d9e6b]' : 'bg-white/25'}`}
+                        />
+                        {isBirdieOpen ? 'Open' : 'Closed'}
+                      </span>
+                    }
+                    onClick={() => {
+                      setUserMenuOpen(false)
+                      onBirdieToggle()
+                      closeMobile()
+                    }}
+                  />
+                </div>
+                {menuExtra}
+                <div className="mt-1 border-t border-white/[0.08] px-1.5 pt-1.5">
+                  <UserMenuItem
+                    label="Sign out"
+                    onClick={() => {
+                      setUserMenuOpen(false)
+                      onLogout()
+                    }}
+                  />
+                </div>
+              </div>
+            )}
             <button
-              className={`flex items-center gap-2 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
-                isCollapsed ? '' : 'min-w-0 flex-1'
+              aria-expanded={userMenuOpen}
+              aria-haspopup="menu"
+              aria-label="Account menu"
+              title={isCollapsed ? `${userFullName} · ${userRole}` : undefined}
+              className={`flex w-full items-center gap-2.5 rounded-lg border px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                isCollapsed ? 'justify-center px-0' : ''
+              } ${
+                userMenuOpen
+                  ? 'border-white/25 bg-white/[0.08]'
+                  : 'border-transparent hover:bg-white/[0.07]'
               }`}
-              aria-label="Profile settings"
-              title={isCollapsed ? `${userFullName} · Profile settings` : undefined}
-              onClick={() => {
-                selectSettings()
-                closeMobile()
-              }}
+              onClick={() => setUserMenuOpen((open) => !open)}
               type="button"
             >
-              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-[9px] font-semibold uppercase text-white">
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-[10px] font-semibold uppercase text-white">
                 {userInitials}
               </div>
               {!isCollapsed && (
                 <>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[11.5px] font-medium text-white/80">
-                      {userFullName}
-                    </div>
-                    <div className="truncate text-[9.5px] text-white/30">Profile settings</div>
+                    <div className="truncate text-[12px] font-medium text-white/85">{userFullName}</div>
+                    <div className="truncate text-[10.5px] capitalize text-white/40">{userRole}</div>
                   </div>
-                  <Settings size={14} className="shrink-0 text-white/35" />
+                  <ChevronsUpDown
+                    size={14}
+                    className={`shrink-0 text-white/35 transition-transform duration-150 motion-reduce:transition-none ${
+                      userMenuOpen ? 'scale-110 text-white/60' : ''
+                    }`}
+                  />
                 </>
               )}
-            </button>
-            <button
-              onClick={onLogout}
-              aria-label="Log out"
-              title="Log out"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/35 transition-colors hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-              type="button"
-            >
-              <LogOut size={14} />
             </button>
           </div>
         </div>
@@ -402,6 +476,28 @@ export function Sidebar({
         )}
       </aside>
     </>
+  )
+}
+
+function UserMenuItem({
+  label,
+  hint,
+  onClick,
+}: {
+  label: string
+  hint?: ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-[12.5px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      onClick={onClick}
+      role="menuitem"
+      type="button"
+    >
+      <span>{label}</span>
+      {hint && <span className="text-[11px] text-white/45">{hint}</span>}
+    </button>
   )
 }
 
