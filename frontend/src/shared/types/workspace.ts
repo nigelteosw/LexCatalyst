@@ -17,6 +17,7 @@ export type Message = {
 export type ChatThread = {
   id: string
   title: string
+  matterId: string | null
   createdAt: string
   updatedAt: string
 }

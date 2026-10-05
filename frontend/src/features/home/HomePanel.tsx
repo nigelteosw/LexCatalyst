@@ -250,7 +250,7 @@ function DocsStat({ onClick }: { onClick: () => void }) {
 // ---------------------------------------------------------------------------
 
 function RecentThreadsSection({ onClick }: { onClick: (threadId: string) => void }) {
-  const q = useQuery({ queryKey: ['threads'], queryFn: listChatThreads, staleTime: 30_000 })
+  const q = useQuery({ queryKey: ['threads', 'all'], queryFn: () => listChatThreads(), staleTime: 30_000 })
   const threads = (q.data ?? []).slice(0, 8)
 
   return (

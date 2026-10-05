@@ -125,8 +125,8 @@ function App() {
 
   // Server state — threads and messages via TanStack Query
   const threadsQuery = useQuery({
-    queryKey: ['threads'],
-    queryFn: listChatThreads,
+    queryKey: ['threads', 'all'],
+    queryFn: () => listChatThreads(),
     enabled: isAuthenticated,
   })
   const threads = useMemo(() => threadsQuery.data ?? [], [threadsQuery.data])
@@ -320,10 +320,10 @@ function App() {
         signal: controller.signal,
         threadId,
         onThread: (tid, title) => {
-          queryClient.setQueryData(['threads'], (old: ChatThread[] = []) => {
+          queryClient.setQueryData(['threads', 'all'], (old: ChatThread[] = []) => {
             if (old.some((t) => t.id === tid)) return old
             return [
-              { id: tid, title, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+              { id: tid, title, matterId: selectedMatterId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
               ...old,
             ]
           })

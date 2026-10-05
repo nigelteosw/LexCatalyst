@@ -50,6 +50,7 @@ const UNAUTHORIZED_EVENT = 'lexcatalyst:unauthorized'
 type BackendThread = {
   id: string
   title: string
+  matter_id: string | null
   created_at: string
   updated_at: string
 }
@@ -314,6 +315,7 @@ function mapThread(thread: BackendThread): ChatThread {
   return {
     id: thread.id,
     title: thread.title,
+    matterId: thread.matter_id ?? null,
     createdAt: thread.created_at,
     updatedAt: thread.updated_at,
   }
@@ -506,9 +508,21 @@ function mapWikiPageSource(source: BackendWikiPageSource): WikiPageSource {
   }
 }
 
-export async function listChatThreads(): Promise<ChatThread[]> {
-  const threads = await request<BackendThread[]>('/chat/threads')
+/** 'all' = every thread, 'general' = no matter, otherwise a matter id. */
+export type ThreadScope = string
+
+export async function listChatThreads(scope: ThreadScope = 'all'): Promise<ChatThread[]> {
+  const query = scope === 'all' ? '' : `?matter_id=${encodeURIComponent(scope)}`
+  const threads = await request<BackendThread[]>(`/chat/threads${query}`)
   return threads.map(mapThread)
+}
+
+export async function moveChatThread(threadId: string, matterId: string | null): Promise<ChatThread> {
+  const thread = await request<BackendThread>(`/chat/threads/${threadId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ matter_id: matterId }),
+  })
+  return mapThread(thread)
 }
 
 export async function listThreadMessages(threadId: string): Promise<Message[]> {
@@ -574,6 +588,15 @@ export async function renameDocument(id: string, filename: string): Promise<Work
     await request<BackendDocument>(`/documents/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ filename }),
+    }),
+  )
+}
+
+export async function moveDocument(id: string, matterId: string | null): Promise<WorkspaceDocument> {
+  return mapDocument(
+    await request<BackendDocument>(`/documents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ matter_id: matterId }),
     }),
   )
 }
@@ -828,6 +851,24 @@ export async function createMatter(payload: {
     }),
   })
   return mapMatter(matter)
+}
+
+export async function updateMatter(
+  id: string,
+  patch: { title?: string; caseNumber?: string; clientName?: string | null; status?: Matter['status'] },
+): Promise<Matter> {
+  const body: Record<string, unknown> = {}
+  if (patch.title !== undefined) body.title = patch.title
+  if (patch.caseNumber !== undefined) body.case_number = patch.caseNumber
+  if (patch.clientName !== undefined) body.client_name = patch.clientName
+  if (patch.status !== undefined) body.status = patch.status
+  return mapMatter(
+    await request<BackendMatter>(`/matters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  )
+}
+
+export async function deleteMatter(id: string): Promise<void> {
+  await request<void>(`/matters/${id}`, { method: 'DELETE' })
 }
 
 export async function listKnowledgeBankEntryPage(params?: {
