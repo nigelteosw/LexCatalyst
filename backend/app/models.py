@@ -1254,3 +1254,47 @@ class UserSetting(Base):
     @openrouter_api_key.setter
     def openrouter_api_key(self, value: str | None) -> None:
         self._openrouter_api_key = encrypt_text(value)
+
+
+class BirdieConversation(Base):
+    __tablename__ = "birdie_conversations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Matter deletion removes confidential history rather than moving it into General.
+    matter_id: Mapped[str | None] = mapped_column(ForeignKey("matters.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200), default="New Birdie conversation")
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class BirdieTurn(Base):
+    __tablename__ = "birdie_turns"
+    __table_args__ = (UniqueConstraint("conversation_id", "request_id", name="uq_birdie_turn_request"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("birdie_conversations.id", ondelete="CASCADE"), index=True)
+    request_id: Mapped[str] = mapped_column(String(80))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    message: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text, default="")
+    mode: Mapped[str] = mapped_column(String(20))
+    model: Mapped[str | None] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    error: Mapped[str | None] = mapped_column(Text)
+    context: Mapped[list] = mapped_column(JSON, default=list)
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    attempt: Mapped[str] = mapped_column(String(36), default=new_uuid)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BirdiePreference(Base):
+    __tablename__ = "birdie_preferences"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    disabled_memory_ids: Mapped[list] = mapped_column(JSON, default=list)
+    # Separate user-approved interpretations; never overwrite original reviewer feedback or lessons.
+    lesson_overrides: Mapped[dict] = mapped_column(JSON, default=dict)
