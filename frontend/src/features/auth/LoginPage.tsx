@@ -43,10 +43,8 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
       {/* Brand panel */}
       <div className="pearl-black flex flex-1 flex-col justify-between px-8 py-10 text-white lg:px-16 lg:py-14">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-8 w-8 place-items-center rounded-lg border border-white/20 font-serif text-lg italic">
-            L
-          </div>
-          <span className="font-serif text-xl italic tracking-tight">LexCatalyst</span>
+          <img alt="" className="h-8 w-8 rounded-lg" src="/favicon.svg" />
+          <span className="text-xl font-semibold tracking-tight">LexCatalyst</span>
         </div>
 
         <div className="my-12 max-w-xl lg:my-0">

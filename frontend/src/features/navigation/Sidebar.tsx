@@ -194,10 +194,8 @@ export function Sidebar({
                 onClick={() => { selectHome(); onClose() }}
                 type="button"
               >
-                <span className="grid h-[30px] w-[30px] place-items-center rounded-lg border border-white/[0.18] font-serif text-[15px] italic">
-                  L
-                </span>
-                <span className="font-serif text-base italic tracking-[-0.01em]">
+                <img alt="" className="h-[30px] w-[30px] rounded-lg" src="/favicon.svg" />
+                <span className="text-[15px] font-semibold tracking-[-0.02em]">
                   LexCatalyst
                 </span>
               </button>
