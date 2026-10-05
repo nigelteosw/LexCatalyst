@@ -152,7 +152,7 @@ export function ChatPanel({
   }, [prompt])
 
   return (
-    <section aria-label="LexChat" className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+    <section aria-label="LexChat" className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface">
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -234,7 +234,7 @@ export function ChatPanel({
         </div>
       )}
 
-      <div className="shrink-0 border-t border-neutral-100 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6 lg:pb-8">
+      <div className="shrink-0 border-t border-neutral-200/70 bg-surface/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6 lg:pb-8">
         <form
           className="mx-auto max-w-3xl"
           onSubmit={onSubmit}
@@ -313,7 +313,7 @@ export function ChatPanel({
                 ) : (
                   <Button
                     aria-label={sendLabel}
-                    className="bg-[#16224f] px-5 hover:bg-[#1f2f6b]"
+                    className="px-5"
                     disabled={!canSubmit}
                     type="submit"
                     variant="primary"
@@ -398,7 +398,7 @@ function ChatMessage({ matters, message, openSourceN, onOpenSource, userInitials
         <div className="flex items-center gap-4 rounded-xl bg-neutral-100 px-5 py-4">
           <span
             aria-hidden="true"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#16224f] text-xs font-semibold text-white"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-white"
           >
             {userInitials}
           </span>
@@ -484,7 +484,7 @@ function SourceList({
               onClick={() => onOpen(source.n)}
               type="button"
             >
-              <span className="w-3 shrink-0 text-sm font-semibold text-[#16224f]">{source.n}</span>
+              <span className="w-3 shrink-0 text-sm font-semibold text-accent">{source.n}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[15px] font-medium text-neutral-900">{source.title}</span>
                 <span className="block truncate text-sm text-neutral-500">{describeSource(source, matters)}</span>

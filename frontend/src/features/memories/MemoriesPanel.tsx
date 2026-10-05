@@ -193,7 +193,7 @@ export function MemoriesPanel() {
   ]
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white lg:my-2 lg:mr-2 lg:rounded-tl-2xl lg:border-l lg:border-t lg:border-neutral-200 lg:shadow-sm">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface lg:my-2 lg:mr-2 lg:rounded-tl-2xl lg:border-l lg:border-t lg:border-neutral-200 lg:shadow-sm">
       <PanelHeader
         actions={
           <>

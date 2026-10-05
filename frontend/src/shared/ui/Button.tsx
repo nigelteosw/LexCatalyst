@@ -13,7 +13,7 @@ const baseClasses =
   'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400'
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-neutral-950 text-white hover:bg-neutral-800',
+  primary: 'bg-accent text-white hover:bg-accent-hover',
   secondary: 'bg-transparent text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950',
   ghost: 'bg-transparent text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950',
   danger: 'bg-transparent text-red-700 hover:bg-red-50 hover:text-red-800',

@@ -25,7 +25,7 @@ export function HomePanel({ currentUser, onMatterChange }: Props) {
   const name = currentUser?.fullName ?? currentUser?.email?.split('@')[0] ?? 'Welcome'
 
   return (
-    <div className="app-scroll-region h-full overflow-y-auto bg-[#fafaf8] px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
+    <div className="app-scroll-region h-full overflow-y-auto bg-surface px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
       <div className="mx-auto max-w-5xl">
         <p className="mb-3 text-sm text-neutral-500">
           {getGreeting()} · {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}

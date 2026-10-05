@@ -16,7 +16,7 @@ export function ChatHeader({
   actions?: ReactNode
 }) {
   return (
-    <header className="z-30 flex shrink-0 items-start justify-between gap-3 bg-white px-4 pb-3 pt-4 lg:px-8">
+    <header className="z-30 flex shrink-0 items-start justify-between gap-3 bg-surface px-4 pb-3 pt-4 lg:px-8">
       <div className="flex min-w-0 flex-1 items-start gap-2">
         {leading}
         <div className="min-w-0">

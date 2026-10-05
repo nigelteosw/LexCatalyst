@@ -572,7 +572,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-dvh min-h-0 w-full overflow-hidden overscroll-none bg-[#fcfcfb] text-neutral-900">
+    <div className="flex h-dvh min-h-0 w-full overflow-hidden overscroll-none bg-surface text-neutral-900">
       <Sidebar
         isOpen={isSidebarOpen}
         isBirdieOpen={isBirdieOpen}
@@ -609,7 +609,7 @@ function App() {
         />
       </Suspense>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white lg:border-l lg:border-neutral-200 lg:shadow-sm">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface lg:border-l lg:border-neutral-200 lg:shadow-sm">
         {isImpersonating() && (
           <DemoBar
             name={currentUser?.fullName ?? user?.fullName ?? 'demo user'}

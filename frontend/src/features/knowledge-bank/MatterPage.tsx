@@ -161,7 +161,7 @@ export function MatterPage({
     'h-10 rounded-lg border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-60'
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 bg-surface">
       <main className="min-w-0 flex-1 overflow-y-auto px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
         <div className="mx-auto max-w-5xl">
           <nav aria-label="Breadcrumb" className="mb-4 text-sm text-neutral-500">
@@ -201,7 +201,7 @@ export function MatterPage({
               {upload.isPending ? 'Uploading…' : 'Upload'}
             </button>
             <button
-              className="h-10 rounded-lg bg-[#1e3a8a] px-4 text-sm font-medium text-white transition-colors hover:bg-[#172e6e]"
+              className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
               onClick={() => {
                 onMatterChange(matterKey)
                 startNewChat()

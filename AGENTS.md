@@ -265,6 +265,8 @@ Everything is grouped by matter: documents, Knowledge Bank entries, LexChats and
 
 This is an operational legal workspace, not a marketing site.
 
+Keep the look consistent: every page sits on `bg-surface` (#fafaf8), the brand colour is `bg-accent` / `text-accent` (#1e3a8a), page titles are serif (`font-serif`, 4xl for full pages, 2xl in `PanelHeader`), and body text is the default sans. These are theme tokens in `frontend/src/index.css`; use them instead of hard-coded hex values.
+
 Use dense, readable UI for repeated work:
 
 - chat as the primary workflow

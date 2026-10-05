@@ -3,6 +3,10 @@
 @theme {
   --font-sans: "Inter", "Aptos", "Helvetica Neue", Helvetica, sans-serif;
   --font-serif: "Playfair Display", Georgia, serif;
+  /* Page surface and brand accent: use these instead of hard-coded hex values. */
+  --color-surface: #fafaf8;
+  --color-accent: #1e3a8a;
+  --color-accent-hover: #172e6e;
 }
 
 * {
@@ -11,7 +15,7 @@
 
 :root {
   color: #171717;
-  background: #fcfcfb;
+  background: #fafaf8;
   font-family:
     "Inter", Aptos, "Helvetica Neue", Helvetica, sans-serif;
   font-synthesis: none;
@@ -32,7 +36,7 @@ body,
 
 html {
   min-width: 320px;
-  background: #fcfcfb;
+  background: #fafaf8;
   overscroll-behavior: none;
 }
 

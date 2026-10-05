@@ -162,7 +162,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
   return (
     <section
       aria-label={`Review ${document.filename}`}
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-white"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-surface"
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3 sm:px-5">
         <Button onClick={onClose} size="sm" variant="ghost">

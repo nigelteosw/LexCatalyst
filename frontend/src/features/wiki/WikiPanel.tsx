@@ -179,7 +179,7 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <PanelHeader
         actions={
           <>

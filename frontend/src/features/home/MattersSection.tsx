@@ -153,7 +153,7 @@ export function MattersSection({
           )}
           {canCreate && (
             <button
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#1e3a8a] px-3.5 text-sm font-medium text-white transition-colors hover:bg-[#172e6e]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
               onClick={() => {
                 saveMutation.reset()
                 setDraft(emptyDraft)
