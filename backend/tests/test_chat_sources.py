@@ -29,8 +29,19 @@ class SourceRegistryTests(unittest.TestCase):
 
     def test_sources_are_json_ready(self) -> None:
         reg = SourceRegistry()
-        reg.add(kind="document", id="d1", title="MSA.pdf", locator=None, matter_id="m1")
+        reg.add(
+            kind="document", id="d1", title="MSA.pdf", locator="p. 2", matter_id="m1",
+            scope="matter", excerpt="9.3 The Processor shall indemnify.",
+        )
         self.assertEqual(
             reg.sources[0],
-            {"n": 1, "kind": "document", "id": "d1", "title": "MSA.pdf", "locator": None, "matter_id": "m1"},
+            {
+                "n": 1, "kind": "document", "id": "d1", "title": "MSA.pdf", "locator": "p. 2",
+                "matter_id": "m1", "scope": "matter", "excerpt": "9.3 The Processor shall indemnify.",
+            },
         )
+
+    def test_excerpt_is_capped(self) -> None:
+        reg = SourceRegistry()
+        reg.add(kind="kb_entry", id="k", title="T", excerpt="x" * 5000)
+        self.assertLessEqual(len(reg.sources[0]["excerpt"]), 1500)

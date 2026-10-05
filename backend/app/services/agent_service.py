@@ -29,6 +29,8 @@ class SourceRegistry:
         title: str,
         locator: str | None = None,
         matter_id: str | None = None,
+        scope: str | None = None,
+        excerpt: str | None = None,
     ) -> int:
         key = (kind, id, locator)
         if key in self._index:
@@ -42,6 +44,9 @@ class SourceRegistry:
                 "title": title,
                 "locator": locator,
                 "matter_id": matter_id,
+                "scope": scope,
+                # The passage the answer relied on, shown in the source panel.
+                "excerpt": excerpt[:MAX_EXCERPT_CHARS] if excerpt else None,
             }
         )
         self._index[key] = number
@@ -51,6 +56,7 @@ class SourceRegistry:
 MAX_TOOL_ROUNDS = 4
 MAX_MEMORY_RESULTS = 6
 MAX_KB_BODY_PREVIEW = 2000
+MAX_EXCERPT_CHARS = 1500
 
 TOOLS: list[dict] = [
     {
@@ -176,6 +182,8 @@ async def _execute_tool(
                 title=r.filename,
                 locator=f"p. {r.page_number}" if r.page_number else None,
                 matter_id=owner.matter_id if owner else None,
+                scope="matter" if owner and owner.matter_id else "private",
+                excerpt=r.text,
             )
             parts.append(f"[{number}] {r.citation_label}\n{r.text}")
         summary = f"{len(results)} chunk{'s' if len(results) != 1 else ''}"
@@ -201,6 +209,8 @@ async def _execute_tool(
                 title=e.title,
                 locator=e.entry_type.replace("_", " "),
                 matter_id=e.matter_id,
+                scope=e.scope,
+                excerpt=e.body_markdown,
             )
             blocks.append(
                 f"[{number}] {e.title} ({e.entry_type}, {e.scope}, entry_id: {e.id})\n"
@@ -242,6 +252,8 @@ async def _execute_tool(
             title=entry.title,
             locator=entry.entry_type.replace("_", " "),
             matter_id=entry.matter_id,
+            scope=entry.scope,
+            excerpt=entry.body_markdown,
         )
         header = f"[{number}] # {entry.title}\nType: {entry.entry_type} | Scope: {entry.scope}"
         if entry.source_document_id:
@@ -273,6 +285,7 @@ async def _execute_tool(
             id=document.id,
             title=document.filename,
             matter_id=document.matter_id,
+            scope="matter" if document.matter_id else "private",
         )
         body = f"[{number}] # {document.filename}\n\n{full_text}"
         return body, summary
@@ -307,7 +320,7 @@ async def run_agent_loop(
       ("token",       {"content": str})
       ("tool_call",   {"step_id": str, "tool": str, "args": dict})
       ("tool_result", {"step_id": str, "tool": str, "summary": str})
-      ("sources",     {"sources": [{"n", "kind", "id", "title", "locator", "matter_id"}]})
+      ("sources",     {"sources": [{"n", "kind", "id", "title", "locator", "matter_id", "scope", "excerpt"}]})
 
     Loop design:
       - Up to MAX_TOOL_ROUNDS rounds of tool calls are allowed.
