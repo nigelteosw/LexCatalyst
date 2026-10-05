@@ -7,7 +7,7 @@
   "action": { "default_title": "Open Birdie" },
   "side_panel": { "default_path": "sidepanel.html" },
   "background": { "service_worker": "background.js", "type": "module" },
-  "permissions": ["sidePanel", "contextMenus", "scripting", "storage", "identity"],
+  "permissions": ["sidePanel", "contextMenus", "scripting", "storage", "identity", "tabs"],
   "host_permissions": [
     "https://lexcatalyst-production.up.railway.app/*",
     "http://127.0.0.1:8000/*"
