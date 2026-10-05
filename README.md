@@ -226,6 +226,8 @@ Birdie only reads sites you turn on ("Turn on Birdie for this site", which grant
 
 `VITE_APP_URL` (default `https://lexcatalyst.pages.dev`) sets where "Open" links to documents point.
 
+**Releases:** every push to `main` that changes `extension/` runs `.github/workflows/extension-release.yml`: it runs the tests, bumps the patch version in `extension/package.json` and `extension/public/manifest.json` (`node extension/scripts/bump-version.mjs`), builds against the production API, commits `chore(extension): release vX.Y.Z [skip ci]`, tags `extension-vX.Y.Z`, and publishes `birdie-extension-X.Y.Z.zip` as a GitHub Release. Set the repository variable `VITE_GOOGLE_CLIENT_ID` (Settings → Secrets and variables → Actions → Variables) once. For a minor or major bump, edit both version fields by hand in your PR. Do not bump versions by hand otherwise; CI owns the patch number.
+
 ---
 
 ## Environment Variables
