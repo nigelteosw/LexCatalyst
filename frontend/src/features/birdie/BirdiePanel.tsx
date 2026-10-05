@@ -608,6 +608,7 @@ function KBEntryCard({ entry }: { entry: KnowledgeBankEntry }) {
 type BirdieMsg = { id: string; role: 'user' | 'assistant'; body: string }
 
 const STARTERS = [
+  'Show my Workboard progress for this matter.',
   'How do I raise a workload concern with my supervisor?',
   'What does reasonable endeavours actually require?',
   'How can I handle feedback I disagree with?',
@@ -733,7 +734,7 @@ function AskTab({
     <div className="flex h-full flex-col">
       <div
         ref={scrollContainerRef}
-        className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-3"
+        className="app-scroll-region min-h-0 flex-1 select-text overflow-y-auto p-3"
       >
         {messages.length === 0 ? (
           <div className="space-y-2">
@@ -784,6 +785,7 @@ function AskTab({
       </div>
 
       <div className="shrink-0 border-t border-black/10 bg-white p-2">
+        <p className="mb-1.5 text-[10px] leading-4 text-[#76766f]">Shared text and your ticket data go to OpenRouter and your chosen model provider.</p>
         <div className="flex items-end gap-1.5 rounded-[10px] border border-black/15 bg-[#f4f3ef] p-1.5 pl-3 focus-within:border-black/30 focus-within:bg-white">
           <textarea
             ref={textareaRef}

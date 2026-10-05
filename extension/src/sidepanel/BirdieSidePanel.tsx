@@ -279,7 +279,7 @@ export function BirdieSidePanel() {
           <p className="text-[11px] text-stone-500">
             {needsKey
               ? 'Add your OpenRouter key in the LexCatalyst web app (Settings → Models) to use Birdie.'
-              : `Text you share is sent to OpenRouter and the model provider you choose${llm?.keySource === 'demo' ? ' (demo key in use)' : ''}.`}{' '}
+              : `Text you share and your Workboard ticket data are sent to OpenRouter and the model provider you choose${llm?.keySource === 'demo' ? ' (demo key in use)' : ''}.`}{' '}
             Case searches send only a short phrase to eLitigation.
           </p>
           {llm && (
