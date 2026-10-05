@@ -702,18 +702,14 @@ Also: wrap `PanelErrorBoundary`/the panel `key` so switching sections doesn't re
   - `updateMatter(id, patch: { title?; caseNumber?; clientName?; status? }): Promise<Matter>`
   - `deleteMatter(id: string): Promise<void>`
   - `moveDocument(id: string, matterId: string | null): Promise<WorkspaceDocument>`
-  - `threadScopeKey(matterId: string | null): string` (returns `matterId ?? 'general'`)
 
 - [ ] **Step 1: Types** — add `matterId: string | null` to `ChatThread`. Add `matter_id: string | null` to `BackendThread` and `matterId: thread.matter_id ?? null` to `mapThread`. Fix the optimistic thread in `App.tsx:323` to include `matterId: selectedMatterId`.
 
 - [ ] **Step 2: Functions**
 
 ```ts
+/** 'all' = every thread, 'general' = no matter, otherwise a matter id. */
 export type ThreadScope = string
-
-export function threadScopeKey(matterId: string | null): ThreadScope {
-  return matterId ?? 'general'
-}
 
 export async function listChatThreads(scope: ThreadScope = 'all'): Promise<ChatThread[]> {
   const query = scope === 'all' ? '' : `?matter_id=${encodeURIComponent(scope)}`
