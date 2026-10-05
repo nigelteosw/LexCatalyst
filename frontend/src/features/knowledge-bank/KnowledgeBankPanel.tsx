@@ -431,29 +431,18 @@ export function KnowledgeBankPanel({
         {!isListView && (
         <div className="flex border-b border-black/10 bg-white px-4 lg:px-5">
           <button
-            className={`border-b-2 px-3 py-2.5 text-xs ${
-              activeTab === 'library'
-                ? 'border-[#0f0f0f] font-medium text-[#0f0f0f]'
-                : 'border-transparent text-[#76766f]'
-            }`}
+            className="border-b-2 border-transparent px-3 py-2.5 text-xs text-[#76766f]"
             onClick={() => setActiveTab('library')}
             type="button"
           >
             Library
           </button>
-          {canViewAudit && (
-            <button
-              className={`border-b-2 px-3 py-2.5 text-xs ${
-                activeTab === 'audit'
-                  ? 'border-[#0f0f0f] font-medium text-[#0f0f0f]'
-                  : 'border-transparent text-[#76766f]'
-              }`}
-              onClick={() => setActiveTab('audit')}
-              type="button"
-            >
-              Audit log
-            </button>
-          )}
+          <button
+            className="border-b-2 border-[#0f0f0f] px-3 py-2.5 text-xs font-medium text-[#0f0f0f]"
+            type="button"
+          >
+            Audit log
+          </button>
         </div>
         )}
 
