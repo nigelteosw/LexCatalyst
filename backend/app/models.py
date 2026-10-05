@@ -206,6 +206,8 @@ class Document(Base):
         index=True,
         nullable=True,
     )
+    # "executed" (signed) or "draft"; None when unknown. Precedent ranks executed first.
+    execution_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     processing_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -668,6 +670,27 @@ class KnowledgeBankAccessLog(Base):
 
     entry: Mapped[KnowledgeBankEntry | None] = relationship()
     user: Mapped[User] = relationship()
+
+
+class RetrievalAuditEvent(Base):
+    """Who searched what, and which sources came back (precedent and eLitigation lookups)."""
+
+    __tablename__ = "retrieval_audit_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    returned_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class ResourceMetadata(Base):
