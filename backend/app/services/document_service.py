@@ -467,13 +467,16 @@ def get_document_full_text(
     return document, body
 
 
-def rename_user_document(
+def update_user_document(
     db: Session,
     *,
     user_id: str,
     document_id: str,
-    filename: str,
+    filename: str | None,
+    matter_id: str | None,
+    set_matter: bool,
 ) -> Document | None:
+    """Rename and/or move a document. matter_id=None with set_matter moves it to General."""
     document = db.scalar(
         select(Document).where(
             Document.id == document_id,
@@ -483,32 +486,36 @@ def rename_user_document(
     if not document:
         return None
 
-    requested_name = Path(filename).name.strip()
-    if not requested_name:
-        raise ValueError("Filename is required")
+    requested_name: str | None = None
+    if filename is not None:
+        requested_name = Path(filename).name.strip()
+        if not requested_name:
+            raise ValueError("Filename is required")
 
-    current_suffix = Path(document.filename).suffix.lower()
-    requested_suffix = Path(requested_name).suffix.lower()
-    if not requested_suffix:
-        requested_name = f"{requested_name}{current_suffix}"
-    elif current_suffix and requested_suffix != current_suffix:
-        raise ValueError(f"Filename must keep the {current_suffix} extension")
-    if len(requested_name) > 255:
-        raise ValueError("Filename must be 255 characters or fewer")
+        current_suffix = Path(document.filename).suffix.lower()
+        requested_suffix = Path(requested_name).suffix.lower()
+        if not requested_suffix:
+            requested_name = f"{requested_name}{current_suffix}"
+        elif current_suffix and requested_suffix != current_suffix:
+            raise ValueError(f"Filename must keep the {current_suffix} extension")
+        if len(requested_name) > 255:
+            raise ValueError("Filename must be 255 characters or fewer")
 
-    document.filename = requested_name
+        document.filename = requested_name
+        chunks = list(
+            db.scalars(
+                select(DocumentChunk).where(DocumentChunk.document_id == document.id)
+            )
+        )
+        for chunk in chunks:
+            chunk.citation_label = make_citation_label(
+                requested_name,
+                chunk.page_number,
+                chunk.chunk_index,
+            )
+    if set_matter:
+        document.matter_id = matter_id
     document.updated_at = datetime.now(UTC)
-    chunks = list(
-        db.scalars(
-            select(DocumentChunk).where(DocumentChunk.document_id == document.id)
-        )
-    )
-    for chunk in chunks:
-        chunk.citation_label = make_citation_label(
-            requested_name,
-            chunk.page_number,
-            chunk.chunk_index,
-        )
     db.commit()
     db.refresh(document)
     sync_metadata_safe(db, sync_document_metadata, document)

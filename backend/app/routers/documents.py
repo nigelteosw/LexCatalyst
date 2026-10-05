@@ -18,7 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import authenticate_user_token, get_current_user
+from app.dependencies import authenticate_user_token, get_current_user, require_matter_member
 from app.models import Document, User
 from app.schemas import (
     DocumentCommentCreate,
@@ -40,7 +40,7 @@ from app.services.document_service import (
     delete_user_document,
     get_user_document,
     list_user_documents,
-    rename_user_document,
+    update_user_document,
 )
 from app.services.ingestion_service import UnsupportedDocumentError
 from app.services.review_handoff_service import can_view_handoff_document
@@ -203,12 +203,17 @@ def rename_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DocumentResponse:
+    set_matter = "matter_id" in schema.model_fields_set
+    if set_matter and schema.matter_id:
+        require_matter_member(db, current_user, schema.matter_id)
     try:
-        document = rename_user_document(
+        document = update_user_document(
             db,
             user_id=current_user.id,
             document_id=document_id,
             filename=schema.filename,
+            matter_id=schema.matter_id,
+            set_matter=set_matter,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

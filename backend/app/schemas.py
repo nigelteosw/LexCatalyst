@@ -94,7 +94,10 @@ class DocumentResponse(BaseModel):
 
 
 class DocumentUpdate(BaseModel):
-    filename: str = Field(min_length=1, max_length=255)
+    """Omitted fields are unchanged. matter_id=null moves the document to General."""
+
+    filename: str | None = Field(default=None, min_length=1, max_length=255)
+    matter_id: str | None = None
 
 
 class ResourceMetadataResponse(BaseModel):

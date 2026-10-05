@@ -64,3 +64,22 @@ class ThreadScopingTests(unittest.TestCase):
         update_thread(db, user_id="u-1", thread_id="t-1", title=None, matter_id=None, set_matter=True)
         self.assertIsNone(thread.matter_id)
         self.assertEqual(thread.title, "Old")
+
+
+from unittest.mock import patch
+
+from app.services.document_service import update_user_document
+
+
+class DocumentReassignTests(unittest.TestCase):
+    def test_moves_document_and_resyncs_metadata(self) -> None:
+        db = MagicMock()
+        document = SimpleNamespace(id="d-1", filename="a.pdf", matter_id="m-1", user_id="u-1", updated_at=None)
+        db.scalar.return_value = document
+        with patch("app.services.document_service.sync_metadata_safe") as sync:
+            update_user_document(
+                db, user_id="u-1", document_id="d-1", filename=None, matter_id="m-2", set_matter=True,
+            )
+        self.assertEqual(document.matter_id, "m-2")
+        self.assertEqual(document.filename, "a.pdf")
+        sync.assert_called_once()

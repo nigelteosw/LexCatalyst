@@ -451,7 +451,10 @@ Knowledge and document records are unaffected.
 
 Authenticated document review routes:
 
-- `PATCH /documents/{id}` renames an uploaded document; uploader only.
+- `PATCH /documents/{id}` renames and/or moves an uploaded document (`{filename?, matter_id?}`; `matter_id: null` moves it to General); uploader only, and the target matter must be one the caller belongs to.
+- `DELETE /matters/{id}` hard-deletes a matter (partner/admin). Its chats, documents and wiki pages move to General; matter-scoped Knowledge Bank entries become private.
+- `GET /chat/threads?matter_id=<id|general>` lists the caller's threads for one matter (members only) or for General; omit it for all threads.
+- `PATCH /chat/threads/{id}` renames and/or moves a thread (`{title?, matter_id?}`; `matter_id: null` moves it to General); owner only.
 - `GET /documents/{id}/file` serves the original file inline. It accepts the normal Bearer header or the JWT `token` query parameter used by the PDF iframe.
 - `GET|POST /documents/{id}/comments` lists or creates comments for the uploader or a member of the document's matter.
 - `DELETE /documents/comments/{comment_id}` is restricted to the author or a partner/admin who can access the matter document.
