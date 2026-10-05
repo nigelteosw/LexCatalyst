@@ -218,7 +218,7 @@ export function Sidebar({
     queryClient.prefetchQuery({ queryKey: ['actions'], queryFn: listActionItems })
   }
 
-  const kbActive = ['knowledge_bank', 'documents', 'matters', 'matter'].includes(current.view)
+  const kbActive = current.view === 'knowledge_bank'
 
   return (
     <>
@@ -287,7 +287,7 @@ export function Sidebar({
             aria-label="Workspace"
             className="flex flex-col gap-0.5 border-b border-white/[0.08] px-1.5 py-2"
           >
-            <NavItem icon={Home} label="Home" collapsed={isCollapsed} active={current.view === 'home'}
+            <NavItem icon={Home} label="Home" collapsed={isCollapsed} active={current.view === 'home' || current.view === 'matter' || current.view === 'documents'}
               onClick={() => { selectHome(); closeMobile() }} />
             <NavItem icon={MessageSquare} label="LexChat" collapsed={isCollapsed} active={current.view === 'chat'}
               onClick={() => { onNewChat(); closeMobile() }} />

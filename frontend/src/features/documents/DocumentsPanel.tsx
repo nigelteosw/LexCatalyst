@@ -11,15 +11,15 @@ import { DocumentDrawer } from './DocumentDrawer'
  * uploaded and organised on their matter's page, so this route only opens the drawer.
  */
 export function DocumentsPanel({ currentUser }: { currentUser: CurrentUser | null }) {
-  const { current, selectMatter, selectMatters } = useWorkspaceNavigation()
+  const { current, selectMatter, selectHome } = useWorkspaceNavigation()
   const documentId = current.view === 'documents' ? current.documentId : null
   const documentsQuery = useQuery({ queryKey: ['documents'], queryFn: listDocuments })
   const document = documentsQuery.data?.find((d) => d.id === documentId) ?? null
 
-  // /knowledge/documents with no id used to be the list; send people to the matters instead.
+  // /knowledge/documents with no id used to be the list; documents now live on their matter's page.
   useEffect(() => {
-    if (!documentId) selectMatters({ replace: true })
-  }, [documentId, selectMatters])
+    if (!documentId) selectHome({ replace: true })
+  }, [documentId, selectHome])
 
   if (!document) {
     return (

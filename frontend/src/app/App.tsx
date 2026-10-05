@@ -6,7 +6,6 @@ import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
 import { ChatHeader } from '../features/chat/ChatHeader'
 import { MatterChip } from '../features/chat/MatterChip'
-import { KnowledgeBankSections } from '../features/knowledge-bank/KnowledgeBankSections'
 import { ModelPicker } from '../shared/ui/ModelPicker'
 import { MISSING_KEY_MESSAGE, useModelChoice } from '../shared/lib/llm'
 import { PanelErrorBoundary } from '../shared/ui/PanelErrorBoundary'
@@ -46,9 +45,6 @@ const MemoriesPanel = lazy(() =>
 )
 const DocumentsPanel = lazy(() =>
   import('../features/documents/DocumentsPanel').then((module) => ({ default: module.DocumentsPanel })),
-)
-const MattersPanel = lazy(() =>
-  import('../features/knowledge-bank/MattersPanel').then((module) => ({ default: module.MattersPanel })),
 )
 const MatterPage = lazy(() =>
   import('../features/knowledge-bank/MatterPage').then((module) => ({ default: module.MatterPage })),
@@ -551,11 +547,7 @@ function App() {
     }
   }
 
-  // Library / Documents / Matters share one frame so the section bar does not remount.
-  const panelKey =
-    current.view === 'documents' || current.view === 'matters' || current.view === 'matter'
-      ? 'knowledge_bank'
-      : current.view
+  const panelKey = current.view
 
   const userInitials = useMemo(() => {
     const name = currentUser?.fullName || user?.fullName
@@ -665,27 +657,17 @@ function App() {
                 <WikiPanel currentUser={currentUser} />
               ) : current.view === 'wellbeing' ? (
                 <WellbeingPanel currentUser={currentUser} />
-              ) : current.view === 'knowledge_bank' ||
-                current.view === 'documents' ||
-                current.view === 'matters' ||
-                current.view === 'matter' ? (
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  <KnowledgeBankSections />
-                  {current.view === 'documents' ? (
-                    <DocumentsPanel currentUser={currentUser} />
-                  ) : current.view === 'matters' ? (
-                    <MattersPanel currentUser={currentUser} onMatterChange={handleMatterChange} />
-                  ) : current.view === 'matter' ? (
-                    <MatterPage matterId={current.matterId} onMatterChange={handleMatterChange} />
-                  ) : (
-                    <KnowledgeBankPanel
-                      matters={matters}
-                      selectedMatterId={selectedMatterId}
-                      onMatterChange={handleMatterChange}
-                      currentUser={currentUser}
-                    />
-                  )}
-                </div>
+              ) : current.view === 'documents' ? (
+                <DocumentsPanel currentUser={currentUser} />
+              ) : current.view === 'matter' ? (
+                <MatterPage matterId={current.matterId} onMatterChange={handleMatterChange} />
+              ) : current.view === 'knowledge_bank' ? (
+                <KnowledgeBankPanel
+                  matters={matters}
+                  selectedMatterId={selectedMatterId}
+                  onMatterChange={handleMatterChange}
+                  currentUser={currentUser}
+                />
               ) : current.view === 'actions' || current.view === 'handoff_review' ? (
                 <ActionsPanel matters={matters} currentUser={currentUser} />
               ) : current.view === 'settings' ? (

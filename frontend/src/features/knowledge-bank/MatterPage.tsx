@@ -99,7 +99,7 @@ export function MatterPage({
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
-  const { selectKnowledgeBank, selectMatters, selectThread, selectActions, startNewChat } =
+  const { selectHome, selectKnowledgeBank, selectThread, selectActions, startNewChat } =
     useWorkspaceNavigation()
 
   const mattersQuery = useQuery({ queryKey: ['matters', 'all'], queryFn: () => listMatters() })
@@ -165,12 +165,8 @@ export function MatterPage({
       <main className="min-w-0 flex-1 overflow-y-auto px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
         <div className="mx-auto max-w-5xl">
           <nav aria-label="Breadcrumb" className="mb-4 text-sm text-neutral-500">
-            <button type="button" className="hover:text-neutral-800" onClick={() => selectKnowledgeBank()}>
-              Knowledge Bank
-            </button>
-            {' / '}
-            <button type="button" className="hover:text-neutral-800" onClick={() => selectMatters()}>
-              Matters
+            <button type="button" className="hover:text-neutral-800" onClick={() => selectHome()}>
+              Home
             </button>
             {' / '}
             <span className="text-neutral-700">{caseLabel}</span>

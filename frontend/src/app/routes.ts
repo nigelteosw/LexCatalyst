@@ -11,7 +11,6 @@ type KnowledgeBankView = { view: 'knowledge_bank'; entryId: string | null }
 type ActionsView = { view: 'actions'; actionId: string | null }
 type HandoffReviewView = { view: 'handoff_review'; actionId: string }
 type SettingsView = { view: 'settings' }
-type MattersView = { view: 'matters' }
 type MatterView = { view: 'matter'; matterId: string }
 
 export type AppView =
@@ -25,7 +24,6 @@ export type AppView =
   | ActionsView
   | HandoffReviewView
   | SettingsView
-  | MattersView
   | MatterView
 
 type NavigationOptions = {
@@ -51,12 +49,11 @@ function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute:
       isKnownRoute: true,
     }
   }
-  if (section === 'knowledge' && rawId === 'matters' && segments.length <= 3) {
-    const matterId = decodeSegment(segments[2])
-    return {
-      current: matterId ? { view: 'matter', matterId } : { view: 'matters' },
-      isKnownRoute: true,
-    }
+  // Matters live on Home; /matters/:id is a single matter's page.
+  if (section === 'matters') {
+    if (segments.length === 1) return { current: { view: 'home' }, isKnownRoute: true }
+    if (segments.length === 2 && id) return { current: { view: 'matter', matterId: id }, isKnownRoute: true }
+    return { current: { view: 'home' }, isKnownRoute: false }
   }
   if (segments.length > 2) {
     // Only allowed 3-segment path: /actions/[id]/review
@@ -111,10 +108,15 @@ export function useWorkspaceNavigation() {
     [location.pathname],
   )
 
-  // Documents moved under Knowledge Bank; keep old /documents links working.
+  // Keep old links working: documents moved under /knowledge, matters moved to Home.
   useEffect(() => {
-    if (location.pathname === '/documents' || location.pathname.startsWith('/documents/')) {
-      navigate(`/knowledge${location.pathname}`, { replace: true })
+    const path = location.pathname
+    if (path === '/documents' || path.startsWith('/documents/')) {
+      navigate(`/knowledge${path}`, { replace: true })
+    } else if (path === '/knowledge/matters') {
+      navigate('/home', { replace: true })
+    } else if (path.startsWith('/knowledge/matters/')) {
+      navigate(path.replace('/knowledge/matters/', '/matters/'), { replace: true })
     }
   }, [location.pathname, navigate])
 
@@ -149,13 +151,9 @@ export function useWorkspaceNavigation() {
         go(routeWithId('/knowledge/documents', documentId), options),
       [go],
     ),
-    selectMatters: useCallback(
-      (options?: NavigationOptions) => go('/knowledge/matters', options),
-      [go],
-    ),
     selectMatter: useCallback(
       (matterId: string, options?: NavigationOptions) =>
-        go(`/knowledge/matters/${encodeURIComponent(matterId)}`, options),
+        go(`/matters/${encodeURIComponent(matterId)}`, options),
       [go],
     ),
     selectMemories: useCallback(
