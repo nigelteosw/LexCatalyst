@@ -9,6 +9,9 @@ import {
   AlertTriangle,
   ArrowLeft,
   BookMarked,
+  FileText,
+  ListChecks,
+  Upload,
   Check,
   ExternalLink,
   FileCheck2,
@@ -23,6 +26,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   useInfiniteQuery,
   useMutation,
@@ -130,6 +134,16 @@ type KnowledgeBankPanelProps = {
   currentUser: CurrentUser | null
 }
 
+type ListTab = 'all' | KnowledgeBankEntryType | 'upload'
+
+const listTabs: Array<{ id: ListTab; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'knowledge_bank', label: 'Knowledge' },
+  { id: 'style_guide', label: 'Style guides' },
+  { id: 'action', label: 'Actions' },
+  { id: 'upload', label: 'Uploads' },
+]
+
 function canWrite(user: CurrentUser | null) {
   return user?.isAdmin || user?.firmRole === 'partner' || user?.firmRole === 'senior_associate'
 }
@@ -160,8 +174,7 @@ export function KnowledgeBankPanel({
   const selectedEntryId = current.view === 'knowledge_bank' ? current.entryId : null
   const [activeTab, setActiveTab] = useState<'library' | 'audit'>('library')
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<KnowledgeBankEntryType | 'all'>('all')
-  const [scopeFilter, setScopeFilter] = useState<KnowledgeBankScope | 'all'>('all')
+  const [listTab, setListTab] = useState<ListTab>('all')
   const [isCreatingEntry, setIsCreatingEntry] = useState(false)
   const [isCreatingMatter, setIsCreatingMatter] = useState(false)
 
@@ -176,16 +189,12 @@ export function KnowledgeBankPanel({
       'kbEntries',
       {
         query: deferredSearch,
-        scope: scopeFilter,
-        type: typeFilter,
         matterId: selectedMatterId,
       },
     ],
     queryFn: ({ pageParam }) =>
       listKnowledgeBankEntryPage({
         query: deferredSearch || undefined,
-        scope: scopeFilter === 'all' ? undefined : scopeFilter,
-        entryType: typeFilter === 'all' ? undefined : typeFilter,
         contextMatterId: selectedMatterId ?? undefined,
         limit: 30,
         offset: pageParam,
@@ -237,16 +246,60 @@ export function KnowledgeBankPanel({
     })
   }, [queryClient, statusQuery.data])
 
-  const filteredEntries = useMemo(() => {
-    return entries.filter((entry) => {
-      if (typeFilter !== 'all' && entry.entryType !== typeFilter) return false
-      if (scopeFilter !== 'all' && entry.scope !== scopeFilter) return false
-      if (selectedMatterId && entry.scope === 'matter' && entry.matterId !== selectedMatterId) {
-        return false
+  const matterEntries = useMemo(
+    () =>
+      entries.filter(
+        (entry) =>
+          !(selectedMatterId && entry.scope === 'matter' && entry.matterId !== selectedMatterId),
+      ),
+    [entries, selectedMatterId],
+  )
+  const tabCounts = useMemo(() => {
+    const counts: Record<ListTab, number> = {
+      all: matterEntries.length,
+      knowledge_bank: 0,
+      style_guide: 0,
+      action: 0,
+      upload: 0,
+    }
+    for (const entry of matterEntries) {
+      if (entry.entryType in counts) counts[entry.entryType] += 1
+      if (entry.sourceDocumentId) counts.upload += 1
+    }
+    return counts
+  }, [matterEntries])
+  const filteredEntries = useMemo(
+    () =>
+      matterEntries.filter((entry) => {
+        if (listTab === 'all') return true
+        if (listTab === 'upload') return !!entry.sourceDocumentId
+        return entry.entryType === listTab
+      }),
+    [matterEntries, listTab],
+  )
+
+  const entryGroups = useMemo(() => {
+    const groups: Array<{ key: string; label: string; icon: LucideIcon; entries: KnowledgeBankEntry[] }> = []
+    let rest = filteredEntries
+    if (listTab === 'all') {
+      const pending = filteredEntries.filter((e) => e.sourceDocumentId && e.status !== 'ready')
+      if (pending.length > 0) {
+        groups.push({ key: 'recent', label: 'Recent uploads', icon: Upload, entries: pending })
+        rest = filteredEntries.filter((e) => !pending.includes(e))
       }
-      return true
-    })
-  }, [entries, selectedMatterId, scopeFilter, typeFilter])
+    }
+    if (listTab === 'upload') {
+      return rest.length > 0 ? [{ key: 'upload', label: 'Uploads', icon: Upload, entries: rest }] : []
+    }
+    for (const type of listTabs.slice(1, 4)) {
+      const entries = rest.filter((e) => e.entryType === type.id)
+      if (entries.length > 0) groups.push({ key: type.id, label: type.label, icon: typeIcon[type.id as KnowledgeBankEntryType], entries })
+    }
+    const known = new Set(listTabs.map((t) => t.id))
+    const other = rest.filter((e) => !known.has(e.entryType))
+    if (other.length > 0) groups.push({ key: 'other', label: 'Other', icon: FileText, entries: other })
+    return groups
+  }, [filteredEntries, listTab])
 
   const selectedEntry =
     selectedEntryQuery.data ??
@@ -284,6 +337,8 @@ export function KnowledgeBankPanel({
     onError: (error) => setBackfillMessage(getErrorMessage(error)),
   })
 
+  const isListView = activeTab === 'library'
+
   function refreshKnowledgeBank() {
     queryClient.invalidateQueries({ queryKey: ['kbEntries'] })
     queryClient.invalidateQueries({ queryKey: ['kbAudit'] })
@@ -292,6 +347,7 @@ export function KnowledgeBankPanel({
   return (
     <section className="flex h-full min-h-0 overflow-hidden bg-[#fafaf8]">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {!isListView && (
         <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 py-3 lg:px-6">
           <div className="flex items-center gap-3">
             <div className="grid h-8 w-8 place-items-center rounded-lg bg-neutral-950 text-white">
@@ -354,6 +410,7 @@ export function KnowledgeBankPanel({
             />
           </div>
         </header>
+        )}
         {backfillMessage && (
           <div className="border-b border-black/10 bg-[#f4f3ef] px-4 py-2 text-xs text-[#5a5a56] lg:px-5">
             {backfillMessage}
@@ -371,6 +428,7 @@ export function KnowledgeBankPanel({
           </div>
         )}
 
+        {!isListView && (
         <div className="flex border-b border-black/10 bg-white px-4 lg:px-5">
           <button
             className={`border-b-2 px-3 py-2.5 text-xs ${
@@ -397,6 +455,7 @@ export function KnowledgeBankPanel({
             </button>
           )}
         </div>
+        )}
 
         {activeTab === 'library' && selectedEntryId && selectedEntry ? (
           <KnowledgeBankReader
@@ -416,62 +475,124 @@ export function KnowledgeBankPanel({
           />
         ) : activeTab === 'library' ? (
           <div className="flex min-h-0 flex-1">
-            <main className="min-w-0 flex-1 overflow-y-auto p-5 lg:p-6">
-              <div className="mb-4 flex gap-2">
-                <div className="relative min-w-0 flex-1">
-                  <Search
-                    size={14}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#76766f]"
-                  />
-                  <input
-                    className="h-9 w-full rounded-[10px] border border-black/10 bg-white pl-9 pr-3 text-xs outline-none placeholder:text-[#8a8a84] focus:border-black/25"
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search knowledge bank, style guides, and actions"
-                    value={search}
-                  />
+            <main className="min-w-0 flex-1 overflow-y-auto px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
+              <div className="mx-auto max-w-5xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="font-serif text-4xl tracking-tight text-neutral-950">Knowledge Bank</h1>
+                    <FeatureHelp title="Knowledge Bank" content={KB_HELP} />
+                  </div>
+                  <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-neutral-500">
+                    Precedents, authorities and internal guidance available to LexChat when drafting and reviewing.
+                  </p>
                 </div>
+                <OverflowMenu
+                  items={[
+                    ...(isWriter
+                      ? [
+                          {
+                            label: backfillMutation.isPending ? 'Repairing search index…' : 'Repair search index',
+                            disabled: backfillMutation.isPending,
+                            onSelect: () => {
+                              setBackfillMessage(null)
+                              backfillMutation.mutate()
+                            },
+                          },
+                          { label: 'New matter', onSelect: () => setIsCreatingMatter(true) },
+                        ]
+                      : []),
+                    {
+                      label: isContextOpen ? 'Hide details panel' : 'Show details panel',
+                      onSelect: () => setIsContextOpen((isOpen) => !isOpen),
+                    },
+                  ]}
+                />
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center gap-2">
+                {canViewAudit && (
+                  <button
+                    className="h-10 rounded-lg border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+                    onClick={() => setActiveTab('audit')}
+                    type="button"
+                  >
+                    Audit log
+                  </button>
+                )}
+                {isWriter && (
+                  <button
+                    className="h-10 rounded-lg bg-[#1e3a8a] px-4 text-sm font-medium text-white transition-colors hover:bg-[#172e6e]"
+                    onClick={() => setIsCreatingEntry(true)}
+                    type="button"
+                  >
+                    Add to Knowledge Bank
+                  </button>
+                )}
                 <select
-                  aria-label="Filter by type"
-                  className="h-9 shrink-0 rounded-[10px] border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 outline-none focus:border-neutral-400"
-                  onChange={(event) => setTypeFilter(event.target.value as KnowledgeBankEntryType | 'all')}
-                  value={typeFilter}
+                  aria-label="Active matter"
+                  className="h-10 max-w-56 rounded-lg border border-neutral-200 bg-white px-2.5 text-sm text-neutral-700 outline-none focus:border-neutral-400"
+                  onChange={(event) => onMatterChange(event.target.value || null)}
+                  value={selectedMatterId ?? ''}
                 >
-                  <option value="all">All types</option>
-                  {entryTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.label}
+                  <option value="">All matters</option>
+                  {matters.map((matter) => (
+                    <option key={matter.id} value={matter.id}>
+                      {matter.caseNumber} · {matter.title}
                     </option>
                   ))}
                 </select>
-                <select
-                  aria-label="Filter by scope"
-                  className="h-9 shrink-0 rounded-[10px] border border-neutral-200 bg-white px-2.5 text-xs text-neutral-700 outline-none focus:border-neutral-400"
-                  onChange={(event) => setScopeFilter(event.target.value as KnowledgeBankScope | 'all')}
-                  value={scopeFilter}
-                >
-                  <option value="all">All scopes</option>
-                  {(Object.keys(scopeLabels) as KnowledgeBankScope[]).map((scope) => (
-                    <option key={scope} value={scope}>
-                      {scopeLabels[scope]}
-                    </option>
+              </div>
+
+              <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-3">
+                <div className="flex flex-wrap gap-x-6 gap-y-1">
+                  {listTabs.map((tab) => (
+                    <button
+                      className={`text-[15px] transition-colors ${
+                        listTab === tab.id
+                          ? 'text-[#1e3a8a]'
+                          : 'text-neutral-500 hover:text-neutral-800'
+                      }`}
+                      key={tab.id}
+                      onClick={() => setListTab(tab.id)}
+                      type="button"
+                    >
+                      {tab.label} <span className="text-neutral-400">{tabCounts[tab.id]}</span>
+                    </button>
                   ))}
-                </select>
+                </div>
+                <input
+                  aria-label="Search Knowledge Bank"
+                  className="h-10 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm outline-none placeholder:text-neutral-400 focus:border-neutral-400 sm:w-64"
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search"
+                  value={search}
+                />
               </div>
 
               {entriesQuery.isLoading ? (
                 <EmptyState title="Loading Knowledge Bank..." />
               ) : filteredEntries.length > 0 ? (
                 <div>
-                  <div className="divide-y divide-black/6">
-                    {filteredEntries.map((entry) => (
-                      <EntryCard
-                        key={entry.id}
-                        entry={entry}
-                        isSelected={selectedEntry?.id === entry.id}
-                        onClick={() => selectKnowledgeBank(entry.id)}
-                      />
-                    ))}
-                  </div>
+                  {entryGroups.map((group) => (
+                    <section className="mt-9 first:mt-6" key={group.key}>
+                      <h2 className="flex items-center gap-2.5 border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">
+                        <group.icon size={18} className="text-neutral-600" />
+                        {group.label}
+                        <span className="font-sans text-sm text-neutral-400">{group.entries.length}</span>
+                      </h2>
+                      <div className="divide-y divide-neutral-200/70">
+                        {group.entries.map((entry) => (
+                          <EntryCard
+                            key={entry.id}
+                            entry={entry}
+                            isSelected={selectedEntry?.id === entry.id}
+                            onClick={() => selectKnowledgeBank(entry.id)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))}
                   {entriesQuery.hasNextPage && (
                     <button
                       className="mt-4 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-xs font-medium text-[#5a5a56] hover:border-black/20 disabled:opacity-50"
@@ -490,6 +611,7 @@ export function KnowledgeBankPanel({
                   title="No knowledge matches this view"
                 />
               )}
+              </div>
             </main>
           </div>
         ) : (
@@ -616,6 +738,15 @@ function KnowledgeBankReader({
     },
   })
 
+  const typeMutation = useMutation({
+    mutationFn: (entryType: KnowledgeBankEntryType) =>
+      updateKnowledgeBankEntry(entry.id, { entryType }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kbEntry', entry.id] })
+      onUpdated()
+    },
+  })
+
   function startEditing() {
     setDraftTitle(entry.title)
     setDraftBody(entry.bodyMarkdown)
@@ -624,10 +755,10 @@ function KnowledgeBankReader({
 
   return (
     <div className="app-scroll-region flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <main className="bg-white px-4 py-5 sm:px-5 lg:px-8 lg:py-7">
-        <article className="mx-auto max-w-4xl">
+      <main className="px-5 pb-12 pt-14 lg:px-12 lg:pt-20">
+        <article className="mx-auto max-w-5xl">
           <button
-            className="mb-5 inline-flex items-center gap-1.5 text-xs font-medium text-[#777770] hover:text-[#0f0f0f]"
+            className="mb-6 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
             onClick={onBack}
             type="button"
           >
@@ -642,12 +773,28 @@ function KnowledgeBankReader({
               value={draftTitle}
             />
           ) : (
-            <h1 className="text-3xl font-semibold tracking-tight text-[#0f0f0f]">{entry.title}</h1>
+            <h1 className="font-serif text-4xl leading-tight tracking-tight text-neutral-950">{entry.title}</h1>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#777770]">
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-neutral-500">
             <Pill label={scopeLabels[entry.scope]} tone={scopeTone(entry.scope)} />
-            <span>{entry.entryType.replaceAll('_', ' ')}</span>
+            {canEdit ? (
+              <select
+                aria-label="Entry type"
+                className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-sm text-neutral-700 outline-none focus:border-neutral-400 disabled:opacity-50"
+                disabled={typeMutation.isPending || entry.status === 'processing'}
+                onChange={(event) => typeMutation.mutate(event.target.value as KnowledgeBankEntryType)}
+                value={entry.entryType}
+              >
+                {entryTypes.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span>{entry.entryType.replaceAll('_', ' ')}</span>
+            )}
             <span>Author role: {entry.createdByRole.replaceAll('_', ' ')}</span>
             <span>Added {formatDateTime(entry.createdAt)}</span>
             <span>Latest edit {formatDateTime(entry.updatedAt)}</span>
@@ -720,13 +867,18 @@ function KnowledgeBankReader({
           {docPreviewError && (
             <p className="mt-2 text-xs text-red-600">{docPreviewError}</p>
           )}
+          {typeMutation.isError && (
+            <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              {getErrorMessage(typeMutation.error)}
+            </div>
+          )}
           {saveMutation.isError && (
             <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
               {getErrorMessage(saveMutation.error)}
             </div>
           )}
 
-          <div className="mt-10 rounded-md border border-black/10 bg-white px-6 py-7 shadow-[0_2px_12px_rgba(0,0,0,0.045)] sm:px-8 sm:py-9 lg:px-10">
+          <div className="mt-8 rounded-xl border border-neutral-200 bg-white px-6 py-7 sm:px-8 sm:py-9 lg:px-10">
             {entry.status === 'processing' ? (
               <div className="flex items-center gap-3 text-sm text-[#666660]">
                 <span className="flex gap-1">
@@ -899,6 +1051,23 @@ function ScopeAccessEditor({
   )
 }
 
+const typeIcon: Record<KnowledgeBankEntryType, LucideIcon> = {
+  knowledge_bank: BookMarked,
+  style_guide: FileText,
+  action: ListChecks,
+}
+
+function listDate(value: string) {
+  const date = new Date(value)
+  const now = new Date()
+  if (date.toDateString() === now.toDateString()) return 'Today'
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
+  }).format(date)
+}
+
 function EntryCard({
   entry,
   isSelected,
@@ -908,33 +1077,42 @@ function EntryCard({
   isSelected: boolean
   onClick: () => void
 }) {
-  const meta = [
-    scopeLabels[entry.scope],
-    entryTypes.find((type) => type.id === entry.entryType)?.label ?? entry.entryType.replaceAll('_', ' '),
-    entry.status === 'processing' ? 'processing' : null,
-    entry.status === 'failed' ? 'failed' : null,
-    entry.piiStatus !== 'clean' ? entry.piiStatus.replaceAll('_', ' ') : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const failed = entry.status === 'failed'
+  const pendingUpload = !!entry.sourceDocumentId && entry.status !== 'ready'
+  const Icon = pendingUpload ? Upload : (typeIcon[entry.entryType] ?? FileText)
+  const preview =
+    entry.status === 'processing'
+      ? 'Processing document…'
+      : failed
+        ? null
+        : markdownPreview(entry.bodyMarkdown)
 
   return (
     <button
-      className={`block w-full px-2 py-3.5 text-left transition-colors hover:bg-neutral-50 ${
-        isSelected ? 'bg-neutral-50' : ''
+      className={`grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-x-4 px-1 py-5 text-left transition-colors hover:bg-black/[0.025] sm:grid-cols-[44px_minmax(0,1fr)_110px_70px] ${
+        isSelected ? 'bg-black/[0.025]' : ''
       }`}
       onClick={onClick}
       type="button"
     >
-      <h3 className="line-clamp-1 text-sm font-medium text-neutral-900">{entry.title}</h3>
-      <p className="mt-0.5 line-clamp-1 text-[13px] text-neutral-600">
-        {entry.status === 'processing'
-          ? 'Processing document…'
-          : entry.status === 'failed'
-            ? entry.errorMessage ?? 'Processing failed.'
-            : markdownPreview(entry.bodyMarkdown)}
-      </p>
-      <p className="mt-1 text-xs text-neutral-500">{meta}</p>
+      <span
+        className={`grid h-11 w-11 place-items-center rounded-lg ${
+          failed ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-[#1e3a8a]'
+        }`}
+      >
+        <Icon size={18} />
+      </span>
+      <div className="min-w-0">
+        <h3 className="text-base font-medium leading-snug text-neutral-900">{entry.title}</h3>
+        {preview && <p className="mt-1 line-clamp-1 text-sm text-neutral-500">{preview}</p>}
+        {failed && (
+          <p className="mt-1 text-sm text-red-700">
+            {entry.errorMessage ?? "Couldn't process this file."}
+          </p>
+        )}
+      </div>
+      <span className="hidden text-sm text-neutral-500 sm:block">{scopeLabels[entry.scope]}</span>
+      <span className="hidden text-right text-sm text-neutral-500 sm:block">{listDate(entry.createdAt)}</span>
     </button>
   )
 }
