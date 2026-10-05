@@ -18,6 +18,7 @@ from app.dependencies import get_current_user
 from app.models import User
 from app.schemas import FirmRole
 from app.services.demo_seed_service import seed_demo
+from app.services.property_workboard_demo_service import seed_property_workboard
 from app.services.user_service import update_user_role
 
 router = APIRouter(tags=["demo"])
@@ -79,6 +80,14 @@ async def demo_seed(
     admin: User = Depends(require_demo_admin),
 ) -> dict:
     return await seed_demo(db, presenter=admin)
+
+
+@router.post("/demo/workboard/property")
+def property_workboard_demo(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_demo_admin),
+) -> dict:
+    return seed_property_workboard(db, presenter=admin)
 
 
 @router.put("/demo/role")

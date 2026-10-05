@@ -17,6 +17,7 @@ import type {
 } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { isManager, priorityColors, statusColumns, statusColors, userLabel } from './config'
+import { ActionList } from './components/ActionList'
 import { ActionDetailDialog } from './components/ActionDetailDialog'
 import { CreateActionDialog } from './components/CreateActionDialog'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
@@ -35,7 +36,7 @@ const WORKBOARD_HELP: HelpContent = {
     {
       emoji: '🗂️',
       title: 'Move it through the columns',
-      body: 'Drag tickets between To Do → In Progress → Review → Done, or use the status menu inside a ticket. The board is shared — everyone can see all tickets.',
+      body: 'Drag tickets between To do → Drafting → Internal review → With client / counterparty → Done, or use the status menu inside a ticket. The board is shared — everyone can see all tickets.',
     },
     {
       emoji: '📎',
@@ -97,6 +98,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
   const { current, selectActions, selectHandoffReview } = useWorkspaceNavigation()
   const selectedActionId = current.view === 'actions' ? current.actionId : null
 
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board')
   const [matterFilter, setMatterFilter] = useState<string | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
@@ -163,6 +165,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
       pending: [],
       in_progress: [],
       review: [],
+      with_client: [],
       done: [],
     }
     for (const item of filteredItems) {
@@ -304,6 +307,13 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
               New ticket
             </button>
           )}
+          <div role="group" aria-label="Workboard view" className="ml-auto inline-flex rounded-lg bg-neutral-100 p-1">
+            {(['board', 'list'] as const).map((mode) => (
+              <button key={mode} type="button" aria-pressed={viewMode === mode} onClick={() => setViewMode(mode)} className={`rounded-md px-3 py-1.5 text-sm capitalize transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] ${viewMode === mode ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}>
+                {mode}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -350,19 +360,22 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
         </div>
       )}
 
-      <div className="app-scroll-region flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-6 sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden lg:px-12">
+      <div className={`app-scroll-region flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-6 lg:px-12 ${viewMode === 'board' ? 'sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden' : ''}`}>
         {isInitialLoading ? (
           <BoardSkeleton />
         ) : actionsQuery.isError ? (
           <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
             {getErrorMessage(actionsQuery.error)}
           </div>
+        ) : viewMode === 'list' ? (
+          <ActionList items={filteredItems} matters={matters} onSelect={(id) => selectActions(id)} />
         ) : (
           statusColumns.map((col) => (
-            <div key={col.id} className="flex w-full shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-100/80 p-3 sm:min-h-0 sm:w-72 xl:w-auto xl:min-w-[15rem] xl:flex-1">
+            <div key={col.id} className="flex w-full shrink-0 self-start flex-col rounded-lg bg-neutral-100/70 p-2.5 sm:max-h-full sm:min-h-0 sm:w-72 xl:w-auto xl:min-w-[15rem] xl:flex-1">
               <div className="mb-3 flex items-center gap-2">
-                <h3 className={`rounded-md px-2 py-1 text-xs font-semibold ${statusColors[col.id]}`}>{col.label}</h3>
-                <span className="rounded-md bg-white px-1.5 py-0.5 text-xs font-medium tabular-nums text-slate-500">
+                <span aria-hidden="true" className={`h-2 w-2 rounded-sm ${statusColors[col.id]}`} />
+                <h3 className="text-sm font-medium text-neutral-700">{col.label}</h3>
+                <span className="text-xs tabular-nums text-neutral-400">
                   {grouped[col.id].length}
                 </span>
               </div>
@@ -449,7 +462,7 @@ function BoardSkeleton() {
               >
                 <div className="h-3 w-3/4 rounded bg-[#eeecea]" />
                 <div className="mt-2 h-2.5 w-1/2 rounded bg-[#f4f3ef]" />
-                <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
+                <div className="mt-3 flex items-center gap-2">
                   <div className="h-5 w-5 rounded-full bg-[#f4f3ef]" />
                   <div className="h-2.5 w-20 rounded bg-[#f4f3ef]" />
                 </div>
@@ -471,13 +484,6 @@ function ActionCard({
   onClick: () => void
   onDelete: () => void
 }) {
-  const priorityBorderColor =
-    item.priority === 'high'
-      ? 'border-l-rose-700'
-      : item.priority === 'medium'
-        ? 'border-l-blue-600'
-        : 'border-l-slate-400'
-
   const assigneeInitials = item.assignee
     ? (item.assignee.fullName ?? item.assignee.email)
         .split(' ')
@@ -492,29 +498,29 @@ function ActionCard({
 
   return (
     <article
-      className={`group relative rounded-lg border border-slate-200 border-l-[3px] bg-white shadow-sm transition-shadow hover:shadow-md focus-within:ring-2 focus-within:ring-blue-600 ${priorityBorderColor}`}
+      className="group relative rounded-lg border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#1e3a8a]"
     >
       <button
-        className="w-full p-4 pr-10 text-left focus-visible:outline-none"
+        className="w-full p-3 pr-8 text-left focus-visible:outline-none"
         onClick={onClick}
         type="button"
       >
-        <span className={`mb-2 inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold capitalize ${priorityColors[item.priority]}`}>
+        <span className={`mb-2 inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium capitalize ${priorityColors[item.priority]}`}>
           {item.priority} priority
         </span>
-        <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900">
+        <p className="line-clamp-2 text-sm font-medium leading-5 text-neutral-900">
           {item.title}
         </p>
 
         {item.activeHandoffId && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-indigo-800">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-slate-1000" />
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-400" />
             {item.status === 'in_progress' ? 'Returned for rework' : 'Review ready'}
           </div>
         )}
 
         {item.description && (
-          <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">
             {item.description}
           </p>
         )}
@@ -532,8 +538,8 @@ function ActionCard({
           </div>
         )}
 
-        <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
-          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#e8f0fe] text-[9px] font-semibold text-[#1a4a8a]">
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[9px] font-semibold text-neutral-600">
             {assigneeInitials}
           </div>
           <span className="min-w-0 flex-1 truncate text-[11px] text-[#6f6f69]">

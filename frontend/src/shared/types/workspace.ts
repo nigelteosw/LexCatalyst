@@ -282,7 +282,7 @@ export type SurveyResults = {
   questions: SurveyQuestionResult[]
 }
 
-export type ActionStatus = 'pending' | 'in_progress' | 'review' | 'done'
+export type ActionStatus = 'pending' | 'in_progress' | 'review' | 'with_client' | 'done'
 export type ActionPriority = 'low' | 'medium' | 'high'
 
 export type ActionUser = {

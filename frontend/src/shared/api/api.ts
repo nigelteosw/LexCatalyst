@@ -2349,6 +2349,13 @@ export async function seedDemoData(): Promise<DemoSeedSummary> {
   return request<DemoSeedSummary>('/demo/seed', { method: 'POST', headers: presenterAuthHeader() })
 }
 
+export async function seedPropertyWorkboard(): Promise<{ ticketsCreated: number; matters: number; chatsCreated: number }> {
+  const result = await request<{ tickets_created: number; matters: number; chats_created: number }>('/demo/workboard/property', {
+    method: 'POST', headers: presenterAuthHeader(),
+  })
+  return { ticketsCreated: result.tickets_created, matters: result.matters, chatsCreated: result.chats_created }
+}
+
 // DEMO_MODE only: mimic a role (including 'admin') on the signed-in account.
 export async function setDemoRole(firmRole: FirmRole): Promise<void> {
   await request<unknown>('/demo/role', { method: 'PUT', body: JSON.stringify({ firm_role: firmRole }) })

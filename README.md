@@ -38,11 +38,13 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - All authenticated users can submit. Existing responses without a user ID are excluded from cohort reports.
 
 ### Workboard — Task Delegation
-- Kanban-style board (To Do / In Progress / Review / Done) with priority pills.
+- Board and list views share a five-stage flow: To do → Drafting → Internal review → With client / counterparty → Done. Existing drafting and review tickets keep their stages; `with_client` is accepted by the authenticated action update endpoint.
 - **Partners and senior associates** can create and assign actions; assignee or assigner can update.
 - Completing a linked review handoff moves its ticket to Done. Any authenticated user can delete a ticket.
 - Filter by matter, edit through a detail dialog.
 - Admin demo tools can idempotently add Sarah Chen (senior associate) and Jane Pereira (associate) to the firm roster.
+
+Settings → Development & Testing → **Load property Workboard demo** adds 12 synthetic Singapore property-law tasks across four demo matters and all five stages, plus four private sample chats each for the presenter, Sarah, Jane and Marcus (16 chats in total). Chats contain pre-written fictional exchanges, stay linked to their matter and respect existing per-user chat ownership. Available to admins with `DEMO_MODE=true`; `POST /demo/workboard/property` requires an authenticated demo admin and returns 404 otherwise. Repeated loads preserve existing tasks and add no duplicates. The seed uses no external providers and contains fictional workflow prompts, not legal advice.
 
 ### Documents — In-App Review
 - Clicking a document opens a right-side review drawer. PDFs render inline; DOCX files provide an authenticated download.

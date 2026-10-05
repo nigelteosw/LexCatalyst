@@ -2,22 +2,24 @@ import type { ActionPriority, ActionStatus, CurrentUser, FirmUser } from '../../
 
 export const statusColumns: Array<{ id: ActionStatus; label: string }> = [
   { id: 'pending', label: 'To do' },
-  { id: 'in_progress', label: 'In progress' },
-  { id: 'review', label: 'Review' },
+  { id: 'in_progress', label: 'Drafting' },
+  { id: 'review', label: 'Internal review' },
+  { id: 'with_client', label: 'With client / counterparty' },
   { id: 'done', label: 'Done' },
 ]
 
 export const priorityColors: Record<ActionPriority, string> = {
-  low: 'bg-slate-100 text-slate-600',
-  medium: 'bg-blue-50 text-blue-800',
-  high: 'bg-rose-700 text-white',
+  low: 'bg-neutral-100 text-neutral-500',
+  medium: 'bg-neutral-100 text-neutral-600',
+  high: 'bg-neutral-100 text-[#9f1239]',
 }
 
 export const statusColors: Record<ActionStatus, string> = {
-  pending: 'bg-slate-200 text-slate-700',
-  in_progress: 'bg-blue-100 text-blue-800',
-  review: 'bg-indigo-100 text-indigo-800',
-  done: 'bg-teal-100 text-teal-800',
+  pending: 'bg-neutral-400',
+  in_progress: 'bg-[#647a9b]',
+  review: 'bg-[#7d7893]',
+  with_client: 'bg-[#64858a]',
+  done: 'bg-[#638578]',
 }
 
 export function isManager(user: CurrentUser | null) {

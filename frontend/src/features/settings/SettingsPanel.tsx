@@ -7,6 +7,7 @@ import {
   getAppConfig,
   listFirmUsers,
   seedDemoData,
+  seedPropertyWorkboard,
   setDemoRole,
   updateOtherUserRole,
 } from '../../shared/api/api'
@@ -108,6 +109,17 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
           (failed > 0 ? ` ${failed} item(s) failed — check R2/OpenAI config.` : '') +
           processing,
       )
+    },
+    onError: (error) => setMessage(getErrorMessage(error)),
+  })
+
+  const propertySeedMutation = useMutation({
+    mutationFn: seedPropertyWorkboard,
+    onSuccess: (summary) => {
+      queryClient.invalidateQueries()
+      setMessage(summary.ticketsCreated > 0 || summary.chatsCreated > 0
+        ? `Property Workboard demo loaded: ${summary.ticketsCreated} synthetic tasks and ${summary.chatsCreated} sample chats across ${summary.matters} Singapore property matters.`
+        : 'Property Workboard demo is already loaded. Existing tasks were kept.')
     },
     onError: (error) => setMessage(getErrorMessage(error)),
   })
@@ -259,6 +271,20 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                 Use these tools to populate or clean up your firm roster during testing.
               </p>
               
+              {demoMode && (
+                <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
+                  <h4 className="text-sm font-medium text-neutral-900">Singapore property Workboard demo</h4>
+                  <p className="mt-1 text-xs leading-5 text-neutral-500">
+                    Add 12 synthetic tasks across private residential purchase, HDB resale, commercial leasing and a strata dispute. Uses Sarah, Jane and Marcus across all five stages, plus one private sample chat per matter for you and each demo user. Existing work and conversations are kept; repeated clicks add no duplicates.
+                  </p>
+                  <button type="button" disabled={propertySeedMutation.isPending || seedMutation.isPending}
+                    onClick={() => propertySeedMutation.mutate()}
+                    className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-[#1e3a8a] px-4 text-xs font-medium text-white hover:bg-[#172e6e] disabled:opacity-50">
+                    <Database size={14} />
+                    {propertySeedMutation.isPending ? 'Loading property demo…' : 'Load property Workboard demo'}
+                  </button>
+                </div>
+              )}
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   className="inline-flex h-9 items-center gap-2 rounded-lg border border-black/10 bg-white px-4 text-xs font-medium text-[#0f0f0f] hover:bg-[#f4f3ef] disabled:opacity-50"
@@ -285,7 +311,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                 {demoMode && (
                   <button
                     className="inline-flex h-9 items-center gap-2 rounded-lg border border-black/10 bg-[#0f0f0f] px-4 text-xs font-medium text-white hover:bg-black disabled:opacity-50"
-                    disabled={seedMutation.isPending}
+                    disabled={seedMutation.isPending || propertySeedMutation.isPending}
                     onClick={() => {
                       if (window.confirm('Load demo data? This resets any previous demo data (Sarah, Jane, Marcus and the Meridian matter).')) {
                         seedMutation.mutate()
