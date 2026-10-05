@@ -50,3 +50,6 @@ bun-debug.log*
 extension/dist/
 extension/*.zip
 extension/key.pem
+
+# Shared UI development dependencies
+node_modules/
