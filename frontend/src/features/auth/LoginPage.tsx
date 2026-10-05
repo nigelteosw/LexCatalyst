@@ -41,7 +41,7 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
   return (
     <div className="app-scroll-region flex h-full min-h-0 w-full flex-col overflow-y-auto bg-[#fafaf8] lg:flex-row">
       {/* Brand panel */}
-      <div className="flex flex-1 flex-col justify-between bg-[#14161a] px-8 py-10 text-white lg:px-16 lg:py-14">
+      <div className="pearl-black flex flex-1 flex-col justify-between px-8 py-10 text-white lg:px-16 lg:py-14">
         <div className="flex items-center gap-2.5">
           <div className="grid h-8 w-8 place-items-center rounded-lg border border-white/20 font-serif text-lg italic">
             L
