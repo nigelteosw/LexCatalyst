@@ -49,10 +49,12 @@ async def birdie_stream(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
+    # A stale saved matter (e.g. after switching demo users) falls back to General instead of failing.
     try:
         _require_matter(db, current_user, request.matter_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ValueError, HTTPException):
+        db.rollback()
+        request.matter_id = None
 
     def event(name: str, payload: dict) -> str:
         return f"event: {name}\ndata: {json.dumps(payload)}\n\n"

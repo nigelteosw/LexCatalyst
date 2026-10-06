@@ -264,6 +264,8 @@ function App() {
     setUser(nextUser)
     setIsResponding(false)
     setActiveStream(null)
+    setSelectedMatterId(null)
+    localStorage.removeItem('selectedMatterId')
     selectHome()
     await queryClient.resetQueries()
   }
