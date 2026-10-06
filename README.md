@@ -4,13 +4,20 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 
 ## Core Features
 
+### Home & Workspace
+
+- **Daily overview:** active matters, tasks due in the next seven days, reviews waiting, and open tickets related to the signed-in user.
+- **Pick up work:** attention items, searchable matters, the three most recent LexChats, and three recent documents. Partners/admins also have a wellbeing summary.
+- **Matter-first navigation:** Home manages matters; each matter page holds its documents, chats, and pending work. Unfiled items appear under General. There is no standalone document library.
+- **Responsive interface:** Geist for UI text and Newsreader for headings, with shared type tokens that scale modestly with screen width. The sidebar uses smaller labels, evenly spaced icon slots, and reduced-motion support. Collapse it with the header control; click the logo in the collapsed rail to expand it. The account menu includes profile settings, sign-out, and demo user switching when enabled.
+
 ### Knowledge & Documents
 - **Async document, Knowledge Bank, and Dream jobs**: The FastAPI service runs an embedded worker thread that claims durable Postgres jobs for extraction, OCR, embeddings, OpenRouter-based KB formatting, and automatic memory consolidation.
 - **Auditable memory consolidation**: Dream applies conservative memory additions, merges, updates, and drops without a manual approval step. Automated memories retain the agent's justification.
 - **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
-- **Drag-and-drop uploads**: Drop PDF/DOCX directly onto the Documents panel. OCR fallback via Tesseract for scanned PDFs.
+- **Drag-and-drop uploads**: Upload PDF/DOCX from a matter’s documents section or attach a document in LexChat. OCR fallback via Tesseract for scanned PDFs.
 - **Semantic search**: pgvector cosine similarity over document chunks AND KB entries. Embeddings fingerprinted by content hash so they auto-refresh when content changes.
-- **Source citations**: Full source-chunk attribution available via the Wiki feature.
+- **Source citations**: LexChat shows numbered citations with a source panel for the supporting passage and a link to the document, Knowledge Bank entry, or public judgment.
 
 ### Agentic Chat
 - **ReAct agent loop** with cycle detection and forced-final-answer on max rounds. Tools:
@@ -42,13 +49,15 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - Board and list views share a five-stage flow: To do → Drafting → Internal review → With client / counterparty → Done. Existing drafting and review tickets keep their stages; `with_client` is accepted by the authenticated action update endpoint.
 - **Partners and senior associates** can create and assign actions; assignee or assigner can update.
 - Completing a linked review handoff moves its ticket to Done. Any authenticated user can delete a ticket.
-- Filter by matter, edit through a detail dialog.
+- Filter by matter, assignee, and tags; edit through a detail dialog.
+- **Responsive board:** columns wrap to fit the available workspace width; scroll within each column without a visible scrollbar. Long tags truncate with their full text available on hover.
+- **Sortable list:** Task, Status, Assignee, and Due headers toggle ascending/descending order. Mobile uses a Sort by selector and direction button. Status follows workflow order; unassigned and undated tickets remain last for their respective sorts. Sorting applies to the currently loaded, filtered tickets.
 - Admin demo tools can idempotently add Sarah Chen (senior associate) and Jane Pereira (associate) to the firm roster.
 
 Settings → Development & Testing → **Load property Workboard demo** adds 12 synthetic Singapore property-law tasks across four demo matters and all five stages, plus four private sample chats each for the presenter, Sarah, Jane and Marcus (16 chats in total). Chats contain pre-written fictional exchanges, stay linked to their matter and respect existing per-user chat ownership. Available to admins with `DEMO_MODE=true`; `POST /demo/workboard/property` requires an authenticated demo admin and returns 404 otherwise. Repeated loads preserve existing tasks and add no duplicates. The seed uses no external providers and contains fictional workflow prompts, not legal advice.
 
 ### Documents — In-App Review
-- Clicking a document opens a right-side review drawer. PDFs render inline; DOCX files provide an authenticated download.
+- Open a document from its matter or a citation to review it at `/knowledge/documents/:id`. PDFs render inline; DOCX files provide an authenticated download.
 - Matter members can view documents and share flat Markdown comments. Comment authors and partners/admins on the matter can delete comments.
 - Uploaders can rename documents without moving the stored R2 object; citation labels are updated to use the new filename.
 
@@ -90,7 +99,7 @@ Settings → Development & Testing → **Load property Workboard demo** adds 12 
 - **Docker Compose** for local PostgreSQL
 - **Railway** for the static frontend, FastAPI web service with its embedded worker, and managed PostgreSQL
 - **Cloudflare R2** as the S3-compatible object store
-- **Alembic head:** `t5c6d7e8f9a0`
+- **Alembic head:** `z3e4f5a6b7c8`
 
 Editable high-level architecture diagrams:
 
@@ -140,6 +149,7 @@ Editable high-level architecture diagrams:
 │   ├── src/
 │   │   ├── app/                               # App shell and URL route state
 │   │   ├── features/                          # Domain-owned screens and components
+│   │   │   ├── home/                          # Dashboard and matter management
 │   │   │   ├── chat/                          # Main agent chat with tool steps
 │   │   │   ├── knowledge-bank/                # KB browser, filters, reader, forms
 │   │   │   ├── documents/                     # Upload and ingestion status
@@ -153,6 +163,7 @@ Editable high-level architecture diagrams:
 │   │       ├── types/workspace.ts             # Cross-feature domain types
 │   │       └── ui/                            # Button, Dialog, badges, Markdown
 │   └── package.json
+├── extension/                                 # Birdie Chrome side panel (MV3)
 └── docs/
     ├── architecture-system-context.drawio     # Services and external dependencies
     ├── architecture-chat-retrieval.drawio     # ReAct chat and scoped retrieval
@@ -167,6 +178,10 @@ Editable high-level architecture diagrams:
 
 ## Local Setup
 
+Run the database from the repository root and the backend/frontend in separate terminals. Docker Compose runs only Postgres.
+
+Prerequisites: Python 3.12, Bun 1.3, Docker Compose, and Google OAuth credentials. Document processing also requires OpenAI embeddings and Cloudflare R2 credentials; AI features require a personal OpenRouter key in Settings (or the demo-only fallback).
+
 ### 1. Database (Postgres + pgvector)
 ```bash
 docker compose up -d
@@ -178,7 +193,8 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 make install
-# Configure .env (see below)
+cp .env.example .env
+# Fill in .env before migrating (see Environment Variables below)
 make migrate
 make dev
 ```
@@ -203,9 +219,21 @@ apt-get install tesseract-ocr poppler-utils
 ### 3. Frontend
 ```bash
 cd frontend
+cp .env.example .env
+# Set VITE_GOOGLE_CLIENT_ID to the same client ID as backend GOOGLE_CLIENT_ID
 bun install
 bun run dev
 ```
+
+Local services:
+
+| Service | Address |
+|---|---|
+| Frontend | `http://127.0.0.1:5173` |
+| Backend / API docs | `http://127.0.0.1:8000` / `http://127.0.0.1:8000/docs` |
+| Postgres | `127.0.0.1:5432` |
+
+In the Google OAuth web client, authorize `http://127.0.0.1:5173` and `http://localhost:5173` as JavaScript origins. Keep backend `CORS_ORIGINS` aligned with the frontend origins you use.
 
 Mobile layouts cover phone, tablet and desktop widths. To run the frontend checks:
 
@@ -219,7 +247,7 @@ bun run test:mobile
 
 The browser suite uses synthetic API fixtures and a local Vite server; it does not
 exercise live Google sign-in, storage, or LLM calls. It covers all workspace pages,
-phone navigation, dialogs, document comments, PDF review, and shorter viewports.
+phone navigation, dialogs, document comments, PDF review, shorter viewports, sidebar alignment, responsive Workboard columns, and desktop/mobile list sorting.
 A physical iOS/Android keyboard check is still useful before a demo.
 
 ### 4. Birdie Chrome extension (optional)
@@ -252,7 +280,9 @@ Birdie only reads sites you turn on ("Turn on Birdie for this site", which grant
 `backend/.env`:
 
 ```ini
+ENVIRONMENT=development
 DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/lexcatalyst
+AUTO_CREATE_TABLES=false
 # LLM calls use each user's OpenRouter key (Settings → Models). Demo only:
 # DEMO_MODE=true
 # DEMO_OPENROUTER_KEY=sk-or-...
@@ -265,12 +295,25 @@ CLOUDFLARE_R2_ACCESS_KEY_ID=...
 CLOUDFLARE_R2_SECRET_ACCESS_KEY=...
 CLOUDFLARE_R2_ENDPOINT_URL=...
 
-# Must be at least 32 chars; rotating this invalidates encrypted client_name fields
+# Must be at least 32 chars; rotating this invalidates existing JWT sessions
 JWT_SECRET_KEY=at_least_32_characters_long
+# Separate encryption key, required outside development; keep it stable
+FIELD_ENCRYPTION_KEY=your_fernet_key
+ADMIN_EMAILS=admin@example.com
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 
 # Demo only (see "Demo mode" below). Leave unset/false in real deployments.
 DEMO_MODE=false
 ```
+
+`frontend/.env` (Vite variables are public build-time configuration):
+
+```ini
+VITE_API_URL=http://127.0.0.1:8000
+VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
+```
+
+Keep secrets in `backend/.env`, never in `VITE_*` variables. Generate a dedicated field encryption key with `backend/.venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Rotating that key makes existing encrypted fields and saved OpenRouter keys unreadable. Apply schema changes through `make migrate`; do not rely on automatic table creation.
 
 Users' personal OpenRouter keys are not environment variables: they are saved per user in Settings, encrypted with `FIELD_ENCRYPTION_KEY` (or the dev fallback), and never returned by the API.
 
@@ -278,7 +321,7 @@ Users' personal OpenRouter keys are not environment variables: they are saved pe
 
 ## Demo mode
 
-For presentations. Set `DEMO_MODE=true` and put your Google email in `ADMIN_EMAILS`, sign in once, then:
+For presentations with synthetic data only. Never enable demo mode with real client data. Set `DEMO_MODE=true`, sign in with Google (demo mode grants admin access), then:
 
 ```sh
 cd backend && source .venv/bin/activate
@@ -429,7 +472,7 @@ LexChat (`POST /chat/stream`, JWT required with matter-access checks) exposes `s
 
 ## Post-Deploy Checklist
 
-After pushing this branch:
+For a Railway deployment:
 
 Railway frontend service settings:
 
@@ -439,6 +482,7 @@ Build command: bun run build
 Static output directory: dist
 BUN_VERSION: 1.3.11
 VITE_API_URL: https://<backend-service>.up.railway.app
+VITE_GOOGLE_CLIENT_ID: <Google OAuth web client ID>
 ```
 
 The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`.
@@ -504,7 +548,7 @@ Authenticated Workboard and review-handoff routes:
 5. Clicking "Add to Knowledge Bank" shows a "Summarising..." badge that flips to "Ready".
 6. Clicking "Dream" returns immediately; the worker applies changes and the Memories panel shows the justifications.
 7. The bottom-right Birdie button opens the panel on every signed-in page. Test header dragging, corner resizing, copy/paste, and closing with either the X or the button. Ask for current-matter progress, rename/move your ticket, then reassign it and verify Birdie can no longer edit it. Repeat a Workboard request in the extension.
-8. Settings panel lets you switch roles; KB write buttons should hide/show accordingly.
+8. In demo mode, Settings → View as lets you mimic roles; KB write buttons should hide/show accordingly. Outside demo mode, role changes require admin access.
 
 ---
 
