@@ -25,7 +25,7 @@ export function HomePanel({ currentUser, onMatterChange }: Props) {
   const name = currentUser?.fullName ?? currentUser?.email?.split('@')[0] ?? 'Welcome'
 
   return (
-    <div className="app-scroll-region h-full overflow-y-auto bg-surface px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
+    <div className="app-scroll-region h-full overflow-y-auto bg-surface px-4 pb-20 pt-6 sm:px-5 sm:pb-10 sm:pt-14 lg:px-12 lg:pt-20">
       <div className="mx-auto max-w-5xl">
         <p className="mb-3 text-sm text-neutral-500">
           {getGreeting()} · {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -75,7 +75,7 @@ function Stat({
 }) {
   return (
     <button
-      className="min-w-36 flex-1 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-left transition-colors hover:border-neutral-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] sm:flex-none"
+      className="min-w-0 basis-[calc(50%-0.375rem)] flex-1 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-left transition-colors hover:border-neutral-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] sm:min-w-36 sm:basis-auto sm:flex-none"
       onClick={onClick}
       type="button"
     >

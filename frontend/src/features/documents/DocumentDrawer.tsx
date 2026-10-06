@@ -164,7 +164,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
       aria-label={`Review ${document.filename}`}
       className="flex h-full min-h-0 flex-col overflow-hidden bg-surface"
     >
-      <header className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3 sm:px-5">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 sm:px-5">
         <Button onClick={onClose} size="sm" variant="ghost">
           <ArrowLeft size={15} />
           Back
@@ -174,7 +174,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
           <FileText size={17} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="truncate text-sm font-semibold text-neutral-900">
               {document.filename}
             </h2>
@@ -215,8 +215,8 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="min-h-[55dvh] flex-1 bg-neutral-100 lg:min-h-0">
+      <div className="app-scroll-region flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <div className="h-[55dvh] min-h-64 shrink-0 bg-neutral-100 lg:h-auto lg:min-h-0 lg:min-w-0 lg:flex-1">
           {isPdf && fileUrl ? (
             <iframe
               className="h-full w-full border-0"
@@ -256,7 +256,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
           )}
         </div>
 
-        <section className="flex min-h-[320px] shrink-0 flex-col border-t border-neutral-200 bg-white lg:h-full lg:w-[340px] lg:min-h-0 lg:border-l lg:border-t-0 xl:w-[390px]">
+        <section className="flex min-h-80 shrink-0 flex-col border-t border-neutral-200 bg-white lg:h-full lg:w-[340px] lg:min-h-0 lg:border-l lg:border-t-0 xl:w-[390px]">
           <div className="shrink-0 border-b border-neutral-100 px-4 py-3 sm:px-5">
             <h3 className="text-sm font-semibold text-neutral-900">Matter comments</h3>
             <p className="mt-0.5 text-[11px] text-neutral-500">
@@ -321,7 +321,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
             )}
             <div className="flex items-end gap-2">
               <textarea
-                className="min-h-10 max-h-28 flex-1 resize-y rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-neutral-400"
+                className="min-h-10 max-h-28 min-w-0 flex-1 resize-y rounded-lg border border-neutral-200 px-3 py-2 text-xs text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-neutral-400"
                 maxLength={3000}
                 onChange={(event) => setContent(event.target.value)}
                 onKeyDown={(event) => {

@@ -107,12 +107,12 @@ function HelpModal({
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-[90] grid place-items-center bg-black/40 p-4 backdrop-blur-sm"
+      className="viewport-overlay fixed inset-0 z-[90] grid place-items-center bg-black/40 p-4 backdrop-blur-sm"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
       role="dialog"
       aria-label={`${title} guide`}
     >
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="flex max-h-[calc(var(--app-height,100dvh)-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-neutral-100 bg-gradient-to-b from-amber-50 to-white px-5 py-4">

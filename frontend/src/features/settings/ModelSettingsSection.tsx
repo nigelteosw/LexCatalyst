@@ -169,7 +169,7 @@ export function ModelSettingsSection() {
 
       {settings && (
         <div className="mt-6 border-t border-black/10 pt-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h4 className="text-xs font-semibold text-[#0f0f0f]">Feature tiers</h4>
             <button
               className="text-[11px] font-medium text-[#6f6f69] underline hover:text-[#0f0f0f] disabled:opacity-40"
@@ -187,7 +187,7 @@ export function ModelSettingsSection() {
             {settings.features.map((feature) => {
               const active = settings.featureTiers[feature.key] ?? feature.defaultTier
               return (
-                <li className="flex items-center justify-between gap-3 py-2" key={feature.key}>
+                <li className="flex flex-wrap items-center justify-between gap-3 py-2" key={feature.key}>
                   <span className="text-xs text-[#0f0f0f]">{feature.label}</span>
                   <div
                     aria-label={`${feature.label} tier`}

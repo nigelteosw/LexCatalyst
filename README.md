@@ -207,6 +207,21 @@ bun install
 bun run dev
 ```
 
+Mobile layouts cover phone, tablet and desktop widths. To run the frontend checks:
+
+```bash
+cd frontend
+bun run build
+bun run test
+bunx playwright install chromium  # one-time browser setup
+bun run test:mobile
+```
+
+The browser suite uses synthetic API fixtures and a local Vite server; it does not
+exercise live Google sign-in, storage, or LLM calls. It covers all workspace pages,
+phone navigation, dialogs, document comments, PDF review, and shorter viewports.
+A physical iOS/Android keyboard check is still useful before a demo.
+
 ### 4. Birdie Chrome extension (optional)
 
 `extension/` builds a Chrome side-panel extension that brings Birdie to any webpage.

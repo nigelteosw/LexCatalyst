@@ -453,7 +453,7 @@ export function ActionDetailDialog({
   // Mobile: render as a full-screen page (no backdrop, back button nav)
   if (isMobile) {
     return (
-      <div className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-[#fafaf8]">
+      <div className="viewport-overlay fixed inset-0 z-[80] flex flex-col overflow-hidden bg-[#fafaf8]">
         <header className="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-black/10 bg-[#fafaf8]/95 px-3 py-3 backdrop-blur">
           <button
             aria-label="Back to Workboard"

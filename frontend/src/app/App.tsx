@@ -603,7 +603,7 @@ function App() {
         aria-controls="birdie-panel"
         title="Birdie"
         onClick={() => setIsBirdieOpen((open) => !open)}
-        className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[60] grid h-12 w-12 place-items-center overflow-hidden rounded-full border border-[#2d9e6b]/45 bg-[#fff8d8] shadow-lg hover:ring-2 hover:ring-[#2d9e6b]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d9e6b] focus-visible:ring-offset-2"
+        className="birdie-launcher fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[60] grid h-12 w-12 place-items-center overflow-hidden rounded-full border border-[#2d9e6b]/45 bg-[#fff8d8] shadow-lg hover:ring-2 hover:ring-[#2d9e6b]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d9e6b] focus-visible:ring-offset-2"
       >
         <img alt="" aria-hidden="true" className="h-auto w-[250%] max-w-none" src={birdieLogo} />
       </button>

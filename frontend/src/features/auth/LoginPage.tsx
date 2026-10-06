@@ -41,7 +41,7 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
   return (
     <div className="app-scroll-region flex h-full min-h-0 w-full flex-col overflow-y-auto bg-[#fafaf8] lg:flex-row">
       {/* Brand panel */}
-      <div className="pearl-black flex flex-1 flex-col justify-between px-8 py-10 text-white lg:px-16 lg:py-14">
+      <div className="pearl-black order-2 flex shrink-0 flex-col lg:order-none lg:flex-1 justify-between px-8 py-10 text-white lg:px-16 lg:py-14">
         <div className="flex items-center gap-2.5">
           <img alt="" className="h-8 w-8 rounded-lg" src="/favicon.svg" />
           <span className="text-xl font-semibold tracking-tight">LexCatalyst</span>
@@ -77,7 +77,7 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
       </div>
 
       {/* Sign-in panel */}
-      <div className="flex shrink-0 items-center justify-center px-6 py-14 lg:w-[480px] lg:px-12">
+      <div className="order-1 flex shrink-0 items-center justify-center px-5 py-8 lg:order-none lg:py-14 lg:w-[480px] lg:px-12">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-semibold tracking-tight text-neutral-900">Sign in</h2>
           <p className="mt-1.5 text-sm text-neutral-600">

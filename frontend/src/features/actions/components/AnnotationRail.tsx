@@ -682,10 +682,10 @@ function PromoteModal({
 
   return (
     <div
-      className="fixed inset-0 z-[90] grid place-items-center bg-black/40 backdrop-blur-sm"
+      className="viewport-overlay fixed inset-0 z-[90] grid place-items-center overflow-y-auto p-3 bg-black/40 backdrop-blur-sm"
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
-      <div className="w-full max-w-sm rounded-xl border border-black/10 bg-white p-5 shadow-2xl">
+      <div className="max-h-[calc(var(--app-height,100dvh)-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-sm overflow-y-auto rounded-xl border border-black/10 bg-white p-5 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-[#0f0f0f]">
             <Sparkles size={14} className="text-[#1a6b4a]" />

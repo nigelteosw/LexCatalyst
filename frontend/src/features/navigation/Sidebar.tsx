@@ -228,10 +228,10 @@ export function Sidebar({
       {/* Sidebar Container */}
       <aside
         ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-[#0f0f0f] text-[#fafaf8] transition-[transform,width] duration-300 lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
+        className={`mobile-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-[#0f0f0f] text-[#fafaf8] transition-[transform,width] duration-300 lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ width: `${isCollapsed ? COLLAPSED_WIDTH : width}px` }}
+        style={{ width: `${isCollapsed ? COLLAPSED_WIDTH : width}px`, maxWidth: isDesktop ? undefined : 'calc(100vw - 2rem)' }}
       >
         <div className="flex h-full min-h-0 flex-col">
           {/* Sidebar Header */}

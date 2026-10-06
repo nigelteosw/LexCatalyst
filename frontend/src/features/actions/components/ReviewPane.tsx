@@ -240,7 +240,7 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
   const canResubmit = latest?.status === 'returned'
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       {(rounds.length > 1 || canResubmit || error) && (
         <div className="flex flex-wrap items-center gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-2">
           {rounds.length > 1 && (
@@ -717,9 +717,9 @@ function HandoffViewer({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-black/10 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 px-4 py-2.5">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-[#0f0f0f]">
             {handoff.documentFilename ?? 'Review document'}
@@ -895,7 +895,7 @@ function HandoffViewer({
               <Loader2 size={16} className="animate-spin" />
             </div>
           ) : (
-            <div style={{ height: 'calc(100dvh - 14rem)' }}>
+            <div className="h-full min-h-0">
               <Worker workerUrl={PDFJS_WORKER_URL}>
                 <Viewer
                   fileUrl={fileUrl}
@@ -978,10 +978,10 @@ function RejectModal({
 
   return (
     <div
-      className="fixed inset-0 z-[90] grid place-items-center bg-black/40 backdrop-blur-sm"
+      className="viewport-overlay fixed inset-0 z-[90] grid place-items-center overflow-y-auto p-3 bg-black/40 backdrop-blur-sm"
       onKeyDown={handleKeyDown}
     >
-      <div className="w-full max-w-md rounded-xl border border-black/10 bg-white p-5 shadow-2xl">
+      <div className="max-h-[calc(var(--app-height,100dvh)-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-md overflow-y-auto rounded-xl border border-black/10 bg-white p-5 shadow-2xl">
         <div className="mb-4 flex items-start gap-3">
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-500" />
           <div>

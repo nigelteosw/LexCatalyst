@@ -50,3 +50,7 @@ bun-debug.log*
 extension/dist/
 extension/*.zip
 extension/key.pem
+
+# Browser verification artifacts
+frontend/test-results/
+frontend/playwright-report/

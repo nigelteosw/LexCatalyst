@@ -26,7 +26,7 @@ export function PanelHeader({
     <header
       className={`flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-neutral-200/70 bg-surface px-4 py-3 lg:px-6 ${className}`}
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 max-w-full items-center gap-3">
         {Icon && (
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-neutral-950 text-white">
             <Icon aria-hidden="true" size={16} />
@@ -34,11 +34,11 @@ export function PanelHeader({
         )}
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="truncate font-serif text-2xl tracking-tight text-neutral-950">{title}</h2>
+            <h2 className="break-words font-serif text-2xl tracking-tight text-neutral-950">{title}</h2>
             {helpContent && <FeatureHelp title={title} content={helpContent} />}
           </div>
           {description && (
-            <p className="truncate text-xs text-neutral-600">{description}</p>
+            <p className="text-xs text-neutral-600">{description}</p>
           )}
         </div>
       </div>

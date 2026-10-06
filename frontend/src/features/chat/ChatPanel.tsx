@@ -261,7 +261,7 @@ export function ChatPanel({
               ref={textareaRef}
               aria-label={inputLabel}
               rows={1}
-              className="min-h-[48px] max-h-48 w-full resize-none overflow-y-auto bg-transparent px-1 py-3 text-sm leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
+              className="min-h-[48px] max-h-[min(12rem,25dvh)] w-full resize-none overflow-y-auto bg-transparent px-1 py-3 text-sm leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault()
@@ -309,7 +309,7 @@ export function ChatPanel({
                 }}
               />
               {modelPicker}
-              <div className="ml-auto">
+              <div className="ml-auto mr-14 sm:mr-0">
                 {isResponding ? (
                   <Button aria-label="Stop response" onClick={onStop} variant="secondary" className="border border-neutral-200">
                     <Square size={14} fill="currentColor" />

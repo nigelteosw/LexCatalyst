@@ -236,7 +236,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                   <p className="p-4 text-xs text-[#8c8c86]">No other users found.</p>
                 ) : (
                   usersQuery.data?.map((u) => (
-                    <div key={u.id} className="flex items-center justify-between gap-4 p-4">
+                    <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-medium text-[#0f0f0f]">{userLabel(u)}</div>
                         <div className="truncate text-[11px] text-[#8c8c86]">{u.email}</div>

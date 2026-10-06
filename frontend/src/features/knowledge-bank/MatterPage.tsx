@@ -162,7 +162,7 @@ export function MatterPage({
 
   return (
     <div className="flex min-h-0 flex-1 bg-surface">
-      <main className="min-w-0 flex-1 overflow-y-auto px-5 pb-10 pt-14 lg:px-12 lg:pt-20">
+      <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-20 pt-6 sm:px-5 sm:pb-10 sm:pt-14 lg:px-12 lg:pt-20">
         <div className="mx-auto max-w-5xl">
           <nav aria-label="Breadcrumb" className="mb-4 text-sm text-neutral-500">
             <button type="button" className="hover:text-neutral-800" onClick={() => selectHome()}>

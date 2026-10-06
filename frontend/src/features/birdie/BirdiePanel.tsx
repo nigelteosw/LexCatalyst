@@ -141,13 +141,17 @@ function playTweet(pitch = 1300) {
 }
 
 export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSettings }: BirdiePanelProps) {
-  const [frame, setFrame] = useState(() => defaultBirdieFrame(window.innerWidth, window.innerHeight))
+  const [frame, setFrame] = useState(() => defaultBirdieFrame(window.innerWidth, (window.visualViewport?.height ?? window.innerHeight)))
   const interactionRef = useRef<{ mode: 'drag' | 'resize'; pointerId: number; x: number; y: number; frame: BirdieFrame } | null>(null)
 
   useEffect(() => {
-    const onResize = () => setFrame((current) => clampBirdieFrame(current, window.innerWidth, window.innerHeight))
+    const onResize = () => setFrame((current) => clampBirdieFrame(current, window.innerWidth, (window.visualViewport?.height ?? window.innerHeight)))
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    window.visualViewport?.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.visualViewport?.removeEventListener('resize', onResize)
+    }
   }, [])
 
   function startInteraction(event: ReactPointerEvent<HTMLElement>, mode: 'drag' | 'resize') {
@@ -166,7 +170,7 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSet
     const next = start.mode === 'drag'
       ? { ...start.frame, x: start.frame.x + dx, y: start.frame.y + dy }
       : { ...start.frame, width: start.frame.width + dx, height: start.frame.height + dy }
-    setFrame(clampBirdieFrame(next, window.innerWidth, window.innerHeight))
+    setFrame(clampBirdieFrame(next, window.innerWidth, (window.visualViewport?.height ?? window.innerHeight)))
   }
 
   function endInteraction() {
@@ -199,7 +203,7 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSet
       aria-label="Birdie mentor"
       aria-hidden={!isOpen}
       className={`${isOpen ? '' : 'hidden '}birdie-enter fixed z-[60] flex flex-col overflow-hidden overscroll-none rounded-2xl border border-black/10 bg-white shadow-2xl`}
-      style={{ left: frame.x, top: frame.y, width: frame.width, height: frame.height }}
+      style={{ left: `clamp(max(8px, env(safe-area-inset-left)), ${frame.x}px, calc(100vw - ${frame.width}px - max(8px, env(safe-area-inset-right))))`, top: `calc(var(--app-offset-top, 0px) + max(env(safe-area-inset-top), ${frame.y}px))`, width: frame.width, height: frame.height }}
       onPointerMove={moveInteraction}
       onPointerUp={endInteraction}
       onPointerCancel={endInteraction}
@@ -248,14 +252,14 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSet
         type="button"
         aria-label="Resize Birdie (drag or use arrow keys)"
         title="Drag to resize"
-        className="absolute bottom-0 right-0 grid h-5 w-5 touch-none cursor-nwse-resize place-items-center text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2d9e6b]"
+        className="absolute bottom-0 right-0 hidden h-5 w-5 lg:grid touch-none cursor-nwse-resize place-items-center text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2d9e6b]"
         onPointerDown={(event) => startInteraction(event, 'resize')}
         onKeyDown={(event) => {
           const deltas: Record<string, [number, number]> = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] }
           const delta = deltas[event.key]
           if (!delta) return
           event.preventDefault()
-          setFrame((current) => clampBirdieFrame({ ...current, width: current.width + delta[0], height: current.height + delta[1] }, window.innerWidth, window.innerHeight))
+          setFrame((current) => clampBirdieFrame({ ...current, width: current.width + delta[0], height: current.height + delta[1] }, window.innerWidth, (window.visualViewport?.height ?? window.innerHeight)))
         }}
       >
         <MoveDiagonal size={12} />

@@ -264,7 +264,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]">
-      <header className="shrink-0 px-5 pt-10 lg:px-12 lg:pt-14">
+      <header className="shrink-0 px-4 pt-5 sm:px-5 sm:pt-10 lg:px-12 lg:pt-14">
         <div className="flex items-center gap-2">
           <h1 className="font-serif text-4xl tracking-tight text-neutral-950">Workboard</h1>
           <FeatureHelp title="Workboard" content={WORKBOARD_HELP} />
@@ -360,7 +360,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
         </div>
       )}
 
-      <div className={`app-scroll-region flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6 pt-6 lg:px-12 ${viewMode === 'board' ? 'sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden' : ''}`}>
+      <div className={`app-scroll-region flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-20 pt-4 sm:px-5 sm:pb-6 sm:pt-6 lg:px-12 ${viewMode === 'board' ? 'sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden' : ''}`}>
         {isInitialLoading ? (
           <BoardSkeleton />
         ) : actionsQuery.isError ? (

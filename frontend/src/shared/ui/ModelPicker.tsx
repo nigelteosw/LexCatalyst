@@ -27,6 +27,7 @@ export function ModelPicker({
   compact = false,
 }: ModelPickerProps) {
   const [open, setOpen] = useState(false)
+  const [menuRight, setMenuRight] = useState(0)
   const [searching, setSearching] = useState(false)
   const [query, setQuery] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
@@ -85,7 +86,10 @@ export function ModelPicker({
         className={`inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white text-xs hover:bg-neutral-50 ${
           compact ? 'h-7 px-2' : 'h-8 px-2.5'
         }`}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setMenuRight(Math.min(0, (rootRef.current?.getBoundingClientRect().right ?? 264) - 264))
+          setOpen((o) => !o)
+        }}
         type="button"
       >
         <span className="font-medium text-neutral-800">{current.label}</span>
@@ -97,7 +101,8 @@ export function ModelPicker({
 
       {open && (
         <div
-          className={`absolute right-0 z-50 w-64 rounded-xl border border-black/10 bg-white p-1 shadow-lg ${menuPos}`}
+          className={`absolute z-50 max-h-[45dvh] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-black/10 bg-white p-1 shadow-lg ${menuPos}`}
+          style={{ right: menuRight }}
           role="listbox"
         >
           {TIERS.map(({ tier, label }) => {

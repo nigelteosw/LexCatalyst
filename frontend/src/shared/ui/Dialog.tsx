@@ -71,7 +71,7 @@ export function Dialog({
     <div
       aria-labelledby={titleId}
       aria-modal="true"
-      className="fixed inset-0 z-[80] grid place-items-center bg-black/35 p-4 backdrop-blur-sm"
+      className="viewport-overlay fixed inset-0 z-[80] grid place-items-center bg-black/35 p-2 sm:p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -79,12 +79,12 @@ export function Dialog({
     >
       <div
         ref={panelRef}
-        className={`max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-lg border border-black/10 bg-[#fafaf8] shadow-2xl outline-none ${className || 'max-w-xl'}`}
+        className={`max-h-[calc(var(--app-height,100dvh)-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-w-0 w-full sm:max-h-[calc(var(--app-height,100dvh)-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto rounded-lg border border-black/10 bg-[#fafaf8] shadow-2xl outline-none ${className || 'max-w-xl'}`}
         tabIndex={-1}
       >
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-[#fafaf8]/95 px-4 py-3 backdrop-blur">
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-[#fafaf8]/95 px-4 py-3 backdrop-blur">
           {typeof title === 'string' ? (
-            <h2 className="text-sm font-semibold text-[#0f0f0f]" id={titleId}>
+            <h2 className="min-w-0 flex-1 break-words text-sm font-semibold text-[#0f0f0f]" id={titleId}>
               {title}
             </h2>
           ) : (
@@ -92,7 +92,7 @@ export function Dialog({
               {title}
             </div>
           )}
-          <div className="flex items-center gap-1">
+          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
             {headerActions}
             <Button aria-label="Close dialog" onClick={onClose} size="icon" variant="ghost">
               <X size={16} />

@@ -64,17 +64,16 @@ textarea {
 }
 
 .workspace-panel-enter {
-  animation: workspace-panel-in 220ms ease-out both;
+  /* Do not retain an animation stacking context around fixed dialogs. */
+  animation: workspace-panel-in 220ms ease-out backwards;
 }
 
 @keyframes workspace-panel-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -258,7 +257,7 @@ textarea {
 }
 
 .birdie-enter {
-  animation: birdie-in 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: birdie-in 300ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
   transform-origin: bottom right;
 }
 
@@ -347,5 +346,72 @@ textarea {
   .pearl-black::before,
   .pearl-black::after {
     animation: none;
+  }
+}
+
+/* Keep long filenames, model identifiers and user-entered text inside their panel. */
+:where(input, textarea, select) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:where(h1, h2, h3, p, label) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1023px) {
+  #root {
+    height: var(--app-height, 100dvh);
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* iOS otherwise zooms the page when focusing the app's compact forms. */
+  input:not([type='checkbox']):not([type='radio']), textarea, select {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 1023px) and (pointer: coarse) {
+  button:not(.chat-markdown button), select, input:not([type='checkbox']):not([type='radio']) {
+    min-height: 44px;
+  }
+
+  button:has(svg):not(:has(img)) {
+    min-width: 44px;
+  }
+}
+
+
+@media (max-width: 1023px) {
+  .viewport-overlay {
+    top: var(--app-offset-top, 0px);
+    bottom: auto;
+    height: var(--app-height, 100dvh);
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    padding-left: max(0.5rem, env(safe-area-inset-left));
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+  }
+
+  .mobile-sidebar {
+    top: var(--app-offset-top, 0px);
+    bottom: auto;
+    height: var(--app-height, 100dvh);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .birdie-launcher {
+    top: calc(var(--app-offset-top, 0px) + var(--app-height, 100dvh) - 4rem - env(safe-area-inset-bottom));
+    bottom: auto;
+    right: max(1rem, env(safe-area-inset-right));
+  }
+
+  #birdie-panel {
+    max-height: calc(var(--app-height, 100dvh) - 88px - env(safe-area-inset-top));
+    max-width: calc(100vw - 1rem - env(safe-area-inset-left) - env(safe-area-inset-right));
   }
 }

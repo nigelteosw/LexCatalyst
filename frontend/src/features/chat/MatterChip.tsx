@@ -30,7 +30,7 @@ export function MatterChip({
   const label = `${matter ? matter.caseNumber : 'General'} · ${sourceCount} ${sourceCount === 1 ? 'source' : 'sources'}`
 
   return (
-    <label className="relative inline-flex h-9 max-w-[16rem] cursor-pointer items-center gap-2 rounded-lg bg-slate-100 px-3 text-sm font-medium text-slate-800 transition-colors focus-within:ring-2 focus-within:ring-slate-400 hover:bg-slate-200">
+    <label className="relative inline-flex min-h-11 min-w-0 max-w-full sm:max-w-[16rem] cursor-pointer items-center gap-2 rounded-lg bg-slate-100 px-3 text-sm font-medium text-slate-800 transition-colors focus-within:ring-2 focus-within:ring-slate-400 hover:bg-slate-200">
       <Folder size={15} className="shrink-0" />
       <span className="truncate">{label}</span>
       <select

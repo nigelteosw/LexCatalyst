@@ -179,7 +179,7 @@ export function MattersSection({
           return (
             <div
               key={row.key}
-              className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-1 py-4 transition-colors hover:bg-black/[0.025]"
+              className="group grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-1 py-4 transition-colors hover:bg-black/[0.025]"
             >
               <button
                 className="min-w-0 text-left"
@@ -206,7 +206,7 @@ export function MattersSection({
                   {row.lastActivity && ` · Active ${formatRelative(row.lastActivity)}`}
                 </span>
               </button>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center justify-end gap-1">
                 <Button
                   aria-label={`New LexChat in ${matter ? matter.title : 'General'}`}
                   onClick={() => {
