@@ -10,21 +10,21 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const baseClasses =
-  'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400'
+  'inline-flex items-center justify-center gap-2 rounded-md text-body font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-fill disabled:text-ink-tertiary'
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-white hover:bg-accent-hover',
-  secondary: 'bg-transparent text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950',
-  ghost: 'bg-transparent text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950',
-  danger: 'bg-transparent text-red-700 hover:bg-red-50 hover:text-red-800',
-  selected: 'bg-neutral-200 text-neutral-950 hover:bg-neutral-200',
+  primary: 'bg-accent font-semibold text-white hover:bg-accent-hover',
+  secondary: 'border border-line bg-card text-ink hover:bg-fill',
+  ghost: 'bg-transparent text-ink-secondary hover:bg-fill hover:text-ink',
+  danger: 'bg-transparent text-danger hover:bg-danger-tint',
+  selected: 'bg-fill-pressed text-ink hover:bg-fill-pressed',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
   icon: 'h-9 w-9 p-0',
-  sm: 'h-8 px-2.5 text-xs',
-  md: 'h-10 px-3 text-sm',
-  lg: 'h-11 px-4 text-sm',
+  sm: 'h-8 px-2.5',
+  md: 'h-10 px-3',
+  lg: 'h-11 px-4',
 }
 
 export function Button({

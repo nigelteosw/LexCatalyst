@@ -1,12 +1,56 @@
 @import "tailwindcss";
 
+/*
+ * LexCatalyst design tokens — the single source of truth for typography,
+ * colour, radius and spacing. Use these utilities (text-ink, bg-fill,
+ * border-line, text-accent…) and the type-scale classes (.t-display,
+ * .t-body…) instead of hard-coded hex / px values.
+ */
 @theme {
-  --font-sans: "Inter", "Aptos", "Helvetica Neue", Helvetica, sans-serif;
-  --font-serif: "Playfair Display", Georgia, serif;
-  /* Page surface and brand accent: use these instead of hard-coded hex values. */
-  --color-surface: #fafaf8;
-  --color-accent: #1e3a8a;
-  --color-accent-hover: #172e6e;
+  /* Type families */
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, serif;
+
+  /* Type scale (sans sizes; serif headings use the .t-* classes) */
+  --text-micro: 0.625rem;      /* 10px — avatar initials */
+  --text-micro--line-height: 1;
+  --text-label: 0.6875rem;     /* 11px — section labels, column headers */
+  --text-label--line-height: 1.4;
+  --text-label--letter-spacing: 0.02em;
+  --text-meta: 0.75rem;        /* 12px — dates, counts, helper text */
+  --text-meta--line-height: 1.4;
+  --text-body: 0.8125rem;      /* 13px — default UI text */
+  --text-body--line-height: 1.5;
+  --text-reading: 1rem;        /* 16px — answers, memo, composer */
+  --text-reading--line-height: 1.7;
+
+  /* Ink (text) */
+  --color-ink: oklch(0.18 0.005 90);          /* primary text */
+  --color-ink-secondary: oklch(0.42 0.006 90); /* secondary text */
+  --color-ink-tertiary: oklch(0.58 0.006 90);  /* disabled / placeholder */
+
+  /* Accent (dark blue) */
+  --color-accent: oklch(0.30 0.10 262);
+  --color-accent-hover: oklch(0.24 0.08 262);
+  --color-accent-tint: oklch(0.95 0.015 262);
+
+  /* Semantic state */
+  --color-danger: oklch(0.50 0.15 28);
+  --color-danger-tint: oklch(0.96 0.025 28);
+  --color-warning: oklch(0.45 0.10 65);
+  --color-warning-tint: oklch(0.95 0.04 75);
+
+  /* Surfaces */
+  --color-page: oklch(0.99 0.002 90);
+  --color-card: #fff;
+  --color-fill: oklch(0.97 0.003 90);          /* sidebar, hover, columns */
+  --color-fill-pressed: oklch(0.945 0.004 90);
+  --color-highlight: oklch(0.95 0.06 95);      /* source passage highlight */
+
+  /* Borders */
+  --color-line: oklch(0.91 0.003 90);          /* default border */
+  --color-line-strong: oklch(0.86 0.004 90);   /* inputs, focused */
+  --color-hairline: oklch(0.94 0.003 90);      /* dividers */
 }
 
 * {
@@ -14,15 +58,75 @@
 }
 
 :root {
-  color: #171717;
-  background: #fafaf8;
-  font-family:
-    "Inter", Aptos, "Helvetica Neue", Helvetica, sans-serif;
+  color: var(--color-ink);
+  background: var(--color-page);
+  font-family: "Geist", system-ui, sans-serif;
+  font-size: 13px;
   font-synthesis: none;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Type-scale classes: bundle family + size + line-height + weight + tracking.
+   Never use serif below 16px or for UI controls. */
+.t-display {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+}
+.t-h2 {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 400;
+}
+.t-wordmark {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 500;
+}
+.t-reading {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.7;
+  font-weight: 400;
+}
+.t-body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+.t-body-strong {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.t-meta {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+.t-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+}
+.t-micro {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
 }
 
 html,
@@ -36,7 +140,7 @@ body,
 
 html {
   min-width: 320px;
-  background: #fafaf8;
+  background: var(--color-page);
   overscroll-behavior: none;
 }
 
@@ -94,12 +198,12 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #e5e5e5;
+  background: var(--color-line);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #d4d4d4;
+  background: var(--color-line-strong);
 }
 
 .lex-sidebar-scroll {
@@ -118,6 +222,10 @@ textarea {
 .chat-markdown {
   min-width: 0;
   overflow-wrap: anywhere;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--color-ink);
 }
 
 .chat-markdown > :first-child {
@@ -142,17 +250,17 @@ textarea {
 .chat-markdown h3,
 .chat-markdown h4 {
   margin: 1rem 0 0.45rem;
-  color: #171717;
-  font-weight: 650;
+  color: var(--color-ink);
+  font-weight: 500;
   line-height: 1.3;
 }
 
 .chat-markdown h1 {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
 }
 
 .chat-markdown h2 {
-  font-size: 1.1rem;
+  font-size: 1.0625rem;
 }
 
 .chat-markdown h3,
@@ -183,33 +291,33 @@ textarea {
 }
 
 .chat-markdown blockquote {
-  border-left: 3px solid #d4d4d4;
+  border-left: 3px solid var(--color-line-strong);
   padding-left: 0.85rem;
-  color: #525252;
+  color: var(--color-ink-secondary);
 }
 
 .chat-markdown a {
-  color: #1d4ed8;
+  color: var(--color-accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .chat-markdown code {
-  border-radius: 0.3rem;
-  background: #e5e5e5;
+  border-radius: 6px;
+  background: var(--color-fill);
   padding: 0.1rem 0.3rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.85em;
+  font-size: 0.8125rem;
 }
 
 .chat-markdown pre {
   overflow-x: auto;
   max-width: 100%;
-  border: 1px solid #d4d4d4;
-  border-radius: 0.6rem;
-  background: #171717;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-ink);
   padding: 0.85rem;
-  color: #f5f5f5;
+  color: var(--color-page);
 }
 
 .chat-markdown pre code {
@@ -223,27 +331,28 @@ textarea {
   width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
 }
 
 .chat-markdown th,
 .chat-markdown td {
   min-width: 8rem;
-  border: 1px solid #d4d4d4;
+  border: 1px solid var(--color-line);
   padding: 0.45rem 0.6rem;
   text-align: left;
   vertical-align: top;
 }
 
 .chat-markdown th {
-  background: #e5e5e5;
-  font-weight: 600;
+  background: var(--color-fill);
+  font-weight: 500;
 }
 
 .chat-markdown hr {
   margin: 1rem 0;
   border: 0;
-  border-top: 1px solid #d4d4d4;
+  border-top: 1px solid var(--color-hairline);
 }
 
 .chat-markdown input[type="checkbox"] {
@@ -252,8 +361,8 @@ textarea {
 
 /* Selection color */
 ::selection {
-  background-color: #f3f4f6;
-  color: #111827;
+  background-color: var(--color-accent-tint);
+  color: var(--color-ink);
 }
 
 .birdie-enter {

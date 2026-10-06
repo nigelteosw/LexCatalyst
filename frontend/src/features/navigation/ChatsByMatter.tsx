@@ -38,25 +38,25 @@ export function ChatsByMatter({
   const groups = groupThreadsByMatter(threads, matters)
   return (
     <div className="space-y-3">
-      <div className="px-2.5 text-[11px] font-medium text-white/35">Chats by matter</div>
+      <div className="t-label px-2.5 uppercase text-ink-tertiary">Chats by matter</div>
       {groups.map(({ matter, threads: groupThreads }) => (
         <section key={matter?.id ?? 'general'} aria-label={matter ? matter.title : 'General'}>
           <button
             type="button"
             onClick={() => onSelectMatter(matter?.id ?? null)}
             title={matter ? `${matter.caseNumber} · ${matter.title}` : 'General'}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] font-semibold text-white/85 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="t-body-strong flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-ink hover:bg-fill-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <Folder size={14} className="shrink-0 text-white/45" />
+            <Folder size={16} strokeWidth={1.5} className="shrink-0 text-ink-tertiary" />
             <span className="truncate">
               {matter ? `${matter.caseNumber} · ${matter.title}` : 'General'}
             </span>
           </button>
-          <div className="ml-[17px] space-y-0.5 border-l border-white/10 pl-2">
+          <div className="ml-[17px] space-y-0.5 border-l border-line pl-2">
             {groupThreads.length > 0 ? (
               groupThreads.map(renderThread)
             ) : (
-              <div className="px-2 py-1 text-[11px] text-white/30">No LexChats yet</div>
+              <div className="t-meta px-2 py-1 text-ink-tertiary">No LexChats yet</div>
             )}
           </div>
         </section>

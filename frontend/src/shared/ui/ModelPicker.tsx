@@ -58,7 +58,7 @@ export function ModelPicker({
   if (settings && !settings.hasKey) {
     return (
       <button
-        className="inline-flex h-8 items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+        className="t-body inline-flex h-8 items-center rounded-md bg-warning-tint px-2.5 font-medium text-warning hover:bg-warning-tint/70"
         onClick={onOpenSettings}
         type="button"
       >
@@ -83,7 +83,7 @@ export function ModelPicker({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`Model: ${current.label} ${current.modelName ?? ''}`.trim()}
-        className={`inline-flex items-center gap-1.5 rounded-lg border border-black/10 bg-white text-xs hover:bg-neutral-50 ${
+        className={`t-body inline-flex items-center gap-1.5 rounded-md border border-line bg-card hover:bg-fill ${
           compact ? 'h-7 px-2' : 'h-8 px-2.5'
         }`}
         onClick={() => {
@@ -92,16 +92,16 @@ export function ModelPicker({
         }}
         type="button"
       >
-        <span className="font-medium text-neutral-800">{current.label}</span>
+        <span className="font-medium text-ink">{current.label}</span>
         {current.modelName && (
-          <span className="max-w-[9rem] truncate text-neutral-500">{current.modelName}</span>
+          <span className="max-w-[9rem] truncate text-ink-secondary">{current.modelName}</span>
         )}
-        <ChevronDown size={12} className="text-neutral-400" />
+        <ChevronDown size={12} strokeWidth={1.5} className="text-ink-tertiary" />
       </button>
 
       {open && (
         <div
-          className={`absolute z-50 max-h-[45dvh] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-black/10 bg-white p-1 shadow-lg ${menuPos}`}
+          className={`absolute z-50 max-h-[45dvh] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-[10px] border border-line bg-card p-1 shadow-[0_16px_48px_oklch(0.2_0.01_260/0.18)] ${menuPos}`}
           style={{ right: menuRight }}
           role="listbox"
         >
@@ -111,26 +111,26 @@ export function ModelPicker({
             return (
               <button
                 aria-selected={selected}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-neutral-100"
+                className="t-body flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-fill"
                 key={tier}
                 onClick={() => pick({ tier })}
                 role="option"
                 type="button"
               >
-                <span className="font-medium text-neutral-800">{label}</span>
-                <span className="min-w-0 flex-1 truncate text-neutral-500">
+                <span className="font-medium text-ink">{label}</span>
+                <span className="min-w-0 flex-1 truncate text-ink-secondary">
                   {id ? shortModelName(id, modelsQuery.data?.find((m) => m.id === id)?.name) : ''}
                 </span>
-                {selected && <Check size={12} className="text-[#1a6b4a]" />}
+                {selected && <Check size={12} strokeWidth={1.5} className="text-accent" />}
               </button>
             )
           })}
-          <div className="my-1 border-t border-black/5" />
+          <div className="my-1 border-t border-hairline" />
           {searching ? (
             <div className="p-1">
               <input
                 autoFocus
-                className="h-8 w-full rounded-lg border border-black/15 px-2 text-xs outline-none focus:border-black/40"
+                className="t-body h-8 w-full rounded-md border border-line-strong px-2 outline-none focus:border-accent"
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={modelsQuery.isLoading ? 'Loading models…' : 'Search OpenRouter models'}
                 value={query}
@@ -139,12 +139,12 @@ export function ModelPicker({
                 {matches.map((m) => (
                   <li key={m.id}>
                     <button
-                      className="flex w-full flex-col rounded-lg px-2 py-1 text-left text-xs hover:bg-neutral-100"
+                      className="t-body flex w-full flex-col rounded-md px-2 py-1 text-left hover:bg-fill"
                       onClick={() => pick({ model: m.id })}
                       type="button"
                     >
-                      <span className="truncate text-neutral-800">{m.name}</span>
-                      <span className="truncate text-[11px] text-neutral-500">
+                      <span className="truncate text-ink">{m.name}</span>
+                      <span className="t-meta truncate text-ink-secondary">
                         {m.id}
                         {m.promptPricePerMillion != null ? ` · $${m.promptPricePerMillion}/M in` : ''}
                       </span>
@@ -152,18 +152,18 @@ export function ModelPicker({
                   </li>
                 ))}
                 {matches.length === 0 && !modelsQuery.isLoading && (
-                  <li className="px-2 py-1.5 text-[11px] text-neutral-500">No models match.</li>
+                  <li className="t-meta px-2 py-1.5 text-ink-secondary">No models match.</li>
                 )}
               </ul>
             </div>
           ) : (
             <button
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-100"
+              className="t-body flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-ink-secondary hover:bg-fill"
               onClick={() => setSearching(true)}
               type="button"
             >
               Other model…
-              {choice.model && <Check size={12} className="ml-auto text-[#1a6b4a]" />}
+              {choice.model && <Check size={12} strokeWidth={1.5} className="ml-auto text-accent" />}
             </button>
           )}
         </div>

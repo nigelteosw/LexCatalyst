@@ -41,15 +41,9 @@ type FeatureHelpProps = {
 // ---------------------------------------------------------------------------
 
 const TIER_CLASSES: Record<HelpRole['tier'], string> = {
-  top: 'bg-purple-50 text-purple-700 border-purple-200',
-  mid: 'bg-blue-50 text-blue-700 border-blue-200',
-  base: 'bg-neutral-50 text-neutral-600 border-neutral-200',
-}
-
-const TIER_DOT: Record<HelpRole['tier'], string> = {
-  top: 'bg-purple-400',
-  mid: 'bg-blue-400',
-  base: 'bg-neutral-400',
+  top: 'bg-fill text-ink border-line',
+  mid: 'bg-fill text-ink border-line',
+  base: 'bg-fill text-ink-secondary border-line',
 }
 
 // ---------------------------------------------------------------------------
@@ -64,21 +58,21 @@ export function FeatureHelp({ title, content, size = 'default' }: FeatureHelpPro
       {size === 'compact' ? (
         <button
           aria-label={`How ${title} works`}
-          className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-amber-500 transition hover:bg-amber-50 hover:text-amber-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+          className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-ink-tertiary transition hover:bg-fill hover:text-ink-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
           onClick={() => setOpen(true)}
           title={`How ${title} works`}
           type="button"
         >
-          <CircleHelp size={12} />
+          <CircleHelp size={12} strokeWidth={1.5} />
         </button>
       ) : (
       <button
         aria-label={`How ${title} works`}
-        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-400"
+        className="t-label inline-flex items-center gap-1.5 rounded-md border border-line bg-card px-2.5 py-1 text-ink-secondary transition hover:bg-fill focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
         onClick={() => setOpen(true)}
         type="button"
       >
-        <CircleHelp size={12} />
+        <CircleHelp size={12} strokeWidth={1.5} />
         <span className="hidden sm:inline">How it works</span>
         <span className="sm:hidden">Guide</span>
       </button>
@@ -112,27 +106,27 @@ function HelpModal({
       role="dialog"
       aria-label={`${title} guide`}
     >
-      <div className="flex max-h-[calc(var(--app-height,100dvh)-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="flex max-h-[calc(var(--app-height,100dvh)-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-lg flex-col overflow-hidden rounded-[10px] bg-card shadow-[0_16px_48px_oklch(0.2_0.01_260/0.18)]">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-100 bg-gradient-to-b from-amber-50 to-white px-5 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-hairline px-5 py-4">
           <div>
             <div className="mb-1 flex items-center gap-2">
-              <Sparkles className="text-amber-500" size={16} />
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-600">
+              <Sparkles className="text-ink-secondary" size={16} strokeWidth={1.5} />
+              <span className="t-label uppercase text-ink-secondary">
                 Getting started
               </span>
             </div>
-            <h2 className="text-lg font-bold text-neutral-900">{title}</h2>
-            <p className="mt-0.5 text-sm leading-5 text-neutral-500">{content.intro}</p>
+            <h2 className="t-h2 text-ink">{title}</h2>
+            <p className="t-body mt-1 text-ink-secondary">{content.intro}</p>
           </div>
           <button
             aria-label="Close guide"
-            className="mt-0.5 shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+            className="mt-0.5 shrink-0 rounded-md p-1.5 text-ink-tertiary hover:bg-fill hover:text-ink"
             onClick={onClose}
             type="button"
           >
-            <X size={16} />
+            <X size={16} strokeWidth={1.5} />
           </button>
         </div>
 
@@ -141,24 +135,24 @@ function HelpModal({
 
           {/* Steps */}
           <div className="mb-5">
-            <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-neutral-400">
-              <BookOpen size={12} />
+            <div className="t-label mb-3 flex items-center gap-1.5 uppercase text-ink-tertiary">
+              <BookOpen size={12} strokeWidth={1.5} />
               How to use it
             </div>
             <ol className="space-y-3">
               {content.steps.map((step, i) => (
-                <li key={i} className="flex gap-3 rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
+                <li key={i} className="flex gap-3 rounded-md border border-line bg-fill px-4 py-3">
                   <span className="mt-0.5 shrink-0 text-lg leading-none" role="img" aria-hidden="true">
                     {step.emoji}
                   </span>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-[9px] font-bold text-neutral-600">
+                      <span className="t-micro flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-fill-pressed text-ink-secondary">
                         {i + 1}
                       </span>
-                      <p className="text-sm font-semibold text-neutral-900">{step.title}</p>
+                      <p className="t-body-strong text-ink">{step.title}</p>
                     </div>
-                    <p className="mt-1 text-xs leading-5 text-neutral-500">{step.body}</p>
+                    <p className="t-meta mt-1 text-ink-secondary">{step.body}</p>
                   </div>
                 </li>
               ))}
@@ -168,24 +162,23 @@ function HelpModal({
           {/* Role table */}
           {content.roles && content.roles.length > 0 && (
             <div className="mb-5">
-              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-neutral-400">
-                <ShieldCheck size={12} />
+              <div className="t-label mb-3 flex items-center gap-1.5 uppercase text-ink-tertiary">
+                <ShieldCheck size={12} strokeWidth={1.5} />
                 Who can do what
               </div>
               <div className="space-y-2">
                 {content.roles.map((role) => (
                   <div
                     key={role.label}
-                    className={`rounded-xl border px-4 py-3 ${TIER_CLASSES[role.tier]}`}
+                    className={`rounded-md border px-4 py-3 ${TIER_CLASSES[role.tier]}`}
                   >
                     <div className="mb-1.5 flex items-center gap-1.5">
-                      <span className={`h-2 w-2 rounded-full ${TIER_DOT[role.tier]}`} />
-                      <span className="text-xs font-bold">{role.label}</span>
+                      <span className="t-body-strong">{role.label}</span>
                     </div>
                     <ul className="space-y-1">
                       {role.abilities.map((ability) => (
-                        <li key={ability} className="flex items-start gap-1.5 text-xs">
-                          <CheckCircle2 className="mt-px shrink-0 opacity-60" size={11} />
+                        <li key={ability} className="t-meta flex items-start gap-1.5">
+                          <CheckCircle2 className="mt-px shrink-0 opacity-60" size={11} strokeWidth={1.5} />
                           {ability}
                         </li>
                       ))}
@@ -198,13 +191,13 @@ function HelpModal({
 
           {/* Tips */}
           {content.tips && content.tips.length > 0 && (
-            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-600">
-                💡 Good to know
+            <div className="rounded-md border border-line bg-fill px-4 py-3">
+              <p className="t-label mb-1.5 uppercase text-ink-secondary">
+                Good to know
               </p>
               <ul className="space-y-1.5">
                 {content.tips.map((tip) => (
-                  <li key={tip} className="text-xs leading-5 text-amber-800">
+                  <li key={tip} className="t-meta text-ink-secondary">
                     {tip}
                   </li>
                 ))}
@@ -215,9 +208,9 @@ function HelpModal({
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-neutral-100 px-5 py-3">
+        <div className="shrink-0 border-t border-hairline px-5 py-3">
           <button
-            className="w-full rounded-xl bg-neutral-900 py-2.5 text-sm font-semibold text-white hover:bg-neutral-700"
+            className="t-body w-full rounded-md bg-accent py-2.5 font-semibold text-white hover:bg-accent-hover"
             onClick={onClose}
             type="button"
           >

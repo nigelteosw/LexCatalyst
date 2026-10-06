@@ -42,7 +42,7 @@ export function MarkdownContent({
               return (
                 <button
                   aria-label={`Source ${n}`}
-                  className="mx-0.5 inline-flex h-5 min-w-5 -translate-y-0.5 items-center justify-center rounded bg-slate-100 px-1 align-baseline font-sans text-[11px] font-semibold leading-none text-slate-700 transition-colors hover:bg-slate-200"
+                  className="mx-0.5 inline-flex min-w-3 -translate-y-1 items-center justify-center align-baseline font-sans text-[11px] font-medium leading-none tracking-[0.02em] text-accent transition-colors hover:text-accent-hover"
                   onClick={() => onFootnoteClick?.(n)}
                   type="button"
                 >

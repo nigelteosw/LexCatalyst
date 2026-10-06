@@ -28,15 +28,15 @@ export class PanelErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="grid min-h-0 flex-1 place-items-center bg-[#fafaf8] p-6">
-          <div className="max-w-md rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm">
-            <h2 className="text-base font-semibold text-[#171717]">This page could not be opened</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6f6f69]">
+        <div className="grid min-h-0 flex-1 place-items-center bg-page p-6">
+          <div className="max-w-md rounded-[10px] border border-line bg-card p-6 text-center">
+            <h2 className="t-h2 text-ink">This page could not be opened</h2>
+            <p className="t-body mt-2 text-ink-secondary">
               The rest of the workspace is still available. Reload to fetch the latest page files
               and try again.
             </p>
             <button
-              className="mt-4 rounded-lg bg-[#0f0f0f] px-4 py-2 text-sm font-medium text-white"
+              className="t-body mt-4 rounded-md bg-accent px-4 py-2 font-semibold text-white hover:bg-accent-hover"
               onClick={() => window.location.reload()}
               type="button"
             >

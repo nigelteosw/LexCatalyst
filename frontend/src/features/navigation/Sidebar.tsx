@@ -59,12 +59,12 @@ const MAX_WIDTH = 480
 const DEFAULT_WIDTH = 236
 
 const sidebarActionClass =
-  'flex w-full items-center gap-2 rounded-[9px] px-3 py-2 text-left text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0f0f]'
+  'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-fill'
 
 const sidebarNavClass =
-  'text-white/50 hover:bg-white/[0.07] hover:text-white/85'
+  'text-ink-secondary hover:bg-fill-pressed hover:text-ink'
 
-const sidebarNavActiveClass = 'bg-white/10 text-white'
+const sidebarNavActiveClass = 'bg-fill-pressed text-ink'
 
 export function Sidebar({
   threads,
@@ -220,7 +220,7 @@ export function Sidebar({
       {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 overscroll-none bg-neutral-900/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 overscroll-none bg-ink/40 backdrop-blur-sm lg:hidden"
           onClick={onClose}
         />
       )}
@@ -228,7 +228,7 @@ export function Sidebar({
       {/* Sidebar Container */}
       <aside
         ref={sidebarRef}
-        className={`mobile-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none bg-[#0f0f0f] text-[#fafaf8] transition-[transform,width] duration-300 lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
+        className={`mobile-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none border-r border-line bg-fill text-ink transition-[transform,width] duration-300 lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{ width: `${isCollapsed ? COLLAPSED_WIDTH : width}px`, maxWidth: isDesktop ? undefined : 'calc(100vw - 2rem)' }}
@@ -236,7 +236,7 @@ export function Sidebar({
         <div className="flex h-full min-h-0 flex-col">
           {/* Sidebar Header */}
           <div
-            className={`border-b border-white/[0.08] pb-3 pt-[18px] ${isCollapsed ? 'px-2' : 'px-3.5'}`}
+            className={`border-b border-hairline pb-3 pt-[18px] ${isCollapsed ? 'px-2' : 'px-3.5'}`}
           >
             <div
               className={`flex items-center ${
@@ -245,13 +245,13 @@ export function Sidebar({
             >
               <button
                 aria-label="Go to home dashboard"
-                className="flex items-center gap-2.5 text-white transition-opacity hover:opacity-80"
+                className="flex items-center gap-2.5 text-ink transition-opacity hover:opacity-80"
                 onClick={() => { selectHome(); onClose() }}
                 type="button"
               >
-                <img alt="" className="h-[30px] w-[30px] rounded-lg" src="/favicon.svg" />
+                <img alt="" className="h-[30px] w-[30px] rounded-md" src="/favicon.svg" />
                 {!isCollapsed && (
-                  <span className="text-[15px] font-semibold tracking-[-0.02em]">
+                  <span className="t-wordmark">
                     LexCatalyst
                   </span>
                 )}
@@ -261,18 +261,18 @@ export function Sidebar({
                   onClick={toggleCollapsed}
                   aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                   title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                  className="hidden h-8 w-8 place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 lg:grid"
+                  className="hidden h-8 w-8 place-items-center rounded-md text-ink-secondary transition-colors hover:bg-fill-pressed hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:grid"
                   type="button"
                 >
-                  {isCollapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+                  {isCollapsed ? <ChevronsRight size={16} strokeWidth={1.5} /> : <ChevronsLeft size={16} strokeWidth={1.5} />}
                 </button>
                 <button
                   onClick={onClose}
                   aria-label="Close sidebar"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 lg:hidden"
+                  className="grid h-8 w-8 place-items-center rounded-md text-ink-secondary transition-colors hover:bg-fill-pressed hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
                   type="button"
                 >
-                  <X size={16} />
+                  <X size={16} strokeWidth={1.5} />
                 </button>
               </div>
             </div>
@@ -280,7 +280,7 @@ export function Sidebar({
 
           <nav
             aria-label="Workspace"
-            className="flex flex-col gap-0.5 border-b border-white/[0.08] px-1.5 py-2"
+            className="flex flex-col gap-0.5 border-b border-hairline px-1.5 py-2"
           >
             <NavItem icon={Home} label="Home" collapsed={isCollapsed} active={current.view === 'home' || current.view === 'matter' || current.view === 'documents'}
               onClick={() => { selectHome(); closeMobile() }} />
@@ -332,14 +332,14 @@ export function Sidebar({
           {/* Sidebar Footer: user button opens the account menu */}
           <div
             ref={userMenuRef}
-            className="relative shrink-0 border-t border-white/[0.08] px-2 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
+            className="relative shrink-0 border-t border-hairline px-2 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
           >
             {(
               <div
                 aria-hidden={!userMenuOpen}
                 role="menu"
                 aria-label="Account menu"
-                className={`absolute bottom-full z-50 mb-1 origin-bottom overflow-hidden rounded-xl border border-white/10 bg-[#1a1a1a] py-1.5 shadow-xl transition-[opacity,transform,visibility] duration-150 ease-out motion-reduce:transition-none ${
+                className={`absolute bottom-full z-50 mb-1 origin-bottom overflow-hidden rounded-[10px] border border-line bg-card py-1.5 shadow-[0_16px_48px_oklch(0.2_0.01_260/0.18)] transition-[opacity,transform,visibility] duration-150 ease-out motion-reduce:transition-none ${
                   isCollapsed ? 'left-2 w-60' : 'inset-x-2'
                 } ${
                   userMenuOpen
@@ -366,7 +366,7 @@ export function Sidebar({
                   />
                 </div>
                 {menuExtra}
-                <div className="mt-1 border-t border-white/[0.08] px-1.5 pt-1.5">
+                <div className="mt-1 border-t border-hairline px-1.5 pt-1.5">
                   <UserMenuItem
                     label="Sign out"
                     onClick={() => {
@@ -382,29 +382,30 @@ export function Sidebar({
               aria-haspopup="menu"
               aria-label="Account menu"
               title={isCollapsed ? `${userFullName} · ${userRole}` : undefined}
-              className={`flex w-full items-center gap-2.5 rounded-lg border px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+              className={`flex w-full items-center gap-2.5 rounded-md border px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 isCollapsed ? 'justify-center px-0' : ''
               } ${
                 userMenuOpen
-                  ? 'border-white/25 bg-white/[0.08]'
-                  : 'border-transparent hover:bg-white/[0.07]'
+                  ? 'border-line-strong bg-fill-pressed'
+                  : 'border-transparent hover:bg-fill-pressed'
               }`}
               onClick={() => setUserMenuOpen((open) => !open)}
               type="button"
             >
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-[10px] font-semibold uppercase text-white">
+              <div className="t-micro grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent uppercase text-white">
                 {userInitials}
               </div>
               {!isCollapsed && (
                 <>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12px] font-medium text-white/85">{userFullName}</div>
-                    <div className="truncate text-[10.5px] capitalize text-white/40">{userRole}</div>
+                    <div className="t-body-strong truncate text-ink">{userFullName}</div>
+                    <div className="t-meta truncate capitalize text-ink-tertiary">{userRole}</div>
                   </div>
                   <ChevronsUpDown
                     size={14}
-                    className={`shrink-0 text-white/35 transition-transform duration-150 motion-reduce:transition-none ${
-                      userMenuOpen ? 'scale-110 text-white/60' : ''
+                    strokeWidth={1.5}
+                    className={`shrink-0 text-ink-tertiary transition-transform duration-150 motion-reduce:transition-none ${
+                      userMenuOpen ? 'scale-110 text-ink-secondary' : ''
                     }`}
                   />
                 </>
@@ -417,8 +418,8 @@ export function Sidebar({
         {!isCollapsed && (
           <div
             onMouseDown={startResizing}
-            className={`absolute bottom-0 right-0 top-0 hidden w-1 cursor-col-resize transition-colors hover:bg-white/15 lg:block ${
-              isResizing ? 'w-1.5 bg-white/20' : 'bg-transparent'
+            className={`absolute bottom-0 right-0 top-0 hidden w-1 cursor-col-resize transition-colors hover:bg-line-strong lg:block ${
+              isResizing ? 'w-1.5 bg-line-strong' : 'bg-transparent'
             }`}
           />
         )}
@@ -438,13 +439,13 @@ function UserMenuItem({
 }) {
   return (
     <button
-      className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-[12.5px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      className="t-body flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-ink-secondary transition-colors hover:bg-fill hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       onClick={onClick}
       role="menuitem"
       type="button"
     >
       <span>{label}</span>
-      {hint && <span className="text-[11px] text-white/45">{hint}</span>}
+      {hint && <span className="t-meta text-ink-tertiary">{hint}</span>}
     </button>
   )
 }
@@ -473,23 +474,23 @@ function NavItem({
       onClick={onClick}
       onFocus={onPrefetch}
       onMouseEnter={onPrefetch}
-      className={`${sidebarActionClass} relative min-h-10 gap-3 text-[13px] ${
+      className={`${sidebarActionClass} t-body-strong relative min-h-10 gap-3 ${
         collapsed ? 'justify-center px-0' : ''
       } ${active ? sidebarNavActiveClass : sidebarNavClass}`}
       type="button"
     >
-      <Icon size={20} className="shrink-0" />
+      <Icon size={18} strokeWidth={1.5} className="shrink-0" />
       {!collapsed && <span className="flex-1 text-left">{label}</span>}
       {badge ? (
         collapsed ? (
           <span
             aria-label={`${badge} pending`}
-            className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-[#f0a000]"
+            className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-warning"
           />
         ) : (
           <span
             aria-label={`${badge} pending ${label} tasks`}
-            className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#f0a000] px-1 text-[9.5px] font-semibold text-[#0f0f0f]"
+            className="t-micro inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-warning-tint px-1 text-warning"
           >
             {badge}
           </span>
@@ -586,15 +587,15 @@ function ThreadRow({
 
   return (
     <div
-      className={`group relative flex items-center gap-1 rounded-[9px] pr-1 transition-colors ${
-        isActive ? 'bg-white/10' : 'hover:bg-white/[0.07]'
+      className={`group relative flex items-center gap-1 rounded-md pr-1 transition-colors ${
+        isActive ? 'bg-fill-pressed' : 'hover:bg-fill-pressed'
       }`}
     >
       {isRenaming ? (
         <div className="flex w-full items-center gap-2 px-3 py-1.5">
           <input
             ref={inputRef}
-            className="min-w-0 flex-1 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[11.5px] text-white outline-none focus:border-white/45"
+            className="t-body min-w-0 flex-1 rounded-md border border-line-strong bg-card px-2 py-1 text-ink outline-none focus:border-accent"
             onChange={(e) => setDraftTitle(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') commitRename()
@@ -612,17 +613,17 @@ function ThreadRow({
         <>
           <button
             onClick={onSelect}
-            className={`flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-3 py-1.5 text-left text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0f0f] ${
-              isActive ? 'text-white' : 'text-white/50 group-hover:text-white/85'
+            className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-fill ${
+              isActive ? 'text-ink' : 'text-ink-secondary group-hover:text-ink'
             }`}
             type="button"
           >
-            <span className="min-w-0 flex-1 truncate text-[12px] font-normal">{thread.title}</span>
+            <span className="t-body min-w-0 flex-1 truncate">{thread.title}</span>
           </button>
           <button
             aria-label={`Options for ${thread.title}`}
-            className={`grid h-6 w-6 shrink-0 place-items-center rounded-md text-white/35 transition-colors hover:bg-white/10 hover:text-white/80 ${
-              menuOpen ? 'bg-white/10 text-white/80' : 'opacity-0 group-hover:opacity-100'
+            className={`grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill-pressed hover:text-ink ${
+              menuOpen ? 'bg-fill-pressed text-ink' : 'opacity-0 group-hover:opacity-100'
             }`}
             onClick={(e) => {
               e.stopPropagation()
@@ -630,22 +631,22 @@ function ThreadRow({
             }}
             type="button"
           >
-            <MoreHorizontal size={13} />
+            <MoreHorizontal size={16} strokeWidth={1.5} />
           </button>
         </>
       )}
 
       {isMoving && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-white/10 bg-[#1a1a1a] p-2 shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-[10px] border border-line bg-card p-2 shadow-[0_16px_48px_oklch(0.2_0.01_260/0.18)]">
           <MatterSelect
-            tone="dark"
+            tone="light"
             label={`Move "${thread.title}" to matter`}
             matters={matters}
             value={thread.matterId}
             onChange={(id) => moveMutation.mutate(id)}
           />
           <button
-            className="mt-1.5 text-[11px] text-white/50 hover:text-white"
+            className="t-meta mt-1.5 text-ink-secondary hover:text-ink"
             onClick={() => setIsMoving(false)}
             type="button"
           >
@@ -657,10 +658,10 @@ function ThreadRow({
       {menuOpen && (
         <div
           ref={menuRef}
-          className="absolute right-1 top-full z-50 mt-1 min-w-[140px] overflow-hidden rounded-lg border border-white/10 bg-[#1a1a1a] py-1 shadow-xl"
+          className="absolute right-1 top-full z-50 mt-1 min-w-[140px] overflow-hidden rounded-[10px] border border-line bg-card py-1 shadow-[0_16px_48px_oklch(0.2_0.01_260/0.18)]"
         >
           <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11.5px] text-white/80 hover:bg-white/[0.08] hover:text-white"
+            className="t-body flex w-full items-center gap-2 px-3 py-1.5 text-left text-ink-secondary hover:bg-fill hover:text-ink"
             onClick={() => {
               setMenuOpen(false)
               setDraftTitle(thread.title)
@@ -668,27 +669,27 @@ function ThreadRow({
             }}
             type="button"
           >
-            <Pencil size={12} />
+            <Pencil size={16} strokeWidth={1.5} />
             Rename
           </button>
           <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11.5px] text-white/80 hover:bg-white/[0.08] hover:text-white"
+            className="t-body flex w-full items-center gap-2 px-3 py-1.5 text-left text-ink-secondary hover:bg-fill hover:text-ink"
             onClick={() => {
               setMenuOpen(false)
               setIsMoving(true)
             }}
             type="button"
           >
-            <FolderInput size={12} />
+            <FolderInput size={16} strokeWidth={1.5} />
             Move to matter…
           </button>
           <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11.5px] text-red-300 hover:bg-red-500/15 hover:text-red-200"
+            className="t-body flex w-full items-center gap-2 px-3 py-1.5 text-left text-danger hover:bg-danger-tint"
             onClick={handleDelete}
             disabled={deleteMutation.isPending}
             type="button"
           >
-            <Trash2 size={12} />
+            <Trash2 size={16} strokeWidth={1.5} />
             {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
           </button>
         </div>

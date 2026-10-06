@@ -79,16 +79,16 @@ export function Dialog({
     >
       <div
         ref={panelRef}
-        className={`max-h-[calc(var(--app-height,100dvh)-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-w-0 w-full sm:max-h-[calc(var(--app-height,100dvh)-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto rounded-lg border border-black/10 bg-[#fafaf8] shadow-2xl outline-none ${className || 'max-w-xl'}`}
+        className={`max-h-[calc(var(--app-height,100dvh)-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-w-0 w-full sm:max-h-[calc(var(--app-height,100dvh)-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto rounded-[10px] border border-line bg-card shadow-[0_16px_48px_oklch(0.2_0.01_260/0.18)] outline-none ${className || 'max-w-xl'}`}
         tabIndex={-1}
       >
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-[#fafaf8]/95 px-4 py-3 backdrop-blur">
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-hairline bg-card/95 px-4 py-3 backdrop-blur">
           {typeof title === 'string' ? (
-            <h2 className="min-w-0 flex-1 break-words text-sm font-semibold text-[#0f0f0f]" id={titleId}>
+            <h2 className="t-body-strong min-w-0 flex-1 break-words text-ink" id={titleId}>
               {title}
             </h2>
           ) : (
-            <div className="min-w-0 flex-1 text-sm font-semibold text-[#0f0f0f]" id={titleId}>
+            <div className="t-body-strong min-w-0 flex-1 text-ink" id={titleId}>
               {title}
             </div>
           )}

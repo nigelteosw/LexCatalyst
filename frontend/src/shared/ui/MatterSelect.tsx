@@ -18,13 +18,13 @@ export function MatterSelect({
   const toneClass =
     tone === 'dark'
       ? 'border-white/10 bg-white/[0.06] text-white/80'
-      : 'border-neutral-200 bg-white text-neutral-800'
+      : 'border-line-strong bg-card text-ink'
   return (
     <select
       aria-label={label}
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value || null)}
-      className={`w-full truncate rounded-lg border px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 ${toneClass} ${className}`}
+      className={`t-body w-full truncate rounded-md border px-2 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${toneClass} ${className}`}
     >
       <option value="">General</option>
       {matters.map((m) => (
