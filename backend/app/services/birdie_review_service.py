@@ -20,7 +20,7 @@ from app.services.audit_service import record_retrieval
 from app.services.birdie_service import BIRDIE_SYSTEM_PROMPT
 from app.services.case_law_service import CaseSource, find_case_sources, validate_case_citations
 from app.services.knowledge_bank_service import search_kb_for_chat
-from app.services.lesson_service import list_feedback_rounds
+from app.services.lesson_service import distill_lessons, list_feedback_rounds
 from app.services.llm_service import get_llm
 from app.services.precedent_service import search_precedents
 
@@ -248,16 +248,40 @@ async def gather_firm_sources(db: Session, *, user: User, review: BirdieReview):
 MAX_LESSON_SOURCES = 12
 
 
-def gather_lessons(db: Session, *, user: User) -> list[dict]:
-    """Lessons distilled from the user's own returned review rounds (submitter only)."""
+async def gather_lessons(db: Session, *, user: User) -> list[dict]:
+    """Lessons from the user's own returned review rounds (submitter only).
+
+    A round nobody has distilled yet is distilled here; if that fails, the reviewer's raw
+    comments stand in, so the draft is still checked against them.
+    """
     lessons: list[dict] = []
     for r in list_feedback_rounds(db, user=user, limit=5):
         who = r.reviewer_name or "your reviewer"
-        for lesson in r.lessons:
+        date = r.date.date().isoformat()
+        stored = r.lessons
+        if not stored:
+            try:
+                stored = await distill_lessons(db, user=user, handoff_id=r.handoff_id)
+            except Exception:  # noqa: BLE001 - fall back to the comments themselves
+                db.rollback()
+                stored = []
+        for lesson in stored:
             lessons.append(
                 {"title": f"{lesson.title} (from {who}, {r.document_name})", "body": lesson.body,
-                 "date": r.date.date().isoformat()}
+                 "date": date}
             )
+        if not stored:
+            for a in r.annotations:
+                body = "; ".join(
+                    part for part in (
+                        f'changed "{a.anchor_quote}"' if a.anchor_quote else "",
+                        f'to "{a.suggested_text}"' if a.suggested_text else "",
+                        f"because: {a.note}" if a.note else "",
+                    ) if part
+                )
+                lessons.append(
+                    {"title": f"Comment from {who} on {r.document_name}", "body": body, "date": date}
+                )
     return lessons[:MAX_LESSON_SOURCES]
 
 
@@ -347,7 +371,7 @@ async def run_review(review_id: str) -> None:
                 user_message="Review this draft; find Singapore judgments only if the draft turns on a point of law.",
                 web_text=text,
             )
-            lessons = gather_lessons(db, user=user)
+            lessons = await gather_lessons(db, user=user)
             sources, block = _collect_sources(precedents, kb_entries, cases, lessons)
             messages = [
                 {"role": "system", "content": BIRDIE_SYSTEM_PROMPT + REVIEW_ADDENDUM},
