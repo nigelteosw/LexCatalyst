@@ -1,16 +1,39 @@
 """Add synthetic Singapore property work without resetting other demo content.
 
-Task descriptions are fictional workflow prompts, not legal advice. No document text,
-LLM calls, external services or real client data are involved in this seed.
+Task descriptions are fictional workflow prompts, not legal advice. No LLM calls or real client
+data are involved. The Bishan review note PDFs go through the normal upload pipeline (R2 + worker
++ OpenAI embeddings), so a synthetic document is uploaded and embedded.
 """
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import ActionItem, ChatMessage, ChatThread, Matter, MatterMember, Team, TeamMember, User
-from app.services.resource_metadata_service import sync_action_metadata, sync_metadata_safe
+from app.models import (
+    ActionItem,
+    ChatMessage,
+    ChatThread,
+    Document,
+    Matter,
+    MatterMember,
+    ReviewAnnotation,
+    ReviewHandoff,
+    ReviewLesson,
+    Team,
+    TeamMember,
+    User,
+)
+from app.services import document_service
+from app.services.demo_pdfs import DemoPdf
+from app.services.resource_metadata_service import (
+    sync_action_metadata,
+    sync_handoff_metadata,
+    sync_metadata_safe,
+)
 from app.services.user_service import create_dummy_users
+
+_log = logging.getLogger(__name__)
 
 DEMO_TAG = "property-workboard-demo"
 MATTERS = [
@@ -21,7 +44,7 @@ MATTERS = [
 ]
 # matter index, title, fictional instructions, stage, priority, relative due day, assignee
 TICKETS = [
-    (0, "Review option to purchase for Bishan condominium", "Check the fictional OTP, property particulars and proposed completion timetable. Flag points for the supervising lawyer.", "pending", "high", 0, "jane"),
+    (0, "Review option to purchase for Bishan condominium", "Check the fictional OTP, property particulars and proposed completion timetable. Flag points for the supervising lawyer.", "review", "high", 0, "jane"),
     (0, "Prepare title-search and encumbrance summary", "Summarise the synthetic title search and list follow-up enquiries for the seller's solicitors.", "in_progress", "medium", 2, "marcus"),
     (0, "Review sale and purchase agreement amendments", "Review the draft completion provisions and vacant-possession wording before sending to the seller's solicitors.", "review", "high", 1, "sarah"),
     (0, "Confirm completion funds with purchaser", "Await the fictional purchaser's confirmation of funds and lender coordination. Update the completion checklist.", "with_client", "medium", 5, "jane"),
@@ -61,7 +84,129 @@ CHATS = [
 ]
 
 
-def seed_property_workboard(db: Session, *, presenter: User) -> dict:
+# --- Bishan end-to-end case: Jane's OTP review note, reviewed by Sarah ------------------------
+OTP_TICKET = "Review option to purchase for Bishan condominium"
+_NOTE_INTRO = [
+    ("title", "Bishan Condominium Purchase: Option to Purchase Review Note"),
+    ("para", "Prepared by Jane Pereira for Sarah Chen. Synthetic demo document; all parties and the property are fictional."),
+    ("heading", "1. Property"),
+    ("para", "Unit #08-12, Bishan Park Residences (fictional), 99-year leasehold. Purchasers: Mr and Mrs Tan."),
+]
+NOTE_V1_BLOCKS = [
+    *_NOTE_INTRO,
+    ("heading", "2. Option terms"),
+    ("para", "The option fee has been paid and the option must be exercised within 14 days."),
+    ("heading", "3. Stamp duty"),
+    ("para", "The purchasers already own an HDB flat, so ABSD will be payable at 20% on this purchase."),
+    ("heading", "4. Vacant possession"),
+    ("para", "The seller will hand over the unit in good condition on completion."),
+    ("heading", "5. Next steps"),
+    ("para", "We will send the client our advice once the seller's solicitors reply."),
+]
+NOTE_V2_BLOCKS = [
+    *_NOTE_INTRO,
+    ("heading", "2. Option terms"),
+    ("para", "The option must be exercised by 4pm on 20 October 2026. The option fee is held by the seller's solicitors as stakeholders."),
+    ("heading", "3. Stamp duty"),
+    ("para", "ABSD may apply. Before advising, we will confirm the purchasers' citizenship and existing property holdings, and check the current IRAS rates."),
+    ("heading", "4. Vacant possession"),
+    ("para", "The seller is to deliver vacant possession on completion, with the unit free of occupants and the seller's belongings."),
+    ("heading", "5. Title"),
+    ("para", "The title is clean and there are no encumbrances."),
+    ("heading", "6. Next steps"),
+    ("para", "I will flag open points to Sarah for review before anything is sent to the client."),
+]
+# Sarah's round 1 comments: (quote, suggested wording, note)
+NOTE_V1_FEEDBACK = [
+    (
+        "the option must be exercised within 14 days",
+        "the option must be exercised by 4pm on 20 October 2026",
+        "Give the exact deadline and time. A period on its own invites argument about when it starts.",
+    ),
+    (
+        "ABSD will be payable at 20% on this purchase",
+        "ABSD may apply. Before advising, we will confirm the purchasers' citizenship and existing property holdings, and check the current IRAS rates",
+        "Never state a stamp-duty rate or eligibility from an assumption. Confirm the facts and the current rates first.",
+    ),
+    (
+        "hand over the unit in good condition",
+        "deliver vacant possession",
+        "'Good condition' is not the contractual standard. Use vacant possession and say what it covers.",
+    ),
+    (
+        "We will send the client our advice once the seller's solicitors reply.",
+        "I will flag open points to Sarah for review before anything is sent to the client.",
+        "Nothing goes to the client before the supervising lawyer has reviewed it.",
+    ),
+]
+# Pre-written lessons so Birdie can mentor without an LLM call at seed time: (title, body, source indexes)
+NOTE_V1_LESSONS = [
+    ("Give exact deadlines, not periods", "Write the date and time an option or notice expires. A bare period leaves room to argue about when it started.", [0]),
+    ("Never assume stamp-duty rates or eligibility", "Confirm citizenship and existing property holdings, and check the current IRAS rates, before saying ABSD applies or at what rate.", [1]),
+    ("Use the contractual standard: vacant possession", "Say 'vacant possession' and spell out what it covers instead of informal words like 'good condition'.", [2]),
+    ("Supervisor review before the client", "Flag open points to your supervising lawyer first. Nothing goes to the client until they have reviewed it.", [3]),
+]
+
+
+async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users: dict[str, User]) -> dict:
+    """Two review rounds on Jane's OTP note: v1 returned with Sarah's comments and lessons, v2 waiting."""
+    jane, sarah = users["jane"], users["sarah"]
+    ticket = db.scalar(select(ActionItem).where(ActionItem.matter_id == matter.id, ActionItem.title == OTP_TICKET))
+    filenames = ("Bishan OTP review note v1.pdf", "Bishan OTP review note v2.pdf")
+    if ticket is None or db.scalar(
+        select(Document.id).where(Document.matter_id == matter.id, Document.filename.in_(filenames))
+    ):
+        return {"review_rounds_created": 0}
+
+    v1_pdf, v2_pdf = DemoPdf(NOTE_V1_BLOCKS), DemoPdf(NOTE_V2_BLOCKS)
+    docs = []
+    for filename, pdf in zip(filenames, (v1_pdf, v2_pdf)):
+        document = await document_service.create_pending_document(
+            db, user_id=jane.id, filename=filename, content_type="application/pdf",
+            file_bytes=pdf.bytes, matter_id=matter.id, team_id=team.id,
+        )
+        if document.status == "failed":
+            _log.warning("Property demo document %s failed: %s", filename, document.error_message)
+        docs.append(document)
+
+    now = datetime.now(UTC)
+    round1 = ReviewHandoff(
+        action_id=ticket.id, matter_id=matter.id, document_id=docs[0].id, submitted_by=jane.id,
+        reviewer_id=sarah.id, status="returned", completed_at=now - timedelta(days=1),
+        submitted_at=now - timedelta(days=2),
+    )
+    round2 = ReviewHandoff(
+        action_id=ticket.id, matter_id=matter.id, document_id=docs[1].id, submitted_by=jane.id,
+        reviewer_id=sarah.id, status="ready_for_review",
+    )
+    db.add_all([round1, round2])
+    db.flush()
+    ticket.active_handoff_id = round2.id
+    ticket.status = "review"
+    annotations = []
+    for quote, suggested, note in NOTE_V1_FEEDBACK:
+        page_no, rects = v1_pdf.anchor(quote)
+        annotation = ReviewAnnotation(
+            handoff_id=round1.id, document_id=docs[0].id, page_no=page_no, kind="suggestion",
+            anchor_quote=quote, anchor_rects=rects, suggested_text=suggested, note=note,
+            status="open", author_user_id=sarah.id,
+        )
+        db.add(annotation)
+        annotations.append(annotation)
+    db.flush()
+    for title, body, sources in NOTE_V1_LESSONS:
+        db.add(ReviewLesson(
+            handoff_id=round1.id, title=title, body=body,
+            source_annotation_ids=[annotations[i].id for i in sources],
+        ))
+    db.commit()
+    sync_metadata_safe(db, sync_action_metadata, ticket)
+    for handoff in (round1, round2):
+        sync_metadata_safe(db, sync_handoff_metadata, handoff)
+    return {"review_rounds_created": 2}
+
+
+async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
     users = {u.google_id.split(":", 1)[1].split("-")[0]: u for u in create_dummy_users(db)}
     participants = [presenter, *users.values()]
     team = db.scalar(select(Team).where(Team.name == "Singapore Property (Demo)"))
@@ -123,4 +268,10 @@ def seed_property_workboard(db: Session, *, presenter: User) -> dict:
     db.commit()
     for item in created:
         sync_metadata_safe(db, sync_action_metadata, item)
-    return {"tickets_created": len(created), "matters": len(matters), "chats_created": chats_created}
+    review = await _seed_bishan_review(db, matter=matters[0], team=team, users=users)
+    return {
+        "tickets_created": len(created),
+        "matters": len(matters),
+        "chats_created": chats_created,
+        **review,
+    }

@@ -1,9 +1,12 @@
 import json
 from datetime import date
 
+from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import User
+from app.dependencies import require_matter_member
+from app.models import Document, Matter, ReviewHandoff, User
 from app.services.llm_service import get_llm
 from app.services.birdie_workboard_service import WORKBOARD_TOOLS, execute_workboard_tool
 from app.services.agent_service import TOOLS as _AGENT_TOOLS
@@ -118,6 +121,36 @@ _VIEW_LABELS = {
 }
 
 
+def _format_matter_context(db: Session, user: User, matter_id: str | None) -> str:
+    """Name the open matter, its documents and review rounds so Birdie knows what it is working on."""
+    if matter_id is None:
+        return ""
+    matter = db.get(Matter, matter_id)
+    if matter is None:
+        return ""
+    try:
+        require_matter_member(db, user, matter_id)
+    except HTTPException:
+        return ""
+    documents = db.scalars(
+        select(Document).where(Document.matter_id == matter_id).order_by(Document.created_at)
+    ).all()
+    rounds = db.scalars(
+        select(ReviewHandoff).where(ReviewHandoff.matter_id == matter_id).order_by(ReviewHandoff.submitted_at)
+    ).all()
+    names = {d.id: d.filename for d in documents}
+    lines = [f"\n\nCurrent matter: {matter.title} ({matter.case_number or 'no reference'})."]
+    if documents:
+        lines.append("Documents on this matter: " + "; ".join(d.filename for d in documents) + ".")
+    for r in rounds:
+        who = r.reviewer.full_name if r.reviewer else "a reviewer"
+        lines.append(
+            f"Review round: {names.get(r.document_id, 'a document')} submitted by "
+            f"{r.submitter.full_name if r.submitter else 'a colleague'} to {who}; status {r.status}."
+        )
+    return "\n".join(lines)
+
+
 def _format_workboard_context(db: Session, user: User, matter_id: str | None = None) -> str:
     result = execute_workboard_tool('list_workboard_tickets', {}, db=db, user=user, matter_id=matter_id)
     # Ticket excerpts leave for the user's OpenRouter model just like KB context.
@@ -230,6 +263,7 @@ async def build_birdie_messages(
 
     memories = list_memories(db, user_id=user.id, limit=50)
     system_content += format_memory_context(memories)
+    system_content += _format_matter_context(db, user, matter_id)
     system_content += _format_workboard_context(db, user, matter_id)
     system_content += format_feedback_context(db, user=user)
     system_content += _format_page_context(page_context)

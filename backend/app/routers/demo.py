@@ -83,11 +83,11 @@ async def demo_seed(
 
 
 @router.post("/demo/workboard/property")
-def property_workboard_demo(
+async def property_workboard_demo(
     db: Session = Depends(get_db),
     admin: User = Depends(require_demo_admin),
 ) -> dict:
-    return seed_property_workboard(db, presenter=admin)
+    return await seed_property_workboard(db, presenter=admin)
 
 
 @router.put("/demo/role")

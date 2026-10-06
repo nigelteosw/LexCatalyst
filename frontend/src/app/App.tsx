@@ -178,6 +178,14 @@ function App() {
   const [selectedMatterId, setSelectedMatterId] = useState<string | null>(
     () => localStorage.getItem('selectedMatterId'),
   )
+  // The saved matter may belong to another account (demo user switching); drop it if this user can't see it.
+  useEffect(() => {
+    if (!mattersQuery.isSuccess || !selectedMatterId) return
+    if (!matters.some((matter) => matter.id === selectedMatterId)) {
+      setSelectedMatterId(null)
+      localStorage.removeItem('selectedMatterId')
+    }
+  }, [mattersQuery.isSuccess, matters, selectedMatterId])
   const streamAbortRef = useRef<AbortController | null>(null)
   const streamAbortReasonRef = useRef<'stop' | 'navigation' | null>(null)
 
