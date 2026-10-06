@@ -40,9 +40,12 @@
   --color-danger-tint: oklch(0.96 0.025 28);
   --color-warning: oklch(0.45 0.10 65);
   --color-warning-tint: oklch(0.95 0.04 75);
+  --color-success: oklch(0.45 0.08 160);
+  --color-success-tint: oklch(0.96 0.025 160);
 
   /* Surfaces */
   --color-page: oklch(0.99 0.002 90);
+  --color-surface: var(--color-page);         /* alias used by page shells */
   --color-card: #fff;
   --color-fill: oklch(0.97 0.003 90);          /* sidebar, hover, columns */
   --color-fill-pressed: oklch(0.945 0.004 90);
@@ -115,6 +118,12 @@
   font-size: var(--text-meta);
   line-height: 1.4;
   font-weight: 400;
+}
+.t-meta-strong {
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  font-weight: 500;
 }
 .t-label {
   font-family: var(--font-sans);
@@ -577,4 +586,62 @@ textarea {
 /* Columns wrap according to the board's available width, including the sidebar. */
 .workboard-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+
+/* Print: a LexChat answer, matter page or document review prints as a clean
+   memo — no navigation, composer or assistant launcher, and nothing clipped. */
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  #root *,
+  #root {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  #root .h-dvh,
+  #root .h-full,
+  #root .min-h-0 {
+    height: auto !important;
+  }
+
+  .lex-sidebar,
+  .mobile-sidebar,
+  .birdie-launcher,
+  #birdie-panel,
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  main {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .chat-markdown {
+    font-size: 11.5pt;
+  }
+
+  .chat-markdown a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: var(--color-ink-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  .chat-markdown table,
+  .chat-markdown pre,
+  .chat-markdown blockquote {
+    break-inside: avoid;
+  }
 }

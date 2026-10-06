@@ -8,10 +8,11 @@ export const statusColumns: Array<{ id: ActionStatus; label: string }> = [
   { id: 'done', label: 'Done' },
 ]
 
+// Matches the Workboard legend: red = High, amber = Medium, grey = Low.
 export const priorityColors: Record<ActionPriority, string> = {
-  low: 'bg-neutral-100 text-neutral-500',
-  medium: 'bg-neutral-100 text-neutral-600',
-  high: 'bg-neutral-100 text-[#9f1239]',
+  low: 'bg-fill text-ink-secondary',
+  medium: 'bg-warning-tint text-warning',
+  high: 'bg-danger-tint text-danger',
 }
 
 export const statusColors: Record<ActionStatus, string> = {

@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/types/workspace'
 import { isManager, priorityColors, statusColumns, userLabel } from '../config'
 import { Dialog } from '../../../shared/ui/Dialog'
+import { formatLongDate } from '../../../shared/lib/dates'
 
 type ActionPatch = {
   title?: string
@@ -313,7 +314,7 @@ export function ActionDetailDialog({
           <div>
             <div className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Due date</div>
             <div className="mt-1 text-[#0f0f0f]">
-              {new Date(item.dueDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+              {formatLongDate(item.dueDate)}
             </div>
           </div>
         )}

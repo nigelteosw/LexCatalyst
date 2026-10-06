@@ -21,18 +21,18 @@ export function RecentDocumentsSection() {
     <section>
       <h2 className="border-b border-line pb-3 font-serif text-xl text-ink">Recent documents</h2>
       {documents.isPending ? (
-        <p className="py-6 text-sm text-ink-tertiary">Loading…</p>
+        <p className="t-body py-6 text-ink-tertiary">Loading…</p>
       ) : documents.isError ? (
-        <p className="py-6 text-sm text-danger">Could not load recent documents.</p>
+        <p className="t-body py-6 text-danger">Could not load recent documents.</p>
       ) : recent.length === 0 ? (
-        <p className="py-6 text-sm text-ink-secondary">No documents yet. Open a matter to upload one.</p>
+        <p className="t-body py-6 text-ink-secondary">No documents yet. Open a matter to upload one.</p>
       ) : (
-        <div className="divide-y divide-neutral-200/70">
+        <div className="divide-y divide-hairline">
           {recent.map((doc) => {
             const matter = matters.data?.find((m) => m.id === doc.matterId)
             return (
               <button
-                className="group flex w-full items-start gap-3 py-3.5 text-left transition-colors hover:bg-fill"
+                className="group -mx-2 flex w-[calc(100%+1rem)] items-start gap-3 rounded-md px-2 py-3.5 text-left transition-colors hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 key={doc.id}
                 onClick={() => selectDocuments(doc.id)}
                 type="button"
@@ -42,7 +42,7 @@ export function RecentDocumentsSection() {
                   <span className="block truncate text-body text-ink group-hover:text-accent">
                     {doc.filename}
                   </span>
-                  <span className="mt-0.5 block truncate text-sm text-ink-secondary">
+                  <span className="t-meta mt-0.5 block truncate text-ink-secondary">
                     {matter ? matter.caseNumber : 'General'} · {formatRelative(doc.updatedAt)}
                   </span>
                 </span>

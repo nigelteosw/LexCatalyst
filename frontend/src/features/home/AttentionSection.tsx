@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { listActionItems, listMatters } from '../../shared/api/api'
 import type { ActionItem, CurrentUser } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
+import { StatusBadge } from '../../shared/ui/StatusBadge'
+import type { StatusTone } from '../../shared/ui/StatusBadge'
 import { dueLabel, daysUntil } from './format'
 
 const DUE_SOON_DAYS = 7
@@ -24,10 +26,10 @@ export function attentionFlag(item: ActionItem, userId: string | undefined, now:
   return null
 }
 
-const toneClass = {
-  red: 'bg-red-50 text-red-700',
-  amber: 'bg-amber-50 text-amber-800',
-  blue: 'bg-blue-50 text-accent',
+const badgeTone: Record<Flag['tone'], StatusTone> = {
+  red: 'danger',
+  amber: 'warning',
+  blue: 'accent',
 }
 
 /** Reviews waiting and work that is overdue or due this week. */
@@ -48,18 +50,18 @@ export function AttentionSection({ currentUser }: { currentUser: CurrentUser | n
         {flagged.length > 0 && <span className="font-sans text-sm text-ink-tertiary">{flagged.length}</span>}
       </h2>
       {actions.isPending ? (
-        <p className="py-6 text-sm text-ink-tertiary">Loading…</p>
+        <p className="py-6 t-body text-ink-tertiary">Loading…</p>
       ) : actions.isError ? (
-        <p className="py-6 text-sm text-danger">Could not load items needing attention.</p>
+        <p className="t-body py-6 text-danger">Could not load items needing attention.</p>
       ) : flagged.length === 0 ? (
-        <p className="py-6 text-sm text-ink-secondary">Nothing is overdue or waiting on you.</p>
+        <p className="t-body py-6 text-ink-secondary">Nothing is overdue or waiting on you.</p>
       ) : (
-        <div className="divide-y divide-neutral-200/70">
+        <div className="divide-y divide-hairline">
           {flagged.slice(0, MAX_ITEMS).map(({ item, flag }) => {
             const matter = matters.data?.find((m) => m.id === item.matterId)
             return (
               <button
-                className="group flex w-full flex-wrap items-start gap-3 py-3.5 text-left transition-colors hover:bg-fill"
+                className="group -mx-2 flex w-[calc(100%+1rem)] flex-wrap items-start gap-3 rounded-md px-2 py-3.5 text-left transition-colors hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 key={item.id}
                 onClick={() => selectActions(item.id)}
                 type="button"
@@ -68,12 +70,12 @@ export function AttentionSection({ currentUser }: { currentUser: CurrentUser | n
                   <span className="block truncate text-body text-ink group-hover:text-accent">
                     {item.title}
                   </span>
-                  <span className="mt-0.5 block truncate text-sm text-ink-secondary">
+                  <span className="t-meta mt-0.5 block truncate text-ink-secondary">
                     {matter ? `${matter.caseNumber} · ${matter.title}` : 'General'}
                   </span>
                 </span>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${toneClass[flag.tone]}`}>
-                  {flag.label}
+                <span className="shrink-0">
+                  <StatusBadge tone={badgeTone[flag.tone]}>{flag.label}</StatusBadge>
                 </span>
               </button>
             )
@@ -82,7 +84,7 @@ export function AttentionSection({ currentUser }: { currentUser: CurrentUser | n
       )}
       {flagged.length > MAX_ITEMS && (
         <button
-          className="mt-2 text-sm text-accent hover:underline"
+          className="t-meta mt-2 font-medium text-accent hover:underline"
           onClick={() => selectActions()}
           type="button"
         >

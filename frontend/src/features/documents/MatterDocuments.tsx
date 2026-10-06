@@ -14,6 +14,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '../../shared/ui/Button'
 import { ErrorBanner } from '../../shared/ui/ErrorBanner'
+import { formatDateTime } from '../../shared/lib/dates'
 import { StatusBadge } from '../../shared/ui/StatusBadge'
 import { getErrorMessage } from '../../shared/lib/errors'
 import {
@@ -250,7 +251,7 @@ export function MatterDocuments({
 
   function handleDeleteDocument(document: WorkspaceDocument) {
     if (deleteMutation.isPending) return
-    if (!window.confirm(`Delete ${document.filename}? This removes the uploaded document and its searchable chunks.`)) return
+    if (!window.confirm(`Delete ${document.filename}? This removes the file and its search index. LexChat will no longer cite it.`)) return
     deleteMutation.mutate(document.id)
   }
 
@@ -518,8 +519,7 @@ export function MatterDocuments({
                       </StatusBadge>
                     </div>
                     <p className="mt-1 text-sm text-neutral-500">
-                      {document.contentType.includes('pdf') ? 'PDF' : 'DOCX'} · {document.chunkCount}{' '}
-                      {document.chunkCount === 1 ? 'chunk' : 'chunks'} · Uploaded {formatDate(document.createdAt)}
+                      {document.contentType.includes('pdf') ? 'PDF' : 'DOCX'} · Uploaded {formatDateTime(document.createdAt)}
                     </p>
                     {knowledgeEntry && (
                       <p className="mt-1 text-sm text-neutral-500">
@@ -636,8 +636,3 @@ export function MatterDocuments({
   )
 }
 
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'recently'
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
-}

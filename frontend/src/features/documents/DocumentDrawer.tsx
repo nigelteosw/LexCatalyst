@@ -191,7 +191,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
             </StatusBadge>
           </div>
           <p className="mt-0.5 text-meta text-neutral-500">
-            {document.chunkCount} searchable chunks
+            {document.status === 'ready' ? 'Searchable in LexChat' : document.status === 'failed' ? 'Not searchable' : 'Preparing for search…'}
           </p>
         </div>
         {document.canManage && (

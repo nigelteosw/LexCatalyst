@@ -17,6 +17,8 @@ import type {
 } from '../../shared/types/workspace'
 import { getErrorMessage } from '../../shared/lib/errors'
 import { isManager, priorityColors, statusColumns, statusColors, userLabel } from './config'
+import { DueDate } from '../../shared/ui/DueDate'
+import { daysUntil } from '../../shared/lib/dates'
 import { ActionList } from './components/ActionList'
 import { ActionDetailDialog } from './components/ActionDetailDialog'
 import { CreateActionDialog } from './components/CreateActionDialog'
@@ -393,8 +395,8 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
                   />
                 ))}
                 {grouped[col.id].length === 0 && (
-                  <div className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-xs text-slate-500">
-                    No {col.label.toLowerCase()} tickets
+                  <div className="t-meta rounded-lg border border-dashed border-line-strong px-3 py-6 text-center text-ink-tertiary">
+                    No tickets
                   </div>
                 )}
               </div>
@@ -496,9 +498,13 @@ function ActionCard({
     ? (item.assignee.fullName ?? item.assignee.email)
     : 'Unassigned'
 
+  const isOverdue = item.status !== 'done' && !!item.dueDate && daysUntil(item.dueDate) < 0
+
   return (
     <article
-      className="group relative rounded-lg border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#1e3a8a]"
+      className={`group relative rounded-lg border bg-card shadow-sm transition-[box-shadow,border-color] hover:border-line-strong hover:shadow-md has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent ${
+        isOverdue ? 'border-danger/30' : 'border-line'
+      }`}
     >
       <button
         className="w-full p-3 pr-8 text-left focus-visible:outline-none"
@@ -508,7 +514,7 @@ function ActionCard({
         <span className={`mb-2 inline-flex rounded-md px-2 py-0.5 text-meta font-medium capitalize ${priorityColors[item.priority]}`}>
           {item.priority} priority
         </span>
-        <p className="line-clamp-2 text-sm font-medium leading-5 text-neutral-900">
+        <p className="line-clamp-2 text-sm font-medium leading-5 text-ink">
           {item.title}
         </p>
 
@@ -540,19 +546,14 @@ function ActionCard({
         )}
 
         <div className="mt-3 flex items-center gap-2">
-          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-micro font-semibold text-neutral-600">
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-fill text-micro font-semibold text-ink-secondary">
             {assigneeInitials}
           </div>
-          <span className="min-w-0 flex-1 truncate text-meta text-[#6f6f69]">
+          <span className="min-w-0 flex-1 truncate text-meta text-ink-secondary">
             {assigneeName}
           </span>
           {item.dueDate && (
-            <span className="shrink-0 text-meta text-[#76766f]">
-              {new Date(item.dueDate).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-              })}
-            </span>
+            <DueDate className="shrink-0 text-meta" done={item.status === 'done'} value={item.dueDate} />
           )}
         </div>
       </button>

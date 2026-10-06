@@ -27,6 +27,10 @@ const sizeClasses: Record<ButtonSize, string> = {
   lg: 'h-11 px-4',
 }
 
+// Icon-only delete buttons sit on every row; keep them quiet until hovered so the
+// most destructive action is never the loudest thing on screen.
+const quietDangerIcon = 'bg-transparent text-ink-tertiary hover:bg-danger-tint hover:text-danger'
+
 export function Button({
   children,
   className = '',
@@ -37,7 +41,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`${baseClasses} ${variant === 'danger' && size === 'icon' ? quietDangerIcon : variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       type={type}
       {...props}
     >

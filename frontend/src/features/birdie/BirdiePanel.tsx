@@ -29,6 +29,7 @@ import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import birdieLogo from '../../assets/Birdie.png'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
+import { formatShortDate } from '../../shared/lib/dates'
 
 const BIRDIE_HELP: HelpContent = {
   intro: 'Your personal AI mentor for navigating life as a junior lawyer — ask anything, get straight answers.',
@@ -411,7 +412,7 @@ function RoundGroup({ round, onExplain }: { round: FeedbackRound; onExplain: (pr
 
   const meta = [
     round.reviewerName ? `Reviewed by ${round.reviewerName}` : 'Reviewed',
-    new Date(round.date).toLocaleDateString(),
+    formatShortDate(round.date),
   ].join(' · ')
 
   return (

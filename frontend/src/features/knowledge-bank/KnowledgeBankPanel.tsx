@@ -45,6 +45,7 @@ import {
   promoteKnowledgeBankEntry,
   updateKnowledgeBankEntry,
 } from '../../shared/api/api'
+import { Button } from '../../shared/ui/Button'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
 
@@ -1544,18 +1545,14 @@ function EmptyState({
   onAction?: () => void
 }) {
   return (
-    <div className="grid min-h-56 place-items-center rounded-[14px] border border-dashed border-black/15 bg-white/50 p-6 text-center">
+    <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-line-strong bg-card/60 p-6 text-center">
       <div>
-        <FileCheck2 size={24} className="mx-auto text-[#8a8a84]" />
-        <p className="mt-3 text-sm text-[#6f6f69]">{title}</p>
+        <FileCheck2 size={24} strokeWidth={1.5} className="mx-auto text-ink-tertiary" />
+        <p className="t-body mt-3 text-ink-secondary">{title}</p>
         {action && onAction && (
-          <button
-            className="mt-3 rounded-lg bg-[#0f0f0f] px-3 py-2 text-xs text-white"
-            onClick={onAction}
-            type="button"
-          >
+          <Button className="mt-4" onClick={onAction} size="sm" variant="primary">
             {action}
-          </button>
+          </Button>
         )}
       </div>
     </div>

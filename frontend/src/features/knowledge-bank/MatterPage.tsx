@@ -15,6 +15,8 @@ import {
   useDocumentUpload,
   validateDocumentFile,
 } from '../documents/MatterDocuments'
+import { formatShortDate } from '../../shared/lib/dates'
+import { StatusBadge } from '../../shared/ui/StatusBadge'
 
 type Tab = 'documents' | 'cases' | 'chats' | 'pending'
 
@@ -22,7 +24,7 @@ function shortDate(iso: string) {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
   if (date.toDateString() === new Date().toDateString()) return 'Today'
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  return formatShortDate(date)
 }
 
 /** Same row as a Knowledge Bank entry: tile, title and detail, then a type column and a date. */
@@ -162,7 +164,7 @@ export function MatterPage({
 
   return (
     <div className="flex min-h-0 flex-1 bg-surface">
-      <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-20 pt-6 sm:px-5 sm:pb-10 sm:pt-14 lg:px-12 lg:pt-20">
+      <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-20 pt-6 sm:px-6 sm:pb-10 sm:pt-8 lg:px-12 lg:pt-10">
         <div className="mx-auto max-w-5xl">
           <nav aria-label="Breadcrumb" className="mb-4 text-sm text-neutral-500">
             <button type="button" className="hover:text-neutral-800" onClick={() => selectHome()}>
@@ -173,7 +175,12 @@ export function MatterPage({
           </nav>
 
           <h1 className="font-serif text-4xl tracking-tight text-neutral-950">{title}</h1>
-          <p className="mt-3 max-w-xl text-body leading-relaxed text-neutral-500">{subtitle}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            {matter && (
+              <StatusBadge tone={matter.status === 'active' ? 'success' : 'neutral'}>{matter.status}</StatusBadge>
+            )}
+            <p className="max-w-xl text-body leading-relaxed text-ink-secondary">{subtitle}</p>
+          </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <input

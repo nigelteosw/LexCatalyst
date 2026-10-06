@@ -582,15 +582,15 @@ function ThreadRow({
 
   return (
     <div
-      className={`group relative flex items-center gap-1 rounded-md pr-1 transition-colors ${
+      className={`group relative flex items-center rounded-md transition-colors ${
         isActive ? 'bg-fill-pressed' : 'hover:bg-fill-pressed'
       }`}
     >
       {isRenaming ? (
-        <div className="flex w-full items-center gap-2 px-3 py-1.5">
+        <div className="flex w-full items-center gap-2 px-2 py-1.5">
           <input
             ref={inputRef}
-            className="t-body min-w-0 flex-1 rounded-md border border-line-strong bg-card px-2 py-1 text-ink outline-none focus:border-accent"
+            className="t-meta min-w-0 flex-1 rounded-md border border-line-strong bg-card px-2 py-1 text-ink outline-none focus:border-accent"
             onChange={(e) => setDraftTitle(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') commitRename()
@@ -608,17 +608,17 @@ function ThreadRow({
         <>
           <button
             onClick={onSelect}
-            className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-fill ${
+            className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left [@media(pointer:coarse)]:pr-8 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-fill ${
               isActive ? 'text-ink' : 'text-ink-secondary group-hover:text-ink'
             }`}
             type="button"
           >
-            <span className="t-body min-w-0 flex-1 truncate">{thread.title}</span>
+            <span className="t-meta min-w-0 flex-1 truncate">{thread.title}</span>
           </button>
           <button
             aria-label={`Options for ${thread.title}`}
-            className={`grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill-pressed hover:text-ink ${
-              menuOpen ? 'bg-fill-pressed text-ink' : 'opacity-0 group-hover:opacity-100'
+            className={`absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md bg-fill-pressed text-ink-tertiary shadow-[-8px_0_8px_var(--color-fill-pressed)] transition-colors hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [@media(pointer:coarse)]:opacity-100 ${
+              menuOpen ? 'text-ink' : 'opacity-0 group-hover:opacity-100'
             }`}
             onClick={(e) => {
               e.stopPropagation()

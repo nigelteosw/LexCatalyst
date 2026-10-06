@@ -17,6 +17,7 @@ import { getErrorMessage, isAbortError } from '../../shared/lib/errors'
 import { ErrorBanner } from '../../shared/ui/ErrorBanner'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
+import { formatShortDate } from '../../shared/lib/dates'
 
 const MEMORY_HELP: HelpContent = {
   intro: 'LexCatalyst remembers things about you so every conversation picks up where the last one left off.',
@@ -410,7 +411,7 @@ export function MemoriesPanel() {
                               </div>
                               <div className="mt-3 flex items-center gap-3">
                                 <span className="text-meta font-medium text-neutral-500 tracking-wide">
-                                  {new Date(memory.updatedAt).toLocaleDateString()}
+                                  {formatShortDate(memory.updatedAt)}
                                 </span>
                                 <div className="h-1 w-1 rounded-full bg-neutral-200" />
                                 <span className="text-meta font-medium text-neutral-500 tracking-wide">

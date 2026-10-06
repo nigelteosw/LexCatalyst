@@ -37,7 +37,7 @@ export function ChatsByMatter({
 }) {
   const groups = groupThreadsByMatter(threads, matters)
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <div className="t-label px-2.5 uppercase text-ink-tertiary">Chats by matter</div>
       {groups.map(({ matter, threads: groupThreads }) => (
         <section key={matter?.id ?? 'general'} aria-label={matter ? matter.title : 'General'}>
@@ -45,14 +45,13 @@ export function ChatsByMatter({
             type="button"
             onClick={() => onSelectMatter(matter?.id ?? null)}
             title={matter ? `${matter.caseNumber} · ${matter.title}` : 'General'}
-            className="t-body-strong flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-ink hover:bg-fill-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="t-meta-strong flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-ink hover:bg-fill-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <Folder size={16} strokeWidth={1.5} className="shrink-0 text-ink-tertiary" />
-            <span className="truncate">
-              {matter ? `${matter.caseNumber} · ${matter.title}` : 'General'}
-            </span>
+            <Folder size={14} strokeWidth={1.5} className="shrink-0 text-ink-tertiary" />
+            {/* Lead with the matter name; the case number stays in the tooltip. */}
+            <span className="truncate">{matter ? matter.title || matter.caseNumber : 'General'}</span>
           </button>
-          <div className="ml-[17px] space-y-0.5 border-l border-line pl-2">
+          <div className="ml-[16px] space-y-px border-l border-line pl-1.5">
             {groupThreads.length > 0 ? (
               groupThreads.map(renderThread)
             ) : (

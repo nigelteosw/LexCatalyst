@@ -239,7 +239,7 @@ export function ChatPanel({
         </div>
       )}
 
-      <div className="shrink-0 border-t border-neutral-200/70 bg-surface/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6 lg:pb-8">
+      <div data-print-hide className="shrink-0 border-t border-neutral-200/70 bg-surface/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6 lg:pb-8">
         <form
           className="mx-auto max-w-3xl"
           onSubmit={onSubmit}

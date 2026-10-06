@@ -22,6 +22,7 @@ import type { CurrentUser, SurveyCategory, SurveyQuestion } from '../../shared/t
 import { getErrorMessage } from '../../shared/lib/errors'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
+import { formatShortDate } from '../../shared/lib/dates'
 
 const WELLBEING_HELP: HelpContent = {
   intro: 'A weekly pulse check to help the firm track team health — workload, mental wellbeing, team dynamics, and learning — anonymously.',
@@ -321,10 +322,7 @@ function ResultsTab() {
         <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#1e3a8a]" />
         <p className="text-xs leading-5 text-[#1e3a8a]">
           Current week starting{' '}
-          {new Date(resultsQuery.data.currentWeekOf).toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-          })}
+          {formatShortDate(resultsQuery.data.currentWeekOf)}
           .{' '}
           {resultsQuery.data.currentCohortSize === null
             ? `Results stay hidden until at least ${resultsQuery.data.minimumCohortSize} people respond.`
@@ -357,7 +355,7 @@ function ResultsTab() {
               {q.weeks.map((w) => (
                 <div key={w.weekOf} className="flex items-center gap-4">
                   <span className="w-20 shrink-0 text-meta text-[#8c8c86]">
-                    {new Date(w.weekOf).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    {formatShortDate(w.weekOf)}
                   </span>
                   <div className="flex-1 overflow-hidden rounded-full bg-[#eeecea] h-2">
                     <div

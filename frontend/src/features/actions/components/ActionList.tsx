@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { sortActionItems, type ActionSortKey, type SortDirection } from '../sort'
 import type { ActionItem } from '../../../shared/types/workspace'
 import { statusColumns, statusColors } from '../config'
+import { DueDate } from '../../../shared/ui/DueDate'
 
 type Props = {
   items: ActionItem[]
@@ -77,7 +78,7 @@ export function ActionList({ items, matters, onSelect }: Props) {
                 </td>
                 <td className="min-w-0 px-4 py-3 text-xs text-neutral-500 sm:whitespace-nowrap">
                   <span className="mb-1 block font-medium text-neutral-700 sm:hidden">Due</span>
-                  {item.dueDate ? new Date(item.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+                  {item.dueDate ? <DueDate done={item.status === 'done'} value={item.dueDate} /> : '—'}
                 </td>
               </tr>
             )

@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 
-type StatusTone = 'danger' | 'neutral' | 'success' | 'warning'
+export type StatusTone = 'accent' | 'danger' | 'neutral' | 'success' | 'warning'
 
 const toneClasses: Record<StatusTone, string> = {
+  accent: 'bg-accent-tint text-accent',
   danger: 'bg-danger-tint text-danger',
   neutral: 'bg-fill text-ink-secondary',
-  success: 'bg-fill text-ink',
+  success: 'bg-success-tint text-success',
   warning: 'bg-warning-tint text-warning',
 }
 
@@ -17,7 +18,7 @@ export function StatusBadge({
   tone?: StatusTone
 }) {
   return (
-    <span className={`t-label inline-flex items-center rounded-md px-2 py-0.5 capitalize ${toneClasses[tone]}`}>
+    <span className={`t-label inline-block whitespace-nowrap rounded-md px-2 py-0.5 first-letter:uppercase ${toneClasses[tone]}`}>
       {children}
     </span>
   )
