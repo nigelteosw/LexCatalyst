@@ -16,8 +16,9 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
   host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;top:0;left:0;width:0;height:0;'
   const logo = chrome.runtime.getURL('Birdie.png')
   const root = host.attachShadow({ mode: 'closed' })
-  root.innerHTML = `
-    <style>
+  // Built with DOM calls, not innerHTML: sites that enforce Trusted Types reject HTML strings.
+  const style = document.createElement('style')
+  style.textContent = `
       * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, sans-serif; }
       .avatar { position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 50%;
         background: #fff8d8; border: 1px solid rgba(45,158,107,.45); }
@@ -42,15 +43,40 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
       iframe { flex: 1; width: 100%; border: 0; background: #fff; }
       iframe.dragging { pointer-events: none; }
       .note { padding: 16px; font-size: 13px; color: #44403c; }
-    </style>
-    <button class="bubble avatar" aria-label="Open Birdie" title="Birdie"><img alt="" src="${logo}"></button>
-    <div class="panel" role="dialog" aria-label="Birdie">
-      <div class="bar"><span class="avatar"><img alt="" src="${logo}"></span><span class="title">Birdie</span><span class="live"><i></i>Live</span><button class="close" aria-label="Close Birdie">×</button></div>
-    </div>`
-  const bubble = root.querySelector<HTMLButtonElement>('.bubble')!
-  const panel = root.querySelector<HTMLDivElement>('.panel')!
-  const bar = root.querySelector<HTMLDivElement>('.bar')!
-  const closeButton = root.querySelector<HTMLButtonElement>('.close')!
+    `
+  const el = (tag: string, className?: string, text?: string) => {
+    const node = document.createElement(tag)
+    if (className) node.className = className
+    if (text) node.textContent = text
+    return node
+  }
+  const avatar = (extra = '') => {
+    const wrap = el('span', `avatar ${extra}`.trim())
+    const img = document.createElement('img')
+    img.alt = ''
+    img.src = logo
+    wrap.append(img)
+    return wrap
+  }
+  const bubbleEl = el('button', 'bubble avatar')
+  bubbleEl.setAttribute('aria-label', 'Open Birdie')
+  bubbleEl.title = 'Birdie'
+  bubbleEl.append(Object.assign(document.createElement('img'), { alt: '', src: logo }))
+  const barEl = el('div', 'bar')
+  const closeEl = el('button', 'close', '×')
+  closeEl.setAttribute('aria-label', 'Close Birdie')
+  const live = el('span', 'live')
+  live.append(el('i'), 'Live')
+  barEl.append(avatar(), el('span', 'title', 'Birdie'), live, closeEl)
+  const panelEl = el('div', 'panel')
+  panelEl.setAttribute('role', 'dialog')
+  panelEl.setAttribute('aria-label', 'Birdie')
+  panelEl.append(barEl)
+  root.append(style, bubbleEl, panelEl)
+  const bubble = bubbleEl
+  const panel = panelEl
+  const bar = barEl
+  const closeButton = closeEl
   let frame: HTMLIFrameElement | null = null
   let ready = false
   let readyTimer: ReturnType<typeof setTimeout> | undefined

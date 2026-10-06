@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type ActiveTab, getActiveTab, readTabText } from '../lib/pageText'
 import { selectionFromMessage } from '../lib/selection'
-import { enableSite, injectSelectionScript, isSiteEnabled } from '../lib/sites'
+import { enableSite, injectBubbleScript, injectSelectionScript, isSiteEnabled } from '../lib/sites'
 import { buildWebContext, PENDING_CONTEXT_KEY, type WebContext } from '../lib/webContext'
 
 export type BrowserContext = {
@@ -45,7 +45,11 @@ export function useBrowserContext(pinnedTabId?: number): BrowserContext {
     setPage(null)
     const enabled = current ? await isSiteEnabled(current.url) : false
     setSiteEnabled(enabled)
-    if (current && enabled) await loadPage(current)
+    if (current && enabled) {
+      // Sites enabled before the bubble existed (or tabs opened earlier) have no bubble yet; injecting is idempotent.
+      injectBubbleScript(current.id).catch(() => {})
+      await loadPage(current)
+    }
   }, [loadPage])
 
   useEffect(() => {

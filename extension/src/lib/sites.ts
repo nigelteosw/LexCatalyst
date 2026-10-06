@@ -62,5 +62,9 @@ export async function enableSite(url: string): Promise<boolean> {
 // Registered scripts only reach pages loaded after registration; cover the tab already open.
 export async function injectSelectionScript(tabId: number): Promise<void> {
   await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: [SCRIPT_FILE] })
+  await injectBubbleScript(tabId)
+}
+
+export async function injectBubbleScript(tabId: number): Promise<void> {
   await chrome.scripting.executeScript({ target: { tabId }, files: [BUBBLE_FILE] })
 }
