@@ -37,6 +37,8 @@ _PLANNER_PROMPT = (
 _NEUTRAL_CITATION = re.compile(r"\[\d{4}\]\s+SG[A-Z]+\s+\d+")
 _JSON_OBJECT = re.compile(r"\{.*\}", re.S)
 EXCERPT_JUDGMENTS = 3
+# A judgment the user is reading on eLitigation is a verified source; its neutral citation is in the URL.
+_PAGE_JUDGMENT = re.compile(r"^https://www\.elitigation\.sg/gd/s/(\d{4})_(SGCA|SGHC|SGHCF|SGHCR|SGDC|SGMC|SGFC)_(\d+)/?(?:[?#].*)?$")
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,22 @@ class CaseSource:
     decision_date: str | None
     url: str
     paragraphs: list[tuple[str, str]]
+
+
+def page_case_source(url: str, title: str | None) -> CaseSource | None:
+    """The eLitigation judgment open in the user's browser, so it can be cited like a search result."""
+    match = _PAGE_JUDGMENT.match(url.strip())
+    if not match:
+        return None
+    year, court, number = match.groups()
+    clean_url = url.strip().split("#")[0].split("?")[0].rstrip("/")
+    return CaseSource(f"[{year}] {court} {number}", (title or "").strip() or "Judgment on this page", None, clean_url, [])
+
+
+def with_page_source(sources: list[CaseSource], page: CaseSource | None) -> list[CaseSource]:
+    if not page or any(_normalise_citation(s.citation) == page.citation for s in sources):
+        return sources
+    return [page, *sources]
 
 
 def _normalise_citation(citation: str) -> str:

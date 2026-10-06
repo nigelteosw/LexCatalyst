@@ -181,7 +181,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   function useInChat(result: PrecedentResult) {
     const ctx = buildWebContext({
       url: result.documentId ? `${APP_URL}/documents/${result.documentId}` : APP_URL,
-      title: `Precedent: ${result.documentTitle}`,
+      title: `Related document: ${result.documentTitle}`,
       text: result.excerpt,
       source: 'selection',
     })
@@ -240,7 +240,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
             Chat
           </button>
           <button className={tabClass(view === 'precedent')} onClick={() => setView('precedent')}>
-            Precedent
+            Related documents
           </button>
           <button className={tabClass(view === 'review')} onClick={() => setView('review')}>
             Review
@@ -260,7 +260,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
         <section className="flex-1 space-y-3 overflow-y-auto p-3 text-sm">
           {turns.length === 0 && !streaming && (
             <p className="text-stone-500">
-              Ask Birdie anything. Turn Birdie on for this site and highlight text to ask about it, or open Precedent
+              Ask Birdie anything. Turn Birdie on for this site and highlight text to ask about it, or open Related documents
               to see how the firm drafted a clause before.
             </p>
           )}

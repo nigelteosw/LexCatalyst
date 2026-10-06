@@ -17,7 +17,13 @@ from app.services.error_reporting import unexpected_error_detail
 from app.schemas import FeedbackRoundResponse, LessonResponse, LlmTier, PageContext, WebContext
 from app.services import lesson_service
 from app.services.llm_service import get_llm
-from app.services.case_law_service import case_source_payload, find_case_sources, validate_case_citations
+from app.services.case_law_service import (
+    case_source_payload,
+    find_case_sources,
+    page_case_source,
+    validate_case_citations,
+    with_page_source,
+)
 from app.services.birdie_service import stream_birdie_response
 
 router = APIRouter(tags=["birdie"])
@@ -62,6 +68,10 @@ async def birdie_stream(
                 user_message=request.message,
                 web_text=request.web_context.text if request.web_context else "",
             )
+            if request.web_context:
+                case_sources = with_page_source(
+                    case_sources, page_case_source(request.web_context.url, request.web_context.title)
+                )
             if case_sources:
                 yield event("sources", {"cases": [case_source_payload(s) for s in case_sources]})
 

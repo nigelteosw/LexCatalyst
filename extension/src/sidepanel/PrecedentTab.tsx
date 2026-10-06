@@ -55,9 +55,9 @@ export function PrecedentTab({ selectionText, onUseInChat, onError }: Props) {
   return (
     <section className="flex-1 space-y-3 overflow-y-auto p-3 text-sm">
       <div className="flex items-center justify-between">
-        <span className="font-medium">{data ? (CLAUSE_LABELS[data.clauseType] ?? 'Clause') : 'Precedent'}</span>
+        <span className="font-medium">{data ? (CLAUSE_LABELS[data.clauseType] ?? 'Clause') : 'Related documents'}</span>
         <button className="text-xs underline" disabled={loading} onClick={() => void run(selectionText)}>
-          {loading ? 'Searching…' : 'Find precedent'}
+          {loading ? 'Searching…' : 'Find related documents'}
         </button>
       </div>
       {data && data.termsSummary.length > 0 && (
@@ -65,7 +65,7 @@ export function PrecedentTab({ selectionText, onUseInChat, onError }: Props) {
           {data.termsSummary.map((t) => `${t.label} ×${t.count}`).join(' · ')}
         </p>
       )}
-      {data && data.results.length === 0 && <p className="text-stone-500">No firm precedent found for this clause.</p>}
+      {data && data.results.length === 0 && <p className="text-stone-500">No related documents found for this clause.</p>}
       {data?.results.map((r) => (
         <article key={r.id} className="space-y-1 rounded-md bg-white p-2 shadow-sm">
           <p className="line-clamp-4 whitespace-pre-wrap">{r.excerpt}</p>

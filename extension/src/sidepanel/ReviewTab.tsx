@@ -26,7 +26,7 @@ const GROUPS: { group: Group; title: string }[] = [
 const KIND_LABELS: Record<SuggestionSource['kind'], string> = {
   style_guide: 'Style guide',
   kb: 'Knowledge Bank',
-  document: 'Precedent',
+  document: 'Related document',
   elitigation: 'eLitigation',
 }
 

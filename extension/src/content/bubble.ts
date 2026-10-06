@@ -26,9 +26,15 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
       .avatar { position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 50%;
         background: #fff8d8; border: 1px solid rgba(45,158,107,.45); }
       .avatar img { width: 250%; max-width: none; height: auto; pointer-events: none; }
-      .bubble { position: fixed; bottom: ${MARGIN}px; right: -30px; width: 48px; height: 48px; padding: 0;
-        cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.25); transition: right .2s cubic-bezier(.34,1.56,.64,1); }
-      .bubble:hover, .bubble:focus-visible { right: ${MARGIN}px; outline: 2px solid rgba(45,158,107,.5); }
+      /* The dock is a fixed hover zone; only the bubble inside it moves, so the pointer never leaves it mid-slide. */
+      .dock { position: fixed; bottom: ${MARGIN - 8}px; right: 0; width: 96px; height: 64px; display: flex;
+        align-items: center; justify-content: flex-end; }
+      .bubble { flex: none; width: 48px; height: 48px; padding: 0; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(0,0,0,.25); transform: translateX(30px);
+        transition: transform .22s cubic-bezier(.22,1,.36,1); will-change: transform; }
+      .dock:hover .bubble, .bubble:focus-visible { transform: translateX(-${MARGIN}px); }
+      .bubble:focus-visible { outline: 2px solid rgba(45,158,107,.5); }
+      @media (prefers-reduced-motion: reduce) { .bubble { transition: none; } }
       .panel { position: fixed; display: none; flex-direction: column; background: #fff;
         border: 1px solid rgba(0,0,0,.1); border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,.28); overflow: hidden; }
       .panel.open { display: flex; }
@@ -82,7 +88,9 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
   gripEl.setAttribute('aria-label', 'Resize Birdie (drag or use arrow keys)')
   gripEl.title = 'Drag to resize'
   panelEl.append(barEl, gripEl)
-  root.append(style, bubbleEl, panelEl)
+  const dockEl = el('div', 'dock')
+  dockEl.append(bubbleEl)
+  root.append(style, dockEl, panelEl)
   const bubble = bubbleEl
   const panel = panelEl
   const bar = barEl
@@ -166,11 +174,11 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
     }
     if (!panel.style.left) home()
     panel.classList.add('open')
-    bubble.style.display = 'none'
+    dockEl.style.display = 'none'
   }
   const close = () => {
     panel.classList.remove('open')
-    bubble.style.display = ''
+    dockEl.style.display = ''
   }
 
   bubble.addEventListener('click', open)

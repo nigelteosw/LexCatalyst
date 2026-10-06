@@ -51,3 +51,21 @@ class TruncationNoteTests(unittest.TestCase):
     def test_truncated_context_tells_model(self) -> None:
         ctx = WebContext(url="https://example.com", text="Para 1", source="page", truncated=True)
         self.assertIn("cut off", _format_web_context(ctx))
+
+
+class PageCaseSourceTests(unittest.TestCase):
+    def test_elitigation_judgment_page_is_a_source(self) -> None:
+        from app.services.case_law_service import page_case_source, validate_case_citations, with_page_source
+
+        page = page_case_source("https://www.elitigation.sg/gd/s/2026_SGCA_27?x=1#top", "Wong v Jake")
+        self.assertEqual(page.citation, "[2026] SGCA 27")
+        self.assertEqual(page.url, "https://www.elitigation.sg/gd/s/2026_SGCA_27")
+        sources = with_page_source([], page)
+        self.assertIsNone(validate_case_citations("See [2026] SGCA 27 at [23].", sources))
+        self.assertEqual(with_page_source(sources, page), sources)
+
+    def test_other_pages_are_not_sources(self) -> None:
+        from app.services.case_law_service import page_case_source
+
+        self.assertIsNone(page_case_source("https://example.com/gd/s/2026_SGCA_27", "x"))
+        self.assertIsNone(page_case_source("https://www.elitigation.sg/gd/Home/Index", "x"))
