@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Worker, Viewer } from '@react-pdf-viewer/core'
+import { Worker, Viewer, SpecialZoomLevel } from '@react-pdf-viewer/core'
 import type { DocumentLoadEvent } from '@react-pdf-viewer/core'
 import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout'
 import {
@@ -681,7 +681,11 @@ function HandoffViewer({
     renderHighlights,
     trigger: Trigger.TextSelection,
   })
-  const defaultLayoutInstance = defaultLayoutPlugin()
+  // Phones: drop the thumbnail/bookmark sidebar and fit pages to the width.
+  const isNarrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+  const defaultLayoutInstance = defaultLayoutPlugin(
+    isNarrow ? { sidebarTabs: () => [] } : undefined,
+  )
 
   // PDF fetch
   useEffect(() => {
@@ -899,6 +903,7 @@ function HandoffViewer({
               <Worker workerUrl={PDFJS_WORKER_URL}>
                 <Viewer
                   fileUrl={fileUrl}
+                  defaultScale={isNarrow ? SpecialZoomLevel.PageWidth : undefined}
                   onDocumentLoad={(e) => void detectTextLayer(e)}
                   plugins={[defaultLayoutInstance, highlightPluginInstance]}
                 />

@@ -178,7 +178,6 @@ export function KnowledgeBankPanel({
   const [isCreatingEntry, setIsCreatingEntry] = useState(false)
   const [isCreatingMatter, setIsCreatingMatter] = useState(false)
 
-  const [isContextOpen, setIsContextOpen] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [backfillMessage, setBackfillMessage] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -398,14 +397,6 @@ export function KnowledgeBankPanel({
                       { label: 'New matter', onSelect: () => setIsCreatingMatter(true) },
                     ]
                   : []),
-                ...(!selectedEntryId
-                  ? [
-                      {
-                        label: isContextOpen ? 'Hide details panel' : 'Show details panel',
-                        onSelect: () => setIsContextOpen((isOpen) => !isOpen),
-                      },
-                    ]
-                  : []),
               ]}
             />
           </div>
@@ -491,10 +482,6 @@ export function KnowledgeBankPanel({
                           { label: 'New matter', onSelect: () => setIsCreatingMatter(true) },
                         ]
                       : []),
-                    {
-                      label: isContextOpen ? 'Hide details panel' : 'Show details panel',
-                      onSelect: () => setIsContextOpen((isOpen) => !isOpen),
-                    },
                   ]}
                 />
               </div>
@@ -607,24 +594,6 @@ export function KnowledgeBankPanel({
           <AuditLogView rows={auditQuery.data ?? []} isLoading={auditQuery.isLoading} />
         )}
       </div>
-
-      {isContextOpen && !selectedEntryId && (
-        <aside className="hidden w-[295px] shrink-0 border-l border-black/10 bg-white xl:flex xl:flex-col">
-          <EntryContextPanel
-            entry={selectedEntry}
-            canEdit={isWriter || selectedEntry?.createdBy === currentUser?.id}
-            canChangeScope={selectedEntry?.createdBy === currentUser?.id}
-            isDeleting={deleteMutation.isPending}
-            matters={matters}
-            onDelete={(entry) => {
-              if (window.confirm(`Delete "${entry.title}" from the Knowledge Bank?`)) {
-                deleteMutation.mutate(entry.id)
-              }
-            }}
-            onUpdated={refreshKnowledgeBank}
-          />
-        </aside>
-      )}
 
       {isCreatingEntry && (
         <EntryFormDialog
@@ -1117,16 +1086,16 @@ function OverflowMenu({
 
   useEffect(() => {
     if (!open) return
-    function onPointerDown(event: MouseEvent) {
+    function onPointerDown(event: PointerEvent) {
       if (!ref.current?.contains(event.target as Node)) setOpen(false)
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') setOpen(false)
     }
-    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
