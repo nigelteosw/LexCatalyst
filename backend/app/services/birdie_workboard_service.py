@@ -10,7 +10,7 @@ from typing import Literal
 from fastapi import HTTPException
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.dependencies import is_partner_or_admin, require_matter_member
 from app.models import ActionItem, Matter, MatterMember, User
@@ -129,7 +129,11 @@ def _owned_ticket(db: Session, user: User, ticket_id: str, *, lock: bool = False
 
 
 def _ticket_payload(item: ActionItem) -> dict:
-    return ActionItemResponse.model_validate(item).model_dump(mode='json')
+    payload = ActionItemResponse.model_validate(item).model_dump(mode='json')
+    # Birdie names matters ("the Bishan purchase") instead of guessing from ticket text.
+    matter = item.matter_id and object_session(item).get(Matter, item.matter_id)
+    payload['matter_title'] = matter.title if matter else 'General'
+    return payload
 
 
 def _execute(name: str, args: dict, *, db: Session, user: User, matter_id: str | None) -> dict:

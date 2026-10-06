@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date
 
 from fastapi import HTTPException
@@ -6,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.dependencies import require_matter_member
-from app.models import Document, Matter, ReviewHandoff, User
+from app.models import ActionItem, Document, Matter, ReviewHandoff, User
 from app.services.llm_service import get_llm
 from app.services.birdie_workboard_service import WORKBOARD_TOOLS, execute_workboard_tool
 from app.services.agent_service import TOOLS as _AGENT_TOOLS
@@ -22,6 +23,7 @@ from app.schemas import PageContext, WebContext
 from app.services.lesson_service import format_feedback_context
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
 from app.services.memory_service import format_memory_context, list_memories
+from app.services.organization_service import list_matters
 
 BIRDIE_SYSTEM_PROMPT = """You are Birdie, a drafting assistant for lawyers at a law firm. You draft, rewrite and review contracts, memos, emails and comments. Every output must be ready to send to a supervising partner without further editing.
 
@@ -149,6 +151,36 @@ def _format_matter_context(db: Session, user: User, matter_id: str | None) -> st
             f"{r.submitter.full_name if r.submitter else 'a colleague'} to {who}; status {r.status}."
         )
     return "\n".join(lines)
+
+
+_APP_PATH = re.compile(r"/(matters|actions)/([0-9a-f-]{36})(?:[/?#]|$)")
+_WORD = re.compile(r"[a-z0-9][a-z0-9-]{3,}")
+
+
+def infer_matter_id(db: Session, user: User, *, message: str, web_context: WebContext | None) -> str | None:
+    """No matter selected (the extension, or General): find the one the user means.
+
+    A LexCatalyst page link (/matters/<id>, /actions/<id>) wins. Otherwise a word that appears in
+    exactly one of the user's matter titles or references (e.g. "Bishan") picks that matter. Ambiguous
+    or no match stays None. Only matters the user can access are considered.
+    """
+    matters = list_matters(db, user)
+    by_id = {m.id: m for m in matters}
+    if web_context and (m := _APP_PATH.search(web_context.url or "")):
+        kind, ref = m.groups()
+        if kind == "matters" and ref in by_id:
+            return ref
+        if kind == "actions":
+            item = db.get(ActionItem, ref)
+            if item and item.matter_id in by_id:
+                return item.matter_id
+    owners: dict[str, set[str]] = {}
+    for matter in matters:
+        for word in set(_WORD.findall(f"{matter.title} {matter.case_number or ''}".lower())):
+            owners.setdefault(word, set()).add(matter.id)
+    said = set(_WORD.findall(f"{message} {web_context.title if web_context else ''}".lower()))
+    hits = {next(iter(ids)) for word, ids in owners.items() if len(ids) == 1 and word in said}
+    return hits.pop() if len(hits) == 1 else None
 
 
 def _format_workboard_context(db: Session, user: User, matter_id: str | None = None) -> str:

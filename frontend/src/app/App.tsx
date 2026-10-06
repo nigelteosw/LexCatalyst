@@ -175,6 +175,8 @@ function App() {
     'lex.chat.tier',
     'lexchat',
   )
+  // The Workboard's matter filter (or open ticket's matter); Birdie works in that matter there.
+  const [workboardMatterId, setWorkboardMatterId] = useState<string | null>(null)
   const [selectedMatterId, setSelectedMatterId] = useState<string | null>(
     () => localStorage.getItem('selectedMatterId'),
   )
@@ -626,7 +628,9 @@ function App() {
           onToggle={() => setIsBirdieOpen((o) => !o)}
           matterId={current.view === 'matter'
             ? current.matterId
-            : current.view === 'chat' && activeThread
+            : current.view === 'actions'
+              ? workboardMatterId
+              : current.view === 'chat' && activeThread
               ? activeThread.matterId
               : selectedMatterId}
           onOpenSettings={() => selectSettings()}
@@ -694,7 +698,7 @@ function App() {
                   currentUser={currentUser}
                 />
               ) : current.view === 'actions' || current.view === 'handoff_review' ? (
-                <ActionsPanel matters={matters} currentUser={currentUser} />
+                <ActionsPanel matters={matters} currentUser={currentUser} onFocusMatterChange={setWorkboardMatterId} />
               ) : current.view === 'settings' ? (
                 <SettingsPanel currentUser={currentUser} />
               ) : (

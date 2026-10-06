@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Plus, Tag, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -90,11 +90,13 @@ const WORKBOARD_HELP: HelpContent = {
 type ActionsPanelProps = {
   matters: Matter[]
   currentUser: CurrentUser | null
+  /** The matter Birdie should work in: the matter filter, else the open ticket's matter. */
+  onFocusMatterChange?: (matterId: string | null) => void
 }
 
 const ACTIONS_QUERY_KEY = ['actions'] as const
 
-export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
+export function ActionsPanel({ matters, currentUser, onFocusMatterChange }: ActionsPanelProps) {
   const queryClient = useQueryClient()
   const manager = isManager(currentUser)
   const { current, selectActions, selectHandoffReview } = useWorkspaceNavigation()
@@ -135,6 +137,12 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
   const allItems = useMemo(() => actionsQuery.data ?? [], [actionsQuery.data])
   const users = usersQuery.data ?? []
   const selectedItem = allItems.find((item) => item.id === selectedActionId) ?? null
+
+  const focusMatterId = matterFilter ?? selectedItem?.matterId ?? null
+  useEffect(() => {
+    onFocusMatterChange?.(focusMatterId)
+  }, [focusMatterId, onFocusMatterChange])
+  useEffect(() => () => onFocusMatterChange?.(null), [onFocusMatterChange])
 
   // Distinct tags from the full dataset (not filtered) so chips don't
   // disappear when their column empties.

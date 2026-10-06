@@ -22,7 +22,7 @@ from app.services.case_law_service import (
     validate_case_citations,
     with_page_source,
 )
-from app.services.birdie_service import stream_birdie_response
+from app.services.birdie_service import infer_matter_id, stream_birdie_response
 
 router = APIRouter(tags=["birdie"])
 
@@ -55,6 +55,10 @@ async def birdie_stream(
     except (ValueError, HTTPException):
         db.rollback()
         request.matter_id = None
+    if request.matter_id is None:
+        request.matter_id = infer_matter_id(
+            db, current_user, message=request.message, web_context=request.web_context
+        )
 
     def event(name: str, payload: dict) -> str:
         return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
