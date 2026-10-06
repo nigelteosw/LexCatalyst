@@ -16,6 +16,7 @@ import { clearToken, getToken } from '../lib/auth'
 import { APP_URL } from '../lib/config'
 import { clearTurns, loadTurns, saveTurns, TURNS_KEY } from '../lib/conversation'
 import { buildWebContext } from '../lib/webContext'
+import { BirdieMark } from './BirdieMark'
 import { CasesList } from './CasesList'
 import { ContextChips } from './ContextChips'
 import { MarkdownContent } from './MarkdownContent'
@@ -31,6 +32,7 @@ const CASE_SEARCH_PROMPT = 'Find Singapore judgments on eLitigation relevant to 
 
 // host 'floating' is the on-page popup: same panel, pinned to the tab it floats in.
 export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
+  const floating = tabId !== undefined
   const [auth, setAuth] = useState<AuthState>({ status: 'loading' })
   const [view, setView] = useState<View>('chat')
   const [turns, setTurns] = useState<BirdieTurn[]>([])
@@ -203,14 +205,28 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   }
 
   const tabClass = (active: boolean) =>
-    `px-2 py-1 text-xs ${active ? 'border-b-2 border-stone-900 font-semibold' : 'text-stone-500'}`
+    `flex-1 border-b-2 py-1.5 text-xs font-medium transition-colors ${
+      active ? 'border-[#2d9e6b] text-[#0f0f0f]' : 'border-transparent text-[#76766f] hover:text-[#5a5a56]'
+    }`
 
   return (
-    <main className="flex h-screen flex-col">
-      <header className="space-y-1 border-b border-stone-200 px-3 pt-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold">Birdie</span>
-          <span className="flex items-center gap-2 text-xs text-stone-500">
+    <main className="flex h-screen flex-col bg-white">
+      <header className="border-b border-black/10">
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
+          {/* The floating shell already carries the avatar and title in its drag bar. */}
+          {floating ? (
+            <span />
+          ) : (
+            <span className="flex items-center gap-2.5">
+              <BirdieMark />
+              <span className="text-xs font-semibold text-[#0f0f0f]">Birdie</span>
+              <span className="flex items-center gap-1 text-[11px] font-medium text-[#1a6b4a]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2d9e6b]" />
+                Live
+              </span>
+            </span>
+          )}
+          <span className="flex items-center gap-2 text-xs text-[#76766f]">
             <button className="underline" title="New chat (⌘K)" onClick={newChat}>
               New chat
             </button>
@@ -219,7 +235,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
             </button>
           </span>
         </div>
-        <nav className="flex gap-2">
+        <nav className="flex">
           <button className={tabClass(view === 'chat')} onClick={() => setView('chat')}>
             Chat
           </button>

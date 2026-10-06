@@ -2,7 +2,7 @@
 // Must stay import-free: registered content scripts are classic scripts (see selection.ts).
 // The panel is an iframe of the extension page popup.html, so the host page cannot read the chat.
 const READY_TYPE = 'birdie-popup-ready' // keep in sync with src/popup/main.tsx
-const PANEL_W = 380
+const PANEL_W = 360
 const PANEL_H = 560
 const MARGIN = 16
 const MIN_VISIBLE = 80 // the panel may hang off-screen, but this much stays reachable
@@ -14,28 +14,38 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
 
   const host = document.createElement('div')
   host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;top:0;left:0;width:0;height:0;'
+  const logo = chrome.runtime.getURL('Birdie.png')
   const root = host.attachShadow({ mode: 'closed' })
   root.innerHTML = `
     <style>
       * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, sans-serif; }
-      .bubble { position: fixed; bottom: ${MARGIN}px; right: -34px; width: 56px; height: 56px; border: 0;
-        border-radius: 50%; background: #1c1917; color: #fff; font-size: 26px; cursor: pointer;
-        box-shadow: 0 4px 14px rgba(0,0,0,.3); transition: right .18s ease; padding: 0; }
-      .bubble:hover, .bubble:focus-visible { right: ${MARGIN}px; }
-      .panel { position: fixed; display: none; flex-direction: column; background: #fafaf9;
-        border: 1px solid #d6d3d1; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.28); overflow: hidden; }
+      .avatar { position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 50%;
+        background: #fff8d8; border: 1px solid rgba(45,158,107,.45); }
+      .avatar img { width: 250%; max-width: none; height: auto; pointer-events: none; }
+      .bubble { position: fixed; bottom: ${MARGIN}px; right: -30px; width: 48px; height: 48px; padding: 0;
+        cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.25); transition: right .2s cubic-bezier(.34,1.56,.64,1); }
+      .bubble:hover, .bubble:focus-visible { right: ${MARGIN}px; outline: 2px solid rgba(45,158,107,.5); }
+      .panel { position: fixed; display: none; flex-direction: column; background: #fff;
+        border: 1px solid rgba(0,0,0,.1); border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,.28); overflow: hidden; }
       .panel.open { display: flex; }
-      .bar { height: 28px; flex: none; display: flex; align-items: center; justify-content: space-between;
-        padding: 0 4px 0 10px; background: #1c1917; color: #fff; font-size: 12px; cursor: grab; user-select: none; }
+      .bar { flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #fff;
+        border-bottom: 1px solid rgba(0,0,0,.1); font-size: 12px; font-weight: 600; color: #0f0f0f;
+        cursor: grab; user-select: none; touch-action: none; }
       .bar.dragging { cursor: grabbing; }
-      .close { border: 0; background: transparent; color: #fff; font-size: 16px; cursor: pointer; padding: 2px 8px; }
-      iframe { flex: 1; width: 100%; border: 0; background: #fafaf9; }
+      .bar .avatar { width: 32px; height: 32px; flex: none; }
+      .title { flex: 1; }
+      .live { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: #1a6b4a; }
+      .live i { width: 6px; height: 6px; border-radius: 50%; background: #2d9e6b; }
+      .close { width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #76766f;
+        font-size: 16px; line-height: 1; cursor: pointer; }
+      .close:hover { background: #f4f3ef; }
+      iframe { flex: 1; width: 100%; border: 0; background: #fff; }
       iframe.dragging { pointer-events: none; }
       .note { padding: 16px; font-size: 13px; color: #44403c; }
     </style>
-    <button class="bubble" aria-label="Open Birdie" title="Birdie">🐦</button>
+    <button class="bubble avatar" aria-label="Open Birdie" title="Birdie"><img alt="" src="${logo}"></button>
     <div class="panel" role="dialog" aria-label="Birdie">
-      <div class="bar"><span>Birdie</span><button class="close" aria-label="Close Birdie">×</button></div>
+      <div class="bar"><span class="avatar"><img alt="" src="${logo}"></span><span class="title">Birdie</span><span class="live"><i></i>Live</span><button class="close" aria-label="Close Birdie">×</button></div>
     </div>`
   const bubble = root.querySelector<HTMLButtonElement>('.bubble')!
   const panel = root.querySelector<HTMLDivElement>('.panel')!
@@ -53,7 +63,7 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
     const { w, h } = size()
     // Allow hanging past every edge, but keep MIN_VISIBLE px of the panel (and its bar) on screen.
     const x = Math.min(Math.max(left, MIN_VISIBLE - w), window.innerWidth - MIN_VISIBLE)
-    const y = Math.min(Math.max(top, 0), window.innerHeight - 28)
+    const y = Math.min(Math.max(top, 0), window.innerHeight - 52)
     panel.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;`
   }
   const home = () => {
