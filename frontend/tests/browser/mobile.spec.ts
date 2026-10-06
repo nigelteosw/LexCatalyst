@@ -211,3 +211,38 @@ test('chat citations open a phone-sized source panel', async ({ page }) => {
   await source.getByRole('button', { name: 'Close source' }).click()
   await expect(source).toHaveCount(0)
 })
+
+
+test('sidebar collapse keeps icons aligned and expands through the logo', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await workspace(page)
+  await page.goto('/home')
+  const sidebar = page.locator('aside.lex-sidebar')
+  const homeIcon = sidebar.getByRole('button', { name: 'Home', exact: true }).locator('svg')
+  const initial = await homeIcon.boundingBox()
+  await sidebar.getByRole('button', { name: 'Collapse sidebar' }).click()
+  await expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+  await expect.poll(async () => Math.round((await sidebar.boundingBox())!.width)).toBe(64)
+  expect((await homeIcon.boundingBox())!.x).toBeCloseTo(initial!.x, 0)
+  expect((await homeIcon.boundingBox())!.y).toBeCloseTo(initial!.y, 0)
+  const rail = (await sidebar.boundingBox())!
+  for (const element of [homeIcon, sidebar.locator('img').first()]) {
+    const bounds = (await element.boundingBox())!
+    expect(bounds.x + bounds.width / 2).toBeCloseTo(rail.x + rail.width / 2, 0)
+  }
+  const slots = await sidebar.locator('[aria-label="Workspace"] button').evaluateAll((buttons) => buttons.map((button) => {
+    const box = button.getBoundingClientRect()
+    return { x: box.x, y: box.y, width: box.width, height: box.height }
+  }))
+  slots.forEach((slot, index) => {
+    expect(slot.width).toBe(44)
+    expect(slot.height).toBe(44)
+    expect(slot.x + slot.width / 2).toBe(rail.x + rail.width / 2)
+    if (index > 0) expect(slot.y - slots[index - 1].y).toBe(48)
+  })
+  await page.screenshot({ path: '/private/tmp/lexcatalyst-sidebar-centered.png' })
+  await expect(sidebar.getByRole('button', { name: 'Collapse sidebar' })).toBeHidden()
+  await sidebar.getByRole('button', { name: 'Expand sidebar', exact: true }).click()
+  await expect.poll(async () => Math.round((await sidebar.boundingBox())!.width)).toBe(236)
+  await expect(sidebar.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
+})

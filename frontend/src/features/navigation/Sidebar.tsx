@@ -3,7 +3,6 @@ import {
   BookMarked,
   CheckSquare,
   ChevronsLeft,
-  ChevronsRight,
   ChevronsUpDown,
   FolderInput,
   HeartPulse,
@@ -59,7 +58,7 @@ const MAX_WIDTH = 480
 const DEFAULT_WIDTH = 236
 
 const sidebarActionClass =
-  'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-fill'
+  'flex w-full items-center gap-2 rounded-md px-[17px] py-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-fill'
 
 const sidebarNavClass =
   'text-ink-secondary hover:bg-fill-pressed hover:text-ink'
@@ -228,30 +227,30 @@ export function Sidebar({
       {/* Sidebar Container */}
       <aside
         ref={sidebarRef}
-        className={`mobile-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none border-r border-line bg-fill text-ink transition-[transform,width] duration-300 lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
+        data-collapsed={isCollapsed}
+        className={`mobile-sidebar lex-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden overscroll-none border-r border-line bg-fill text-ink transition-[transform,width] duration-200 ease-out motion-reduce:transition-none lg:relative lg:h-auto lg:max-h-none lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ width: `${isCollapsed ? COLLAPSED_WIDTH : width}px`, maxWidth: isDesktop ? undefined : 'calc(100vw - 2rem)' }}
+        style={{ width: `${isCollapsed ? COLLAPSED_WIDTH : width}px`, maxWidth: isDesktop ? undefined : 'calc(100vw - 2rem)', transitionDuration: isResizing ? '0ms' : undefined }}
       >
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-full min-h-0 flex-col" style={{ width: isDesktop ? width : '100%' }}>
           {/* Sidebar Header */}
           <div
-            className={`border-b border-hairline pb-3 pt-[18px] ${isCollapsed ? 'px-2' : 'px-3.5'}`}
+            className="border-b border-hairline px-[17px] pb-3 pt-[18px]"
           >
             <div
-              className={`flex items-center ${
-                isCollapsed ? 'flex-col gap-2' : 'justify-between'
-              }`}
+              className="flex items-center justify-between"
             >
               <button
-                aria-label="Go to home dashboard"
+                aria-label={isCollapsed ? 'Expand sidebar' : 'Go to home dashboard'}
+                title={isCollapsed ? 'Expand sidebar' : undefined}
                 className="flex items-center gap-2.5 text-ink transition-opacity hover:opacity-80"
-                onClick={() => { selectHome(); onClose() }}
+                onClick={() => { if (isCollapsed) { toggleCollapsed() } else { selectHome(); onClose() } }}
                 type="button"
               >
                 <img alt="" className="h-[30px] w-[30px] rounded-md" src="/favicon.svg" />
-                {!isCollapsed && (
-                  <span className="t-wordmark">
+                {(
+                  <span aria-hidden={isCollapsed} className="sidebar-label t-wordmark whitespace-nowrap">
                     LexCatalyst
                   </span>
                 )}
@@ -261,10 +260,10 @@ export function Sidebar({
                   onClick={toggleCollapsed}
                   aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                   title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                  className="hidden h-8 w-8 place-items-center rounded-md text-ink-secondary transition-colors hover:bg-fill-pressed hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:grid"
+                  className={`${isCollapsed ? 'invisible pointer-events-none' : ''} hidden lg:grid h-8 w-8 place-items-center rounded-md text-ink-secondary transition-colors hover:bg-fill-pressed hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
                   type="button"
                 >
-                  {isCollapsed ? <ChevronsRight size={16} strokeWidth={1.5} /> : <ChevronsLeft size={16} strokeWidth={1.5} />}
+                  <ChevronsLeft size={16} strokeWidth={1.5} />
                 </button>
                 <button
                   onClick={onClose}
@@ -280,7 +279,7 @@ export function Sidebar({
 
           <nav
             aria-label="Workspace"
-            className="flex flex-col gap-0.5 border-b border-hairline px-1.5 py-2"
+            className="flex flex-col gap-[4px] border-b border-hairline px-[10px] py-[8px]"
           >
             <NavItem icon={Home} label="Home" collapsed={isCollapsed} active={current.view === 'home' || current.view === 'matter' || current.view === 'documents'}
               onClick={() => { selectHome(); closeMobile() }} />
@@ -382,9 +381,7 @@ export function Sidebar({
               aria-haspopup="menu"
               aria-label="Account menu"
               title={isCollapsed ? `${userFullName} · ${userRole}` : undefined}
-              className={`flex w-full items-center gap-2.5 rounded-md border px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                isCollapsed ? 'justify-center px-0' : ''
-              } ${
+              className={`flex w-full items-center gap-2.5 rounded-md border px-[7px] py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent  ${
                 userMenuOpen
                   ? 'border-line-strong bg-fill-pressed'
                   : 'border-transparent hover:bg-fill-pressed'
@@ -395,8 +392,8 @@ export function Sidebar({
               <div className="t-micro grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent uppercase text-white">
                 {userInitials}
               </div>
-              {!isCollapsed && (
-                <>
+              {(
+                <div aria-hidden={isCollapsed} className="sidebar-label flex min-w-0 flex-1 items-center gap-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="t-body-strong truncate text-ink">{userFullName}</div>
                     <div className="t-meta truncate capitalize text-ink-tertiary">{userRole}</div>
@@ -408,7 +405,7 @@ export function Sidebar({
                       userMenuOpen ? 'scale-110 text-ink-secondary' : ''
                     }`}
                   />
-                </>
+                </div>
               )}
             </button>
           </div>
@@ -474,18 +471,16 @@ function NavItem({
       onClick={onClick}
       onFocus={onPrefetch}
       onMouseEnter={onPrefetch}
-      className={`${sidebarActionClass} t-body-strong relative min-h-10 gap-3 ${
-        collapsed ? 'justify-center px-0' : ''
-      } ${active ? sidebarNavActiveClass : sidebarNavClass}`}
+      className={`${sidebarActionClass} sidebar-nav-slot t-body-strong relative gap-3  ${active ? sidebarNavActiveClass : sidebarNavClass}`}
       type="button"
     >
       <Icon size={18} strokeWidth={1.5} className="shrink-0" />
-      {!collapsed && <span className="flex-1 text-left">{label}</span>}
+      <span aria-hidden={collapsed} className="sidebar-label flex-1 whitespace-nowrap text-left">{label}</span>
       {badge ? (
         collapsed ? (
           <span
             aria-label={`${badge} pending`}
-            className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-warning"
+            className="absolute left-9 top-2 h-2 w-2 rounded-full bg-warning"
           />
         ) : (
           <span

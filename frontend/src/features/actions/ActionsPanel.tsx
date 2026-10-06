@@ -379,7 +379,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
                   {grouped[col.id].length}
                 </span>
               </div>
-              <div className="flex flex-1 flex-col gap-2 sm:min-h-0 sm:overflow-y-auto sm:pr-1">
+              <div className="workboard-column-scroll flex flex-1 flex-col gap-2 sm:min-h-0 sm:overflow-y-auto sm:pr-1">
                 {grouped[col.id].map((item) => (
                   <ActionCard
                     key={item.id}

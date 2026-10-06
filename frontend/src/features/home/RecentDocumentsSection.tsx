@@ -5,7 +5,7 @@ import { useWorkspaceNavigation } from '../../app/routes'
 import { StatusBadge } from '../../shared/ui/StatusBadge'
 import { formatRelative } from './format'
 
-const MAX_DOCUMENTS = 5
+const MAX_DOCUMENTS = 3
 
 /** The documents touched most recently, so a lawyer can pick up where they left off. */
 export function RecentDocumentsSection() {
@@ -19,28 +19,30 @@ export function RecentDocumentsSection() {
 
   return (
     <section>
-      <h2 className="border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">Recent documents</h2>
+      <h2 className="border-b border-line pb-3 font-serif text-xl text-ink">Recent documents</h2>
       {documents.isPending ? (
-        <p className="py-6 text-sm text-neutral-400">Loading…</p>
+        <p className="py-6 text-sm text-ink-tertiary">Loading…</p>
+      ) : documents.isError ? (
+        <p className="py-6 text-sm text-danger">Could not load recent documents.</p>
       ) : recent.length === 0 ? (
-        <p className="py-6 text-sm text-neutral-500">No documents yet. Open a matter to upload one.</p>
+        <p className="py-6 text-sm text-ink-secondary">No documents yet. Open a matter to upload one.</p>
       ) : (
         <div className="divide-y divide-neutral-200/70">
           {recent.map((doc) => {
             const matter = matters.data?.find((m) => m.id === doc.matterId)
             return (
               <button
-                className="group flex w-full items-start gap-3 py-3.5 text-left transition-colors hover:bg-black/[0.025]"
+                className="group flex w-full items-start gap-3 py-3.5 text-left transition-colors hover:bg-fill"
                 key={doc.id}
                 onClick={() => selectDocuments(doc.id)}
                 type="button"
               >
-                <FileText className="mt-0.5 shrink-0 text-neutral-400" size={16} />
+                <FileText className="mt-0.5 shrink-0 text-ink-tertiary" size={16} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] text-neutral-900 group-hover:text-[#1e3a8a]">
+                  <span className="block truncate text-body text-ink group-hover:text-accent">
                     {doc.filename}
                   </span>
-                  <span className="mt-0.5 block truncate text-sm text-neutral-500">
+                  <span className="mt-0.5 block truncate text-sm text-ink-secondary">
                     {matter ? matter.caseNumber : 'General'} · {formatRelative(doc.updatedAt)}
                   </span>
                 </span>

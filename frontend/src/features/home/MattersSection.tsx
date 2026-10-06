@@ -28,7 +28,7 @@ type Draft = {
 }
 
 const emptyDraft: Draft = { title: '', caseNumber: '', clientName: '', status: 'active' }
-const inputClass = 'mt-1 w-full rounded-lg border border-neutral-200 px-2 py-1.5 text-sm'
+const inputClass = 'mt-1 w-full rounded-lg border border-line px-2 py-1.5 text-sm'
 
 type Row = {
   key: string
@@ -54,6 +54,7 @@ export function MattersSection({
   const [draft, setDraft] = useState<Draft | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Matter | null>(null)
   const [showClosed, setShowClosed] = useState(false)
+  const [search, setSearch] = useState('')
 
   const mattersQuery = useQuery({ queryKey: ['matters', 'all'], queryFn: () => listMatters() })
   const documents = useQuery({ queryKey: ['documents'], queryFn: listDocuments, staleTime: 30_000 })
@@ -134,14 +135,14 @@ export function MattersSection({
 
   return (
     <section>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-3">
-        <h2 className="flex items-baseline gap-2.5 font-serif text-xl text-neutral-900">
-          Matters
-          <span className="font-sans text-sm text-neutral-400">{rows.length - 1}</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+        <h2 className="flex items-baseline gap-2.5 font-serif text-xl text-ink">
+          Your matters
+          <span className="font-sans text-sm text-ink-tertiary">{rows.length - 1}</span>
         </h2>
         <div className="flex items-center gap-3">
           {closedCount > 0 && (
-            <label className="flex cursor-pointer items-center gap-1.5 text-sm text-neutral-500">
+            <label className="flex cursor-pointer items-center gap-1.5 text-sm text-ink-secondary">
               <input
                 checked={showClosed}
                 className="accent-[#1e3a8a]"
@@ -168,8 +169,10 @@ export function MattersSection({
 
       {mattersQuery.error && <ErrorBanner className="mt-3" message={getErrorMessage(mattersQuery.error)} />}
 
-      <div className="divide-y divide-neutral-200/70">
-        {rows.map((row) => {
+      <input aria-label="Search matters" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search matters…" className="t-body mt-4 w-full rounded-md border border-line bg-card px-3 py-2 text-ink placeholder:text-ink-tertiary focus:outline-none focus:ring-2 focus:ring-accent" />
+      {mattersQuery.isPending && <p className="t-body py-4 text-ink-secondary">Loading matters…</p>}
+      <div className="divide-y divide-hairline">
+        {rows.filter((row) => [row.matter?.title ?? 'General', row.matter?.caseNumber, row.matter?.clientName].join(' ').toLowerCase().includes(search.toLowerCase())).map((row) => {
           const { matter } = row
           const stats = [
             `${row.documents} ${row.documents === 1 ? 'document' : 'documents'}`,
@@ -179,7 +182,7 @@ export function MattersSection({
           return (
             <div
               key={row.key}
-              className="group grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-1 py-4 transition-colors hover:bg-black/[0.025]"
+              className="group grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-1 py-4 transition-colors hover:bg-fill"
             >
               <button
                 className="min-w-0 text-left"
@@ -187,7 +190,7 @@ export function MattersSection({
                 type="button"
               >
                 <span className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="text-base font-medium text-neutral-900 group-hover:text-[#1e3a8a]">
+                  <span className="text-base font-medium text-ink group-hover:text-accent">
                     {matter ? matter.title : 'General'}
                   </span>
                   {matter && matter.status !== 'active' && (
@@ -196,12 +199,12 @@ export function MattersSection({
                     </span>
                   )}
                 </span>
-                <span className="mt-0.5 block truncate text-sm text-neutral-500">
+                <span className="mt-0.5 block truncate text-sm text-ink-secondary">
                   {matter
                     ? [matter.caseNumber, matter.clientName].filter(Boolean).join(' · ')
                     : 'Not filed under a matter'}
                 </span>
-                <span className="mt-1 block text-xs text-neutral-400">
+                <span className="mt-1 block text-xs text-ink-tertiary">
                   {stats.join(' · ')}
                   {row.lastActivity && ` · Active ${formatRelative(row.lastActivity)}`}
                 </span>

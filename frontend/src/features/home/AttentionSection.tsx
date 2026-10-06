@@ -5,7 +5,7 @@ import { useWorkspaceNavigation } from '../../app/routes'
 import { dueLabel, daysUntil } from './format'
 
 const DUE_SOON_DAYS = 7
-const MAX_ITEMS = 6
+const MAX_ITEMS = 4
 
 type Flag = { label: string; tone: 'red' | 'amber' | 'blue'; rank: number }
 
@@ -27,7 +27,7 @@ export function attentionFlag(item: ActionItem, userId: string | undefined, now:
 const toneClass = {
   red: 'bg-red-50 text-red-700',
   amber: 'bg-amber-50 text-amber-800',
-  blue: 'bg-blue-50 text-[#1e3a8a]',
+  blue: 'bg-blue-50 text-accent',
 }
 
 /** Reviews waiting and work that is overdue or due this week. */
@@ -43,30 +43,32 @@ export function AttentionSection({ currentUser }: { currentUser: CurrentUser | n
 
   return (
     <section>
-      <h2 className="flex items-baseline gap-2.5 border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">
+      <h2 className="flex items-baseline gap-2.5 border-b border-line pb-3 font-serif text-xl text-ink">
         Needs your attention
-        {flagged.length > 0 && <span className="font-sans text-sm text-neutral-400">{flagged.length}</span>}
+        {flagged.length > 0 && <span className="font-sans text-sm text-ink-tertiary">{flagged.length}</span>}
       </h2>
       {actions.isPending ? (
-        <p className="py-6 text-sm text-neutral-400">Loading…</p>
+        <p className="py-6 text-sm text-ink-tertiary">Loading…</p>
+      ) : actions.isError ? (
+        <p className="py-6 text-sm text-danger">Could not load items needing attention.</p>
       ) : flagged.length === 0 ? (
-        <p className="py-6 text-sm text-neutral-500">Nothing is overdue or waiting on you.</p>
+        <p className="py-6 text-sm text-ink-secondary">Nothing is overdue or waiting on you.</p>
       ) : (
         <div className="divide-y divide-neutral-200/70">
           {flagged.slice(0, MAX_ITEMS).map(({ item, flag }) => {
             const matter = matters.data?.find((m) => m.id === item.matterId)
             return (
               <button
-                className="group flex w-full items-start gap-3 py-3.5 text-left transition-colors hover:bg-black/[0.025]"
+                className="group flex w-full flex-wrap items-start gap-3 py-3.5 text-left transition-colors hover:bg-fill"
                 key={item.id}
                 onClick={() => selectActions(item.id)}
                 type="button"
               >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] text-neutral-900 group-hover:text-[#1e3a8a]">
+                <span className="min-w-0 basis-40 flex-1">
+                  <span className="block truncate text-body text-ink group-hover:text-accent">
                     {item.title}
                   </span>
-                  <span className="mt-0.5 block truncate text-sm text-neutral-500">
+                  <span className="mt-0.5 block truncate text-sm text-ink-secondary">
                     {matter ? `${matter.caseNumber} · ${matter.title}` : 'General'}
                   </span>
                 </span>
@@ -80,7 +82,7 @@ export function AttentionSection({ currentUser }: { currentUser: CurrentUser | n
       )}
       {flagged.length > MAX_ITEMS && (
         <button
-          className="mt-2 text-sm text-[#1e3a8a] hover:underline"
+          className="mt-2 text-sm text-accent hover:underline"
           onClick={() => selectActions()}
           type="button"
         >
