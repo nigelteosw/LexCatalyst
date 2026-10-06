@@ -18,8 +18,6 @@ from app.schemas import FeedbackRoundResponse, LessonResponse, LlmTier, PageCont
 from app.services import lesson_service
 from app.services.llm_service import get_llm
 from app.services.case_law_service import (
-    case_source_payload,
-    find_case_sources,
     page_case_source,
     validate_case_citations,
     with_page_source,
@@ -61,19 +59,11 @@ async def birdie_stream(
 
     async def stream():
         try:
-            case_sources = await find_case_sources(
-                db,
-                user=current_user,
-                provider=get_llm(db, current_user.id, feature="birdie", tier=request.tier, model=request.model),
-                user_message=request.message,
-                web_text=request.web_context.text if request.web_context else "",
+            # The judgment open in the user's browser is citable. Birdie searches eLitigation itself, by
+            # tool call, only when a question needs case law; the loop appends what it finds to this list.
+            case_sources = with_page_source(
+                [], page_case_source(request.web_context.url, request.web_context.title) if request.web_context else None
             )
-            if request.web_context:
-                case_sources = with_page_source(
-                    case_sources, page_case_source(request.web_context.url, request.web_context.title)
-                )
-            if case_sources:
-                yield event("sources", {"cases": [case_source_payload(s) for s in case_sources]})
 
             chunks: list[str] = []
             async for event_name, payload in stream_birdie_response(

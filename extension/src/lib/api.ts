@@ -5,7 +5,8 @@ import type { WebContext } from './webContext'
 
 export type ExtensionUser = { id: string; email: string; fullName: string | null }
 export type CaseLink = { citation: string; title: string; decisionDate: string | null; url: string }
-export type BirdieTurn = { role: 'user' | 'assistant'; content: string; cases?: CaseLink[] }
+export type SearchStep = { id: string; query: string; status: 'running' | 'done' | 'failed'; summary?: string }
+export type BirdieTurn = { role: 'user' | 'assistant'; content: string; cases?: CaseLink[]; searches?: SearchStep[] }
 
 export type LlmTier = 'high' | 'mid'
 export type ModelChoice = { tier: LlmTier; model?: undefined } | { model: string; tier?: undefined }
@@ -65,6 +66,7 @@ export async function streamBirdie(opts: {
   webContext: WebContext | null
   signal?: AbortSignal
   onSources?: (cases: CaseLink[]) => void
+  onSearchStep?: (step: SearchStep) => void
   onWorkboardChange?: () => void
   onToken: (token: string) => void
 }): Promise<string> {
@@ -97,6 +99,12 @@ export async function streamBirdie(opts: {
     buffer = rest
     for (const { event, data } of events) {
       if (event === 'sources') opts.onSources?.(toCaseLinks(data.cases))
+      else if (event === 'tool_call' && data.tool === 'search_elitigation') {
+        opts.onSearchStep?.({ id: String(data.step_id), query: String(data.query ?? ''), status: 'running' })
+      } else if (event === 'tool_result' && data.tool === 'search_elitigation') {
+        const summary = typeof data.summary === 'string' ? data.summary : undefined
+        opts.onSearchStep?.({ id: String(data.step_id), query: '', status: data.success === false ? 'failed' : 'done', summary })
+      }
       else if (event === 'workboard_changed') opts.onWorkboardChange?.()
       else if (event === 'token') opts.onToken(String(data.content ?? ''))
       else if (event === 'done') return String(data.content ?? '')

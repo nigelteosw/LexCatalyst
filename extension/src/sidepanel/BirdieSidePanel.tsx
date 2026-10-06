@@ -5,6 +5,7 @@ import {
   type ModelChoice,
   type BirdieTurn,
   type CaseLink,
+  type SearchStep,
   type ExtensionUser,
   fetchMe,
   type PrecedentResult,
@@ -23,6 +24,7 @@ import { MarkdownContent } from './MarkdownContent'
 import { loadSavedChoice, ModelPicker, saveChoice } from './ModelPicker'
 import { PrecedentTab } from './PrecedentTab'
 import { ReviewTab } from './ReviewTab'
+import { SearchSteps } from './SearchSteps'
 import { useBrowserContext } from './useBrowserContext'
 
 type AuthState = { status: 'loading' } | { status: 'signedOut' } | { status: 'signedIn'; user: ExtensionUser }
@@ -40,6 +42,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   const [draft, setDraft] = useState('')
   const [streaming, setStreaming] = useState('')
   const [streamingCases, setStreamingCases] = useState<CaseLink[]>([])
+  const [streamingSearches, setStreamingSearches] = useState<SearchStep[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [llm, setLlm] = useState<LlmSettings | null>(null)
@@ -104,6 +107,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
     setTurns([])
     setStreaming('')
     setStreamingCases([])
+    setStreamingSearches([])
     setDraft('')
     setError(null)
     clearAll()
@@ -147,11 +151,13 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
     const history = turns
     const webContext = browser.selection ?? browser.page
     let cases: CaseLink[] = []
+    let searches: SearchStep[] = []
     setTurns([...history, { role: 'user', content: message }])
     setDraft('')
     browser.clearSelection()
     setStreaming('')
     setStreamingCases([])
+    setStreamingSearches([])
     setError(null)
     setBusy(true)
     abortRef.current = new AbortController()
@@ -166,14 +172,23 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
           cases = found
           setStreamingCases(found)
         },
+        onSearchStep: (step) => {
+          // A result updates its call in place; it carries no query of its own.
+          const known = searches.find((s) => s.id === step.id)
+          searches = known
+            ? searches.map((s) => (s.id === step.id ? { ...s, status: step.status, summary: step.summary } : s))
+            : [...searches, step]
+          setStreamingSearches(searches)
+        },
         onToken: (token) => setStreaming((prev) => prev + token),
       })
-      setTurns((prev) => [...prev, { role: 'assistant', content: answer, cases }])
+      setTurns((prev) => [...prev, { role: 'assistant', content: answer, cases, searches }])
     } catch (err) {
       handleError(err)
     } finally {
       setStreaming('')
       setStreamingCases([])
+      setStreamingSearches([])
       setBusy(false)
     }
   }
@@ -271,13 +286,15 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
               </p>
             ) : (
               <div key={index} className="mr-4 rounded-md bg-white px-3 py-2 shadow-sm">
+                <SearchSteps steps={turn.searches ?? []} />
                 <MarkdownContent markdown={turn.content} />
                 <CasesList cases={turn.cases ?? []} />
               </div>
             ),
           )}
-          {(streaming || streamingCases.length > 0) && (
+          {(streaming || streamingCases.length > 0 || streamingSearches.length > 0) && (
             <div className="mr-4 rounded-md bg-white px-3 py-2 shadow-sm">
+              <SearchSteps steps={streamingSearches} />
               <MarkdownContent markdown={streaming || '…'} />
               <CasesList cases={streamingCases} />
             </div>

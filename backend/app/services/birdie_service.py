@@ -1,10 +1,20 @@
 import json
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.models import User
 from app.services.llm_service import get_llm
 from app.services.birdie_workboard_service import WORKBOARD_TOOLS, execute_workboard_tool
-from app.services.case_law_service import CASE_LAW_RULE, CaseSource, format_case_sources
+from app.services.agent_service import TOOLS as _AGENT_TOOLS
+from app.services.case_law_service import (
+    CASE_LAW_RULE,
+    CaseSource,
+    case_source_payload,
+    format_case_sources,
+    search_case_sources,
+)
+from app.services.elitigation_service import ElitigationError
 from app.schemas import PageContext, WebContext
 from app.services.lesson_service import format_feedback_context
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
@@ -152,6 +162,50 @@ def _format_web_context(ctx: WebContext | None) -> str:
     )
 
 
+# Birdie decides when to search: only for questions that need Singapore case law, never by default.
+ELITIGATION_TOOL = next(t for t in _AGENT_TOOLS if t["function"]["name"] == "search_elitigation")
+ELITIGATION_GUIDANCE = (
+    "\n\n---\nYou have a search_elitigation tool for public Singapore judgments. Call it only when the user asks "
+    "for case law or the answer genuinely depends on a judgment you do not already have. Do not call it for "
+    "drafting, rewriting, formatting or review requests, for questions about the shared page that the page "
+    "already answers, or for greetings. Send a short legal-topic phrase, never names or client facts. Cite only "
+    "judgments the tool returned or that are listed above as eLitigation sources."
+)
+
+
+async def _search_elitigation(db: Session, user: User, args: dict | None, found: list[CaseSource]) -> tuple[dict, str]:
+    """Run one eLitigation search; new judgments are appended to `found` and numbered after earlier ones."""
+    args = args or {}
+    query = str(args.get("query", "")).strip()
+    year, newest_first = args.get("year"), args.get("newest_first", False)
+    if not query or len(query) > 200:
+        return {"error": "Provide a short legal-topic query of 1-200 characters."}, "invalid arguments"
+    if year is not None and (type(year) is not int or not 1965 <= year <= date.today().year):
+        return {"error": f"Provide a decision year between 1965 and {date.today().year}."}, "invalid arguments"
+    if type(newest_first) is not bool:
+        return {"error": "newest_first must be a boolean."}, "invalid arguments"
+    try:
+        cases = await search_case_sources(db, user=user, query=query, newest_first=newest_first, year=year)
+    except ElitigationError:
+        return {
+            "error": "eLitigation search unavailable. Tell the user the lookup failed; do not claim that no matching judgments exist."
+        }, "search unavailable"
+    if not cases:
+        return {"results": "No eLitigation judgments matched this search. Try different legal-topic keywords."}, "no results"
+    blocks = []
+    for case in cases:
+        index = next((i for i, s in enumerate(found) if s.url == case.url), None)
+        if index is None:
+            found.append(case)
+            index = len(found) - 1
+        excerpt = "\n".join(f"[para {n}] {text}" for n, text in case.paragraphs)
+        blocks.append(
+            f"[{index + 1}] {case.citation} — {case.title}\nDecision date: {case.decision_date or 'unavailable'}\n"
+            f"URL: {case.url}\n{excerpt or 'Judgment excerpt unavailable; do not infer holdings from the title.'}"
+        )
+    return {"results": "\n\n---\n\n".join(blocks)}, f"{len(cases)} judgment{'s' if len(cases) != 1 else ''}"
+
+
 async def build_birdie_messages(
     db: Session,
     *,
@@ -181,6 +235,7 @@ async def build_birdie_messages(
     system_content += _format_page_context(page_context)
     system_content += _format_web_context(web_context)
     system_content += format_case_sources(case_sources or [])
+    system_content += ELITIGATION_GUIDANCE
 
     if kb_context:
         system_content += f"\n\n---\nFirm knowledge relevant to this question:\n{kb_context}"
@@ -215,12 +270,16 @@ async def stream_birdie_response(
         case_sources=case_sources,
     )
     provider = get_llm(db, user.id, feature="birdie", tier=tier, model=model)
+    # `case_sources` starts with the judgment on the user's page (if any) and grows as searches run.
+    # The caller passes the same list, so it can check citations against everything that was found.
+    found = case_sources if case_sources is not None else []
+    shown_from = len(found)
     # A bounded direct tool loop, shared by the web widget and Chrome extension.
     # Cache mutation results within a turn so repeated model calls cannot create
     # duplicate tickets or replay a destructive action.
     mutation_results: dict[str, dict] = {}
     for round_no in range(5):
-        tools = WORKBOARD_TOOLS if round_no < 4 else []
+        tools = [*WORKBOARD_TOOLS, ELITIGATION_TOOL] if round_no < 4 else []
         if not tools:
             messages.append({'role': 'system', 'content':
                 'Tool limit reached. Answer from the tool results, stating any unfinished changes. Do not call more tools.'})
@@ -246,7 +305,10 @@ async def stream_birdie_response(
                     raise ValueError('Tool arguments must be an object')
             except (ValueError, TypeError):
                 args = None
-            yield ('tool_call', {'step_id': call['id'], 'tool': name})
+            step = {'step_id': call['id'], 'tool': name}
+            if name == 'search_elitigation' and isinstance(args, dict) and isinstance(args.get('query'), str):
+                step['query'] = args['query'][:200]  # shown to the user: what is being searched
+            yield ('tool_call', step)
             changed = False
             fingerprint = json.dumps([name, args], sort_keys=True)
             is_mutation = name in {'create_workboard_ticket', 'update_workboard_ticket', 'delete_workboard_ticket'}
@@ -254,6 +316,14 @@ async def stream_birdie_response(
                 result = {'error': 'Invalid JSON tool arguments'}
             elif not tools or index >= 8:
                 result = {'error': 'Tool limit reached; no action performed'}
+            elif name == 'search_elitigation':
+                result, search_summary = await _search_elitigation(db, user, args, found)
+                yield ('tool_result', {'step_id': call['id'], 'tool': name, 'success': 'error' not in result,
+                                       'changed': False, 'summary': search_summary})
+                if found[shown_from:]:
+                    yield ('sources', {'cases': [case_source_payload(s) for s in found[shown_from:]]})
+                messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(result)})
+                continue
             elif is_mutation and fingerprint in mutation_results:
                 result = mutation_results[fingerprint]
             else:

@@ -49,7 +49,7 @@ export function PrecedentTab({ selectionText, onUseInChat, onError }: Props) {
   }
 
   if (!selectionText) {
-    return <p className="p-3 text-sm text-stone-500">Highlight a clause to see how the firm has drafted it before.</p>
+    return <p className="flex-1 p-3 text-sm text-stone-500">Highlight a clause to see how the firm has drafted it before.</p>
   }
 
   return (
