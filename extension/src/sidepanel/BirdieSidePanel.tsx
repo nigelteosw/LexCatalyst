@@ -8,6 +8,8 @@ import {
   type SearchStep,
   type ExtensionUser,
   fetchMe,
+  listDemoUsers,
+  switchDemoUser,
   type PrecedentResult,
   signIn,
   streamBirdie,
@@ -37,6 +39,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   const floating = tabId !== undefined
   const [auth, setAuth] = useState<AuthState>({ status: 'loading' })
   const [view, setView] = useState<View>('chat')
+  const [demoUsers, setDemoUsers] = useState<ExtensionUser[]>([])
   const [turns, setTurns] = useState<BirdieTurn[]>([])
   const [turnsLoaded, setTurnsLoaded] = useState(false)
   const [draft, setDraft] = useState('')
@@ -58,6 +61,16 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
     if (err instanceof Error && err.name === 'AbortError') return
     setError(err instanceof Error ? err.message : String(err))
   }, [])
+
+  // Demo mode: load the seeded users once per real sign-in. A switched-in user is usually not an
+  // admin, so the list is kept rather than refetched; sign out to return to your own account.
+  const signedInId = auth.status === 'signedIn' ? auth.user.id : null
+  useEffect(() => {
+    if (!signedInId || demoUsers.length > 0) return
+    listDemoUsers()
+      .then(setDemoUsers)
+      .catch(() => setDemoUsers([]))
+  }, [signedInId, demoUsers.length])
 
   useEffect(() => {
     getToken()
@@ -135,7 +148,19 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
     }
   }
 
+  async function handleSwitchUser(userId: string) {
+    try {
+      const user = await switchDemoUser(userId)
+      await clearTurns()
+      setTurns([])
+      setAuth({ status: 'signedIn', user })
+    } catch (err) {
+      handleError(err)
+    }
+  }
+
   async function handleSignOut() {
+    setDemoUsers([])
     newChat()
     await clearToken()
     setAuth({ status: 'signedOut' })
@@ -242,6 +267,23 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
             </span>
           )}
           <span className="flex items-center gap-2 text-xs text-[#76766f]">
+            {demoUsers.length > 0 && auth.status === 'signedIn' && (
+              <select
+                aria-label="View as demo user"
+                className="max-w-28 rounded border border-black/10 bg-white px-1 py-0.5 text-xs"
+                value={demoUsers.some((u) => u.id === auth.user.id) ? auth.user.id : ''}
+                onChange={(e) => void handleSwitchUser(e.target.value)}
+              >
+                <option value="" disabled>
+                  View as…
+                </option>
+                {demoUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.fullName ?? u.email}
+                  </option>
+                ))}
+              </select>
+            )}
             <button className="underline" title="New chat (⌘K)" onClick={newChat}>
               New chat
             </button>

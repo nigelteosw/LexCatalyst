@@ -435,6 +435,17 @@ def latest_review_for_url(db: Session, url: str, user_id: str) -> BirdieReview |
     return review
 
 
+def reset_reviews_for_url(db: Session, url: str, user_id: str) -> int:
+    """Delete the user's own reviews of this page (suggestions and replies cascade)."""
+    reviews = db.scalars(
+        select(BirdieReview).where(BirdieReview.user_id == user_id, BirdieReview.source_url == url)
+    ).all()
+    for review in reviews:
+        db.delete(review)
+    db.commit()
+    return len(reviews)
+
+
 def get_suggestion(db: Session, suggestion_id: str, user_id: str) -> BirdieSuggestion | None:
     return db.scalar(
         select(BirdieSuggestion)

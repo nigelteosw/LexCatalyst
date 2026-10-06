@@ -81,6 +81,16 @@ def latest_review(
     return _review_response(review) if review else None
 
 
+@router.delete("/birdie/reviews")
+def reset_reviews(
+    url: str = Query(min_length=1, max_length=2048),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Start over on a page: deletes only the caller's own reviews of that URL."""
+    return {"deleted": svc.reset_reviews_for_url(db, url, current_user.id)}
+
+
 @router.get("/birdie/reviews/{review_id}", response_model=BirdieReviewResponse)
 def get_review(
     review_id: str,

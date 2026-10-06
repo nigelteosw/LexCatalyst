@@ -55,6 +55,20 @@ export async function signIn(): Promise<ExtensionUser> {
   return toUser(payload.user as ApiUser)
 }
 
+// Demo mode only (admin): the backend returns 404 otherwise, and the picker stays hidden.
+export async function listDemoUsers(): Promise<ExtensionUser[]> {
+  return (await apiJson<ApiUser[]>('/demo/users')).map(toUser)
+}
+
+export async function switchDemoUser(userId: string): Promise<ExtensionUser> {
+  const payload = await apiJson<{ access_token: string; user: ApiUser }>('/demo/switch', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  })
+  await setToken(payload.access_token)
+  return toUser(payload.user)
+}
+
 export async function fetchMe(): Promise<ExtensionUser> {
   return toUser(await apiJson<ApiUser>('/me'))
 }
@@ -366,6 +380,10 @@ export async function startBirdieReview(opts: {
 export async function fetchLatestReview(url: string): Promise<BirdieReview | null> {
   const raw = await apiJson<ApiBirdieReview | null>(`/birdie/reviews?url=${encodeURIComponent(url)}`)
   return raw ? toBirdieReview(raw) : null
+}
+
+export async function resetReviews(url: string): Promise<void> {
+  await apiJson(`/birdie/reviews?url=${encodeURIComponent(url)}`, { method: 'DELETE' })
 }
 
 export async function fetchBirdieReview(id: string): Promise<BirdieReview> {

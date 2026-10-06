@@ -5,6 +5,7 @@ import {
   decideSuggestion,
   fetchBirdieReview,
   fetchLatestReview,
+  resetReviews,
   type ModelChoice,
   replyToSuggestion,
   startBirdieReview,
@@ -355,6 +356,19 @@ export function ReviewTab({ browser, model, needsKey, onError }: Props) {
         >
           {starting || processing ? 'Reviewing…' : review ? 'Review again' : 'Review this draft'}
         </button>
+        {review && !processing && tabUrl && (
+          <button
+            className="text-xs underline"
+            title="Delete your reviews of this page and start over"
+            onClick={() =>
+              void resetReviews(tabUrl)
+                .then(() => setReview(null))
+                .catch(fail)
+            }
+          >
+            Reset
+          </button>
+        )}
         {review?.status === 'ready' && (
           <button className="text-xs underline" onClick={() => void copyAccepted()}>
             {copied ? 'Copied' : 'Copy accepted text'}

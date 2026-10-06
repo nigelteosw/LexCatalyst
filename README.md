@@ -335,7 +335,7 @@ With demo mode on, admins get a **Switch user** picker in the sidebar to act as 
 | Route | Auth | Behaviour |
 |---|---|---|
 | `GET /demo/users` | admin + `DEMO_MODE` | seeded users you can switch into |
-| `POST /demo/switch` | admin + `DEMO_MODE` | 12-hour token for a seeded user |
+| `POST /demo/switch` | admin + `DEMO_MODE` | 12-hour token for a seeded user (web Settings → View as, and the extension's header picker) |
 | `POST /demo/seed` | admin + `DEMO_MODE` | (re)load demo data |
 | `PUT /demo/role` | any real signed-in user + `DEMO_MODE` | mimic a role (`admin`, `partner`, `senior_associate`, `associate`) on your own account; 404 for seeded `dummy:` users |
 
@@ -458,6 +458,7 @@ LexChat (`POST /chat/stream`, JWT required with matter-access checks) exposes `s
 | `POST /birdie/reviews` | signed-in user (matter access if `matter_id`) | review a draft shared from the extension; runs in the background on the caller's OpenRouter key, 409 without a key; returns `202` with the review |
 | `GET /birdie/reviews?url=` / `GET /birdie/reviews/{id}` | owner only | the review with its suggestions (`replace`/`insert`/`comment`, each with anchor offsets, reason, category, source) and `current_text` with accepted edits applied |
 | `PATCH /birdie/suggestions/{id}` | owner only | accept, reject or reset a suggestion; logged to the retrieval audit |
+| `DELETE /birdie/reviews?url=` | owner only | reset: deletes the caller's own reviews of that page (extension **Reset**) |
 | `POST /birdie/reviews/{id}/accept-style` | owner only | bulk accept mechanical `style` replacements only; substance is never bulk-accepted |
 | `POST /birdie/suggestions/{id}/replies` | owner only | reply on a suggestion |
 | `GET /settings/llm` | signed-in user | `{has_key, key_last4, key_source, custom_models, models, feature_tiers, features}`; never the key |
