@@ -9,7 +9,7 @@
 **Click:** Switch to **Jane** → **Workboard** → **Birdie** → **Ask** → type:
 `What should I prioritise today across all my matters?`
 
-> "Jane starts her day by asking Birdie, her AI mentor, what to work on. Birdie reads her live Workboard. It sees that the CPF and stamp-duty questions are overdue, and that the Bishan option-to-purchase review is due today."
+> "Jane starts her day by asking Birdie, her AI mentor, what to work on. Birdie reads her live Workboard. It sees that two tasks are overdue: the CPF and stamp-duty questions, and the Bishan option-to-purchase review, which is high priority."
 
 ## [0:40] Jane opens the Bishan matter
 **Click:** The card **"Review option to purchase for Bishan condominium"** → the matter link.

@@ -44,7 +44,7 @@ MATTERS = [
 ]
 # matter index, title, fictional instructions, stage, priority, relative due day, assignee
 TICKETS = [
-    (0, "Review option to purchase for Bishan condominium", "Check the fictional OTP, property particulars and proposed completion timetable. Flag points for the supervising lawyer.", "review", "high", 0, "jane"),
+    (0, "Review option to purchase for Bishan condominium", "Check the fictional OTP, property particulars and proposed completion timetable. Flag points for the supervising lawyer.", "review", "high", -1, "jane"),
     (0, "Prepare title-search and encumbrance summary", "Summarise the synthetic title search and list follow-up enquiries for the seller's solicitors.", "in_progress", "medium", 2, "marcus"),
     (0, "Review sale and purchase agreement amendments", "Review the draft completion provisions and vacant-possession wording before sending to the seller's solicitors.", "review", "high", 1, "sarah"),
     (0, "Confirm completion funds with purchaser", "Await the fictional purchaser's confirmation of funds and lender coordination. Update the completion checklist.", "with_client", "medium", 5, "jane"),
@@ -268,6 +268,11 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
     db.commit()
     for item in created:
         sync_metadata_safe(db, sync_action_metadata, item)
+    # The demo opens on the overdue Bishan OTP review, so keep it overdue on every reload.
+    otp = db.scalar(select(ActionItem).where(ActionItem.matter_id == matters[0].id, ActionItem.title == OTP_TICKET))
+    if otp is not None and otp.status != "done":
+        otp.due_date = now - timedelta(days=1)
+        db.commit()
     review = await _seed_bishan_review(db, matter=matters[0], team=team, users=users)
     return {
         "tickets_created": len(created),
