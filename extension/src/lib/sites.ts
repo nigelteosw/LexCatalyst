@@ -19,7 +19,7 @@ export async function isSiteEnabled(url: string): Promise<boolean> {
 }
 
 // The API hosts are required permissions, not sites the user switched on.
-async function enabledOrigins(): Promise<string[]> {
+export async function enabledOrigins(): Promise<string[]> {
   const required = new Set(chrome.runtime.getManifest().host_permissions ?? [])
   const { origins = [] } = await chrome.permissions.getAll()
   return origins.filter((origin) => origin !== '<all_urls>' && !required.has(origin))

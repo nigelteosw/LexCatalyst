@@ -4,6 +4,9 @@
 const READY_TYPE = 'birdie-popup-ready' // keep in sync with src/popup/main.tsx
 const PANEL_W = 360
 const PANEL_H = 560
+const MIN_W = 280
+const MIN_H = 280
+const TOGGLE_TYPE = 'birdie-toggle' // keep in sync with src/background.ts
 const MARGIN = 16
 const MIN_VISIBLE = 80 // the panel may hang off-screen, but this much stays reachable
 const LOAD_TIMEOUT_MS = 5000
@@ -40,6 +43,10 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
       .close { width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #76766f;
         font-size: 16px; line-height: 1; cursor: pointer; }
       .close:hover { background: #f4f3ef; }
+      .grip { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; cursor: nwse-resize;
+        touch-action: none; border: 0; padding: 0; background: linear-gradient(135deg, transparent 55%, #a3a3a3 55%, #a3a3a3 62%, transparent 62%, transparent 74%, #a3a3a3 74%, #a3a3a3 81%, transparent 81%); }
+      .grip:focus-visible { outline: 2px solid #2d9e6b; outline-offset: -2px; }
+      iframe.dragging { pointer-events: none; }
       iframe { flex: 1; width: 100%; border: 0; background: #fff; }
       iframe.dragging { pointer-events: none; }
       .note { padding: 16px; font-size: 13px; color: #44403c; }
@@ -71,7 +78,10 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
   const panelEl = el('div', 'panel')
   panelEl.setAttribute('role', 'dialog')
   panelEl.setAttribute('aria-label', 'Birdie')
-  panelEl.append(barEl)
+  const gripEl = el('button', 'grip')
+  gripEl.setAttribute('aria-label', 'Resize Birdie (drag or use arrow keys)')
+  gripEl.title = 'Drag to resize'
+  panelEl.append(barEl, gripEl)
   root.append(style, bubbleEl, panelEl)
   const bubble = bubbleEl
   const panel = panelEl
@@ -81,9 +91,12 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
   let ready = false
   let readyTimer: ReturnType<typeof setTimeout> | undefined
 
+  // The user's chosen size, clamped to the viewport whenever it is used.
+  let wantW = PANEL_W
+  let wantH = PANEL_H
   const size = () => ({
-    w: Math.min(PANEL_W, window.innerWidth - MARGIN * 2),
-    h: Math.min(PANEL_H, window.innerHeight - MARGIN * 2),
+    w: Math.max(Math.min(MIN_W, window.innerWidth - MARGIN), Math.min(wantW, window.innerWidth - MARGIN * 2)),
+    h: Math.max(Math.min(MIN_H, window.innerHeight - MARGIN), Math.min(wantH, window.innerHeight - MARGIN * 2)),
   })
   const place = (left: number, top: number) => {
     const { w, h } = size()
@@ -96,6 +109,40 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
     const { w, h } = size()
     place(window.innerWidth - w - MARGIN, window.innerHeight - h - MARGIN)
   }
+
+  const resizeBy = (dw: number, dh: number) => {
+    const rect = panel.getBoundingClientRect()
+    wantW = rect.width + dw
+    wantH = rect.height + dh
+    place(rect.left, rect.top)
+  }
+  gripEl.addEventListener('pointerdown', (event) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startY = event.clientY
+    const rect = panel.getBoundingClientRect()
+    gripEl.setPointerCapture(event.pointerId)
+    frame?.classList.add('dragging')
+    const move = (e: PointerEvent) => {
+      wantW = rect.width + e.clientX - startX
+      wantH = rect.height + e.clientY - startY
+      place(rect.left, rect.top)
+    }
+    const up = () => {
+      frame?.classList.remove('dragging')
+      gripEl.removeEventListener('pointermove', move)
+      gripEl.removeEventListener('pointerup', up)
+    }
+    gripEl.addEventListener('pointermove', move)
+    gripEl.addEventListener('pointerup', up)
+  })
+  gripEl.addEventListener('keydown', (event) => {
+    const deltas: Record<string, [number, number]> = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] }
+    const delta = deltas[event.key]
+    if (!delta) return
+    event.preventDefault()
+    resizeBy(delta[0], delta[1])
+  })
 
   const open = () => {
     if (!chrome.runtime?.id) {
@@ -127,6 +174,12 @@ if (window === window.top && !bubbleMarker.__birdieBubble) {
   }
 
   bubble.addEventListener('click', open)
+  // The toolbar icon (background.ts) toggles the popup on sites where Birdie is on.
+  chrome.runtime.onMessage.addListener((message) => {
+    if ((message as { type?: string } | null)?.type !== TOGGLE_TYPE) return
+    if (panel.classList.contains('open')) close()
+    else open()
+  })
   closeButton.addEventListener('click', close)
   root.addEventListener('keydown', (event) => {
     if ((event as KeyboardEvent).key === 'Escape') close()
