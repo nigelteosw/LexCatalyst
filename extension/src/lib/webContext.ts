@@ -1,4 +1,4 @@
-export const MAX_WEB_CONTEXT_CHARS = 20_000
+export const MAX_WEB_CONTEXT_CHARS = 120_000
 export const PENDING_CONTEXT_KEY = 'pendingWebContext'
 
 export type WebContextSource = 'selection' | 'page'

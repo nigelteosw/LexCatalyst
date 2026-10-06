@@ -10,7 +10,7 @@ from app.services.birdie_service import _format_web_context
 class WebContextTests(unittest.TestCase):
     def test_rejects_text_over_limit(self) -> None:
         with self.assertRaises(ValidationError):
-            WebContext(url="https://example.com", text="x" * 20_001, source="page")
+            WebContext(url="https://example.com", text="x" * 120_001, source="page")
 
     def test_rejects_unknown_source(self) -> None:
         with self.assertRaises(ValidationError):
@@ -45,3 +45,9 @@ class WebContextTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TruncationNoteTests(unittest.TestCase):
+    def test_truncated_context_tells_model(self) -> None:
+        ctx = WebContext(url="https://example.com", text="Para 1", source="page", truncated=True)
+        self.assertIn("cut off", _format_web_context(ctx))

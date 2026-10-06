@@ -28,7 +28,10 @@ CASE_LAW_RULE = (
 
 _PLANNER_PROMPT = (
     "Decide whether answering the user's message needs Singapore case law or court judgments. "
-    'Reply with JSON only: {"search": "<3-8 word eLitigation search phrase>"} or {"search": null}.'
+    'Reply with JSON only: {"search": "<3-8 word eLitigation search phrase>"} or {"search": null}. '
+    "Build the phrase from the legal issues and doctrines in the message and any shared text, not from "
+    "party names, client facts or the user's wording about their own documents (for example 'what builds on "
+    "our files'). The phrase is sent to a public court database."
 )
 
 _NEUTRAL_CITATION = re.compile(r"\[\d{4}\]\s+SG[A-Z]+\s+\d+")
@@ -64,7 +67,8 @@ def parse_search_phrase(raw: str) -> str | None:
 
 
 async def _plan_search(provider, user_message: str, web_text: str) -> str | None:
-    content = user_message if not web_text else f"{user_message}\n\nShared text:\n{web_text[:2000]}"
+    # A long judgment states its issues in the first pages; sample enough of it to name them.
+    content = user_message if not web_text else f"{user_message}\n\nShared text:\n{web_text[:6000]}"
     try:
         raw = await provider.complete(
             [{"role": "system", "content": _PLANNER_PROMPT}, {"role": "user", "content": content}]

@@ -182,8 +182,9 @@ class WebContext(BaseModel):
 
     url: str = Field(min_length=1, max_length=2048)
     title: str | None = Field(default=None, max_length=500)
-    text: str = Field(min_length=1, max_length=20_000)
+    text: str = Field(min_length=1, max_length=120_000)  # keep in sync with extension MAX_WEB_CONTEXT_CHARS
     source: Literal["selection", "page"]
+    truncated: bool = False
 
 
 class WikiPageCreate(BaseModel):
