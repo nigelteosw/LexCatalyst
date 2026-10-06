@@ -12,5 +12,6 @@
     "https://lexcatalyst-production.up.railway.app/*",
     "http://127.0.0.1:8000/*"
   ],
-  "optional_host_permissions": ["<all_urls>"]
+  "optional_host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [{ "resources": ["popup.html", "assets/*", "chunks/*"], "matches": ["<all_urls>"] }]
 }

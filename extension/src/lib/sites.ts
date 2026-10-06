@@ -1,5 +1,7 @@
 const SCRIPT_ID = 'birdie-selection'
 const SCRIPT_FILE = 'content-selection.js'
+const BUBBLE_ID = 'birdie-bubble'
+const BUBBLE_FILE = 'content-bubble.js'
 
 export function originPattern(url: string): string | null {
   try {
@@ -25,10 +27,17 @@ async function enabledOrigins(): Promise<string[]> {
 
 export async function syncContentScripts(): Promise<void> {
   const matches = await enabledOrigins()
-  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [SCRIPT_ID] })
-  if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: [SCRIPT_ID] })
+  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [SCRIPT_ID, BUBBLE_ID] })
+  if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: existing.map((script) => script.id) })
   if (!matches.length) return
   await chrome.scripting.registerContentScripts([
+    {
+      id: BUBBLE_ID,
+      js: [BUBBLE_FILE],
+      matches,
+      runAt: 'document_idle',
+      persistAcrossSessions: true,
+    },
     {
       id: SCRIPT_ID,
       js: [SCRIPT_FILE],
@@ -53,4 +62,5 @@ export async function enableSite(url: string): Promise<boolean> {
 // Registered scripts only reach pages loaded after registration; cover the tab already open.
 export async function injectSelectionScript(tabId: number): Promise<void> {
   await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: [SCRIPT_FILE] })
+  await chrome.scripting.executeScript({ target: { tabId }, files: [BUBBLE_FILE] })
 }

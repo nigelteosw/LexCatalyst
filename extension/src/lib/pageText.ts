@@ -77,8 +77,12 @@ export function isGoogleDoc(url: string): boolean {
   return GOOGLE_DOC_URL.test(url)
 }
 
-export async function getActiveTab(): Promise<ActiveTab | null> {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+export async function getActiveTab(pinnedTabId?: number): Promise<ActiveTab | null> {
+  // The floating panel lives in one page, so it stays on that tab however focus moves.
+  const tab =
+    pinnedTabId === undefined
+      ? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]
+      : await chrome.tabs.get(pinnedTabId).catch(() => undefined)
   if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) return null
   return { id: tab.id, url: tab.url, title: tab.title ?? tab.url }
 }

@@ -17,7 +17,8 @@ export type BrowserContext = {
   enableCurrentSite: () => Promise<void>
 }
 
-export function useBrowserContext(): BrowserContext {
+// pinnedTabId: the floating panel's host page; omitted, the docked panel follows the active tab.
+export function useBrowserContext(pinnedTabId?: number): BrowserContext {
   const [tab, setTab] = useState<ActiveTab | null>(null)
   const [siteEnabled, setSiteEnabled] = useState(false)
   const [selection, setSelection] = useState<WebContext | null>(null)
@@ -35,7 +36,7 @@ export function useBrowserContext(): BrowserContext {
   }, [])
 
   const refreshTab = useCallback(async () => {
-    const current = await getActiveTab()
+    const current = await getActiveTab(pinnedTabId)
     const changed = current?.id !== tabRef.current?.id || current?.url !== tabRef.current?.url
     tabRef.current = current
     setTab(current)
@@ -49,11 +50,15 @@ export function useBrowserContext(): BrowserContext {
 
   useEffect(() => {
     void refreshTab()
-    const onActivated = () => void refreshTab()
+    const onActivated = () => {
+      if (pinnedTabId === undefined) void refreshTab()
+    }
     const onUpdated = (tabId: number, info: { status?: string; url?: string }) => {
       if (tabId === tabRef.current?.id && (info.url || info.status === 'complete')) void refreshTab()
     }
-    const onFocus = () => void refreshTab()
+    const onFocus = () => {
+      if (pinnedTabId === undefined) void refreshTab()
+    }
     chrome.tabs.onActivated.addListener(onActivated)
     chrome.tabs.onUpdated.addListener(onUpdated)
     chrome.windows.onFocusChanged.addListener(onFocus)
@@ -62,7 +67,7 @@ export function useBrowserContext(): BrowserContext {
       chrome.tabs.onUpdated.removeListener(onUpdated)
       chrome.windows.onFocusChanged.removeListener(onFocus)
     }
-  }, [refreshTab])
+  }, [refreshTab, pinnedTabId])
 
   useEffect(() => {
     const onMessage = (message: unknown, sender: chrome.runtime.MessageSender) => {

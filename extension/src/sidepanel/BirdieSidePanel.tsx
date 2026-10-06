@@ -14,7 +14,7 @@ import {
 } from '../lib/api'
 import { clearToken, getToken } from '../lib/auth'
 import { APP_URL } from '../lib/config'
-import { clearTurns, loadTurns, saveTurns } from '../lib/conversation'
+import { clearTurns, loadTurns, saveTurns, TURNS_KEY } from '../lib/conversation'
 import { buildWebContext } from '../lib/webContext'
 import { CasesList } from './CasesList'
 import { ContextChips } from './ContextChips'
@@ -29,7 +29,8 @@ type View = 'chat' | 'precedent' | 'review'
 
 const CASE_SEARCH_PROMPT = 'Find Singapore judgments on eLitigation relevant to the highlighted text.'
 
-export function BirdieSidePanel() {
+// host 'floating' is the on-page popup: same panel, pinned to the tab it floats in.
+export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   const [auth, setAuth] = useState<AuthState>({ status: 'loading' })
   const [view, setView] = useState<View>('chat')
   const [turns, setTurns] = useState<BirdieTurn[]>([])
@@ -44,7 +45,8 @@ export function BirdieSidePanel() {
   const choice: ModelChoice = override ?? { tier: llm?.featureTiers.birdie ?? 'mid' }
   const needsKey = llm !== null && !llm.hasKey
   const abortRef = useRef<AbortController | null>(null)
-  const browser = useBrowserContext()
+  const browser = useBrowserContext(tabId)
+  const lastTurnsJson = useRef('[]')
 
   const handleError = useCallback((err: unknown) => {
     if (err instanceof UnauthorizedError) setAuth({ status: 'signedOut' })
@@ -61,7 +63,10 @@ export function BirdieSidePanel() {
         if (!(err instanceof UnauthorizedError)) setError(String(err))
       })
     loadTurns()
-      .then(setTurns)
+      .then((loaded) => {
+        lastTurnsJson.current = JSON.stringify(loaded)
+        setTurns(loaded)
+      })
       .finally(() => setTurnsLoaded(true))
   }, [])
 
@@ -70,8 +75,26 @@ export function BirdieSidePanel() {
   }, [auth.status, handleError])
 
   useEffect(() => {
-    if (turnsLoaded) saveTurns(turns).catch(console.error)
+    if (!turnsLoaded) return
+    const json = JSON.stringify(turns)
+    if (json === lastTurnsJson.current) return
+    lastTurnsJson.current = json
+    saveTurns(turns).catch(console.error)
   }, [turns, turnsLoaded])
+
+  // The docked and floating panels share one thread: adopt the other surface's turns.
+  useEffect(() => {
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'session' || !changes[TURNS_KEY] || busy) return
+      const next = Array.isArray(changes[TURNS_KEY].newValue) ? (changes[TURNS_KEY].newValue as BirdieTurn[]) : []
+      const json = JSON.stringify(next)
+      if (json === lastTurnsJson.current) return
+      lastTurnsJson.current = json
+      setTurns(next)
+    }
+    chrome.storage.onChanged.addListener(listener)
+    return () => chrome.storage.onChanged.removeListener(listener)
+  }, [busy])
 
   const { clearAll } = browser
   const newChat = useCallback(() => {

@@ -11,8 +11,10 @@ export default defineConfig({
     rollupOptions: {
       input: {
         sidepanel: resolve(__dirname, 'sidepanel.html'),
+        popup: resolve(__dirname, 'popup.html'),
         background: resolve(__dirname, 'src/background.ts'),
         'content-selection': resolve(__dirname, 'src/content/selection.ts'),
+        'content-bubble': resolve(__dirname, 'src/content/bubble.ts'),
       },
       output: {
         entryFileNames: '[name].js',
