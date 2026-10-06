@@ -246,3 +246,34 @@ test('sidebar collapse keeps icons aligned and expands through the logo', async 
   await expect.poll(async () => Math.round((await sidebar.boundingBox())!.width)).toBe(236)
   await expect(sidebar.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
 })
+
+for (const width of [390, 900, 1440, 1920]) {
+  test(`workboard columns fit their available space at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await workspace(page)
+    await page.goto('/actions')
+    const board = page.locator('.workboard-grid')
+    await expect(board.locator('.workboard-column-scroll')).toHaveCount(5)
+    expect(await board.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    const columns = await board.locator('.workboard-column-scroll').evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().width))
+    expect(columns.every((width) => width >= 230)).toBe(true)
+  })
+}
+
+test('list sorting works through desktop headers and mobile controls', async ({ page }) => {
+  await workspace(page)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/actions')
+  await page.getByRole('button', { name: 'list', exact: true }).click()
+  for (const label of ['Task', 'Status', 'Assignee', 'Due']) {
+    const header = page.getByRole('columnheader', { name: label, exact: true })
+    await header.getByRole('button').click()
+    await expect(header).toHaveAttribute('aria-sort', 'ascending')
+    await header.getByRole('button').click()
+    await expect(header).toHaveAttribute('aria-sort', 'descending')
+  }
+  await page.setViewportSize({ width: 390, height: 800 })
+  await page.getByLabel('Sort by', { exact: true }).selectOption('task')
+  await page.getByRole('button', { name: 'Sort descending', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Sort ascending', exact: true })).toBeVisible()
+})

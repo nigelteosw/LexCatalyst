@@ -471,7 +471,7 @@ export function KnowledgeBankPanel({
                     <h1 className="break-words font-serif text-3xl sm:text-4xl tracking-tight text-neutral-950">Knowledge Bank</h1>
                     <FeatureHelp title="Knowledge Bank" content={KB_HELP} />
                   </div>
-                  <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-neutral-500">
+                  <p className="mt-3 max-w-xl text-body leading-relaxed text-neutral-500">
                     Precedents, authorities and internal guidance available to LexChat when drafting and reviewing.
                   </p>
                 </div>
@@ -536,7 +536,7 @@ export function KnowledgeBankPanel({
                 <div className="flex flex-wrap gap-x-6 gap-y-1">
                   {listTabs.map((tab) => (
                     <button
-                      className={`text-[15px] transition-colors ${
+                      className={`text-body transition-colors ${
                         listTab === tab.id
                           ? 'text-[#1e3a8a]'
                           : 'text-neutral-500 hover:text-neutral-800'
@@ -980,7 +980,7 @@ function ScopeAccessEditor({
 
   return (
     <div className="rounded-xl border border-black/10 bg-[#f8f8f6] p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8c8c86]">
+      <div className="text-label font-semibold uppercase tracking-[0.08em] text-[#8c8c86]">
         Agent access
       </div>
       <select
@@ -1010,7 +1010,7 @@ function ScopeAccessEditor({
           ))}
         </select>
       )}
-      <p className="mt-2 text-[11px] leading-5 text-[#777770]">
+      <p className="mt-2 text-meta leading-5 text-[#777770]">
         {scopeDescriptions[scope]} The agent applies this classification to every search.
       </p>
       {mutation.isError && (
@@ -1344,10 +1344,10 @@ function EntryContextPanel({
           />
         ) : (
           <>
-            <MarkdownContent markdown={entry.bodyMarkdown} className="text-[13px] leading-6 text-[#4f4f49]" />
+            <MarkdownContent markdown={entry.bodyMarkdown} className="text-body leading-6 text-[#4f4f49]" />
             {entry.tags.length > 0 && (
               <div className="mt-5 border-t border-black/10 pt-4">
-                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+                <div className="flex items-center gap-1.5 text-label font-semibold uppercase tracking-[0.08em] text-[#76766f]">
                   <Tags size={12} />
                   Tags
                 </div>
@@ -1429,24 +1429,24 @@ function RedactionReview({
         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
         Lawyer review is required before this copy can cross its current boundary.
       </div>
-      <div className="mt-4 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+      <div className="mt-4 text-label font-semibold uppercase tracking-[0.08em] text-[#76766f]">
         Proposed substitutions
       </div>
       <div className="mt-2 space-y-2">
         {Object.entries(proposal.redactedFields).length > 0 ? (
           Object.entries(proposal.redactedFields).map(([key, value]) => (
-            <div key={key} className="rounded-lg bg-[#f4f3ef] px-3 py-2 text-[11px] text-[#5a5a56]">
+            <div key={key} className="rounded-lg bg-[#f4f3ef] px-3 py-2 text-meta text-[#5a5a56]">
               {value}
             </div>
           ))
         ) : (
-          <div className="rounded-lg bg-[#e8f5ee] px-3 py-2 text-[11px] text-[#1a6b4a]">
+          <div className="rounded-lg bg-[#e8f5ee] px-3 py-2 text-meta text-[#1a6b4a]">
             No structured identifiers were detected. Review the content manually before approval.
           </div>
         )}
       </div>
       <label className="mt-4 block">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+        <span className="text-label font-semibold uppercase tracking-[0.08em] text-[#76766f]">
           Redacted content
         </span>
         <textarea
@@ -1497,11 +1497,11 @@ function AuditLogView({
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-medium text-[#0f0f0f]">Edit</div>
-                <div className="mt-0.5 truncate text-[10px] text-[#76766f]">
+                <div className="mt-0.5 truncate text-label text-[#76766f]">
                   Entry {row.entryId ?? 'deleted'} · User {row.userId}
                 </div>
               </div>
-              <div className="text-[10px] text-[#76766f]">{formatDate(row.timestamp)}</div>
+              <div className="text-label text-[#76766f]">{formatDate(row.timestamp)}</div>
             </div>
           ))}
         </div>
@@ -1528,7 +1528,7 @@ function Pill({
     blue: 'bg-[#e8f0fe] text-[#1a4a8a]',
   }
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-medium capitalize ${tones[tone]}`}>
+    <span className={`rounded-full px-2 py-0.5 text-label font-medium capitalize ${tones[tone]}`}>
       {label}
     </span>
   )

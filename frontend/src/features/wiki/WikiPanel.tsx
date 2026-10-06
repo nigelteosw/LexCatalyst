@@ -225,7 +225,7 @@ export function WikiPanel({ currentUser }: { currentUser: CurrentUser | null }) 
                       <FileText size={14} className="shrink-0 text-neutral-500" />
                       <span className="truncate font-medium">{page.title}</span>
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-[11px] text-neutral-500">
+                    <div className="mt-1 flex items-center gap-2 text-meta text-neutral-500">
                       <StatusBadge
                         tone={
                           page.status === 'published'

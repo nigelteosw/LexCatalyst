@@ -98,7 +98,7 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
               <h1 className="font-serif text-4xl tracking-tight text-neutral-950">Wellbeing</h1>
               <FeatureHelp title="Wellbeing" content={WELLBEING_HELP} />
             </div>
-            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-neutral-500">
+            <p className="mt-3 max-w-xl text-body leading-relaxed text-neutral-500">
               Weekly team check-in
             </p>
           </header>
@@ -142,7 +142,7 @@ function TabButton({
   return (
     <button
       aria-current={active ? 'page' : undefined}
-      className={`inline-flex items-center gap-1.5 py-1 text-[15px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] ${
+      className={`inline-flex items-center gap-1.5 py-1 text-body transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a] ${
         active ? 'text-[#1e3a8a]' : 'text-neutral-500 hover:text-neutral-800'
       }`}
       onClick={onClick}
@@ -231,12 +231,12 @@ function SurveyTab() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-4 border-t border-black/5">
-          <p className="text-[11px] font-medium text-[#0f0f0f]">
+          <p className="text-meta font-medium text-[#0f0f0f]">
             Recall period: <span className="font-normal text-[#5a5a56]">Past 2 weeks</span>
           </p>
           <div className="flex items-center gap-2">
             <ShieldCheck size={13} className="text-[#1e3a8a]" />
-            <p className="text-[11px] text-[#1e3a8a]">
+            <p className="text-meta text-[#1e3a8a]">
               Anonymous responses (redacted contributor list)
             </p>
           </div>
@@ -253,7 +253,7 @@ function SurveyTab() {
               <label key={q.id} className="block">
                 <span className="text-sm text-[#171717]">{q.text}</span>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[10px] text-[#8a8a84]">Strongly disagree</span>
+                  <span className="text-label text-[#8a8a84]">Strongly disagree</span>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <button
@@ -269,7 +269,7 @@ function SurveyTab() {
                       />
                     ))}
                   </div>
-                  <span className="text-[10px] text-[#8a8a84]">Strongly agree</span>
+                  <span className="text-label text-[#8a8a84]">Strongly agree</span>
                 </div>
               </label>
             ))}
@@ -334,7 +334,7 @@ function ResultsTab() {
 
       <div>
         <h3 className="font-serif text-xl text-neutral-900">Question trends</h3>
-        <p className="mt-0.5 text-[11px] text-[#8c8c86]">
+        <p className="mt-0.5 text-meta text-[#8c8c86]">
           Cohort averages normalized so higher scores always mean greater concern
         </p>
       </div>
@@ -346,7 +346,7 @@ function ResultsTab() {
       )}
       {resultsQuery.data.questions.map((q) => (
         <section key={q.questionId} className="border-b border-neutral-200 pb-6">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <div className="mb-1 text-label font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             {categoryLabels[q.category as SurveyCategory] ?? q.category}
           </div>
           <h3 className="mb-4 border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">{q.questionText}</h3>
@@ -356,7 +356,7 @@ function ResultsTab() {
             <div className="space-y-3">
               {q.weeks.map((w) => (
                 <div key={w.weekOf} className="flex items-center gap-4">
-                  <span className="w-20 shrink-0 text-[11px] text-[#8c8c86]">
+                  <span className="w-20 shrink-0 text-meta text-[#8c8c86]">
                     {new Date(w.weekOf).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </span>
                   <div className="flex-1 overflow-hidden rounded-full bg-[#eeecea] h-2">
@@ -460,7 +460,7 @@ function ManageQuestionsTab() {
 
       {isAdding && (
         <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <div className="text-label font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             New question
           </div>
           <input
@@ -588,7 +588,7 @@ function ManageQuestionsTab() {
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-[#0f0f0f]">{q.text}</p>
-                    <p className="mt-0.5 text-[10px] text-[#76766f]">
+                    <p className="mt-0.5 text-label text-[#76766f]">
                       {categoryLabels[q.category as SurveyCategory] ?? q.category}
                       {' · '}
                       {q.reverseScored ? 'Reverse scored' : 'Direct scored'}
@@ -596,7 +596,7 @@ function ManageQuestionsTab() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button
-                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-meta font-medium transition-colors ${
                         q.isActive
                           ? 'bg-[#e8f5ee] text-[#1a6b4a] hover:bg-[#d0edde]'
                           : 'bg-[#f4f3ef] text-[#6f6f69] hover:bg-[#eeecea]'

@@ -269,7 +269,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           <h1 className="font-serif text-4xl tracking-tight text-neutral-950">Workboard</h1>
           <FeatureHelp title="Workboard" content={WORKBOARD_HELP} />
         </div>
-        <p className="mt-3 text-[15px] leading-relaxed text-neutral-500">
+        <p className="mt-3 text-body leading-relaxed text-neutral-500">
           Firm-wide workload. Everyone sees the same board.
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-5">
@@ -319,11 +319,11 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
 
       {availableTags.length > 0 && (
         <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pt-4 lg:px-12">
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <span className="inline-flex items-center gap-1 text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             <Tag size={11} /> Tags
           </span>
           <button
-            className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-medium transition-colors ${
+            className={`rounded-full px-2.5 py-0.5 text-meta font-medium transition-colors ${
               tagFilter === null
                 ? 'bg-[#1e3a8a] text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -336,7 +336,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           {availableTags.map((tag) => (
             <button
               key={tag}
-              className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-medium transition-colors ${
+              className={`rounded-full px-2.5 py-0.5 text-meta font-medium transition-colors ${
                 tagFilter === tag
                   ? 'bg-[#1e3a8a] text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -360,7 +360,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
         </div>
       )}
 
-      <div className={`app-scroll-region flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-20 pt-4 sm:px-5 sm:pb-6 sm:pt-6 lg:px-12 ${viewMode === 'board' ? 'sm:flex-row sm:overflow-x-auto sm:overflow-y-hidden' : ''}`}>
+      <div className={`app-scroll-region min-h-0 flex-1 gap-4 overflow-y-auto px-4 pb-20 pt-4 sm:px-5 sm:pb-6 sm:pt-6 lg:px-8 ${viewMode === 'board' ? 'workboard-grid grid content-start' : 'flex flex-col'}`}>
         {isInitialLoading ? (
           <BoardSkeleton />
         ) : actionsQuery.isError ? (
@@ -371,7 +371,7 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
           <ActionList items={filteredItems} matters={matters} onSelect={(id) => selectActions(id)} />
         ) : (
           statusColumns.map((col) => (
-            <div key={col.id} className="flex w-full shrink-0 self-start flex-col rounded-lg bg-neutral-100/70 p-2.5 sm:max-h-full sm:min-h-0 sm:w-72 xl:w-auto xl:min-w-[15rem] xl:flex-1">
+            <div key={col.id} className="flex min-w-0 w-full flex-col rounded-lg bg-neutral-100/70 p-2.5 sm:h-[min(65dvh,42rem)] sm:min-h-0">
               <div className="mb-3 flex items-center gap-2">
                 <span aria-hidden="true" className={`h-2 w-2 rounded-sm ${statusColors[col.id]}`} />
                 <h3 className="text-sm font-medium text-neutral-700">{col.label}</h3>
@@ -505,7 +505,7 @@ function ActionCard({
         onClick={onClick}
         type="button"
       >
-        <span className={`mb-2 inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium capitalize ${priorityColors[item.priority]}`}>
+        <span className={`mb-2 inline-flex rounded-md px-2 py-0.5 text-meta font-medium capitalize ${priorityColors[item.priority]}`}>
           {item.priority} priority
         </span>
         <p className="line-clamp-2 text-sm font-medium leading-5 text-neutral-900">
@@ -513,7 +513,7 @@ function ActionCard({
         </p>
 
         {item.activeHandoffId && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600">
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-2 py-0.5 text-meta font-medium text-neutral-600">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-400" />
             {item.status === 'in_progress' ? 'Returned for rework' : 'Review ready'}
           </div>
@@ -530,7 +530,8 @@ function ActionCard({
             {item.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+                title={tag}
+                className="max-w-full truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-meta font-medium text-slate-600"
               >
                 {tag}
               </span>
@@ -539,14 +540,14 @@ function ActionCard({
         )}
 
         <div className="mt-3 flex items-center gap-2">
-          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[9px] font-semibold text-neutral-600">
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-micro font-semibold text-neutral-600">
             {assigneeInitials}
           </div>
-          <span className="min-w-0 flex-1 truncate text-[11px] text-[#6f6f69]">
+          <span className="min-w-0 flex-1 truncate text-meta text-[#6f6f69]">
             {assigneeName}
           </span>
           {item.dueDate && (
-            <span className="shrink-0 text-[11px] text-[#76766f]">
+            <span className="shrink-0 text-meta text-[#76766f]">
               {new Date(item.dueDate).toLocaleDateString(undefined, {
                 month: 'short',
                 day: 'numeric',
@@ -613,7 +614,7 @@ function HandoffReviewPage({
           <ArrowLeft size={16} />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <p className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Review handoff
           </p>
           <p className="truncate text-sm font-semibold text-[#0f0f0f]">{item.title}</p>
@@ -646,11 +647,11 @@ function MatterSnapshot({ rows }: { rows: ResourceMetadata[] }) {
 
   return (
     <div className="flex items-center gap-3 border-b border-black/10 bg-[#fafaf8] px-5 py-1.5">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+      <span className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
         Matter
       </span>
       {Object.entries(counts).map(([type, count]) => (
-        <span key={type} className="text-[10.5px] text-[#5a5a56]">
+        <span key={type} className="text-meta text-[#5a5a56]">
           <span className="font-medium">{count}</span>{' '}
           <span className="text-[#76766f]">{RESOURCE_LABELS[type] ?? type}</span>
         </span>

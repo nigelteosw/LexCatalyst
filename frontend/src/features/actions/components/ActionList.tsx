@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
+import { sortActionItems, type ActionSortKey, type SortDirection } from '../sort'
 import type { ActionItem } from '../../../shared/types/workspace'
 import { statusColumns, statusColors } from '../config'
 
@@ -8,21 +11,45 @@ type Props = {
 }
 
 export function ActionList({ items, matters, onSelect }: Props) {
+  const [sort, setSort] = useState<{ key: ActionSortKey; direction: SortDirection } | null>(null)
+  const sortedItems = sort ? sortActionItems(items, sort.key, sort.direction) : items
+  function toggleSort(key: ActionSortKey) {
+    setSort(previous => ({ key, direction: previous?.key === key && previous.direction === 'asc' ? 'desc' : 'asc' }))
+  }
+  const columns: { key: ActionSortKey; label: string; width: string }[] = [
+    { key: 'task', label: 'Task', width: '' },
+    { key: 'status', label: 'Status', width: 'w-36' },
+    { key: 'assignee', label: 'Assignee', width: 'w-48' },
+    { key: 'due', label: 'Due', width: 'w-28' },
+  ]
   const matterById = new Map(matters.map((matter) => [matter.id, matter]))
 
   return (
     <div className="w-full overflow-x-auto rounded-lg border border-neutral-200 bg-white">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line p-3 sm:hidden">
+        <label htmlFor="action-sort" className="text-meta text-ink-secondary">Sort by</label>
+        <select id="action-sort" value={sort?.key ?? ''} onChange={event => setSort(event.target.value ? { key: event.target.value as ActionSortKey, direction: 'asc' } : null)} className="min-w-0 rounded-md border border-line bg-card px-2 py-2 text-meta">
+          <option value="">Default order</option>
+          {columns.map(column => <option key={column.key} value={column.key}>{column.label}</option>)}
+        </select>
+        {sort && <button type="button" onClick={() => toggleSort(sort.key)} className="rounded-md border border-line px-2 py-2 text-meta" aria-label={`Sort ${sort.direction === 'asc' ? 'descending' : 'ascending'}`}>{sort.direction === 'asc' ? 'Ascending ↑' : 'Descending ↓'}</button>}
+      </div>
       <table className="block w-full text-left text-sm sm:table sm:min-w-[640px]">
         <thead className="hidden border-b border-neutral-200 bg-neutral-50 text-xs sm:table-header-group font-medium text-neutral-500">
           <tr>
-            <th scope="col" className="px-4 py-3 font-medium">Task</th>
-            <th scope="col" className="w-36 px-4 py-3 font-medium">Status</th>
-            <th scope="col" className="w-48 px-4 py-3 font-medium">Assignee</th>
-            <th scope="col" className="w-28 px-4 py-3 font-medium">Due</th>
+            {columns.map(column => {
+              const selected = sort?.key === column.key
+              const Icon = selected ? sort.direction === 'asc' ? ArrowUp : ArrowDown : ArrowUpDown
+              return <th key={column.key} scope="col" aria-sort={selected ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'} className={`${column.width} px-4 py-3 font-medium`}>
+                <button type="button" onClick={() => toggleSort(column.key)} className="inline-flex items-center gap-1.5 rounded text-ink-secondary hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                  {column.label}<Icon size={14} aria-hidden="true" />
+                </button>
+              </th>
+            })}
           </tr>
         </thead>
         <tbody className="block divide-y divide-neutral-100 sm:table-row-group">
-          {items.map((item) => {
+          {sortedItems.map((item) => {
             const matter = item.matterId ? matterById.get(item.matterId) : null
             const assignee = item.assignee?.fullName || item.assignee?.email || 'Unassigned'
             const initials = assignee === 'Unassigned' ? '?' : assignee.split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()
@@ -44,7 +71,7 @@ export function ActionList({ items, matters, onSelect }: Props) {
                 </td>
                 <td className="min-w-0 px-4 py-3 sm:table-cell">
                   <span className="flex items-center gap-2 text-xs text-neutral-600">
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-neutral-100 text-[10px] font-medium">{initials}</span>
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-neutral-100 text-label font-medium">{initials}</span>
                     <span className="break-words">{assignee}</span>
                   </span>
                 </td>

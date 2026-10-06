@@ -57,7 +57,7 @@ export function SourcePanel({
       </header>
       <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto px-5 py-5">
         {source.excerpt ? (
-          <div className="min-w-0 break-words rounded-sm border border-neutral-200 bg-surface px-4 py-4 font-serif text-[17px] leading-8 text-neutral-900">
+          <div className="min-w-0 break-words rounded-sm border border-neutral-200 bg-surface px-4 py-4 font-serif text-reading leading-8 text-neutral-900">
             <MarkdownContent markdown={preview} />
             {isTruncated && <p aria-label="Source preview truncated" className="mt-3 text-neutral-500">…</p>}
           </div>

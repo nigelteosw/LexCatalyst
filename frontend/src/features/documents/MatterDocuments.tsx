@@ -278,7 +278,7 @@ export function MatterDocuments({
 
       {/* Where am I + folder creation */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <nav aria-label="Folder" className="flex min-w-0 items-center gap-1.5 text-[15px] text-neutral-500">
+        <nav aria-label="Folder" className="flex min-w-0 items-center gap-1.5 text-body text-neutral-500">
           <button
             className={activeFolder ? 'hover:text-neutral-800' : 'text-neutral-900'}
             onClick={() => onFolderChange(null)}

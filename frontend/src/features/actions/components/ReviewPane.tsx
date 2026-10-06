@@ -244,10 +244,10 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
       {(rounds.length > 1 || canResubmit || error) && (
         <div className="flex flex-wrap items-center gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-2">
           {rounds.length > 1 && (
-            <label className="flex items-center gap-1.5 text-[10.5px] text-[#5a5a56]">
+            <label className="flex items-center gap-1.5 text-meta text-[#5a5a56]">
               Round
               <select
-                className="rounded-md border border-black/10 bg-white px-1.5 py-1 text-[10.5px]"
+                className="rounded-md border border-black/10 bg-white px-1.5 py-1 text-meta"
                 onChange={(e) => setSelectedId(e.target.value === latest?.id ? null : e.target.value)}
                 value={selected?.id ?? ''}
               >
@@ -260,10 +260,10 @@ export function ReviewPane({ action, currentUser, onActionStateChange }: Props) 
               </select>
             </label>
           )}
-          {error && <span className="text-[10.5px] text-red-600">{error}</span>}
+          {error && <span className="text-meta text-red-600">{error}</span>}
           {canResubmit && (
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-[10.5px] text-[#76766f]">Upload a revised PDF to start the next round.</span>
+              <span className="text-meta text-[#76766f]">Upload a revised PDF to start the next round.</span>
               {uploadControls}
             </div>
           )}
@@ -322,15 +322,15 @@ function DocumentCommentThread({ documentId }: { documentId: string }) {
 
   return (
     <div className="border-b border-black/10 px-3 py-2">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Document comments</p>
+      <p className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Document comments</p>
       {commentsQuery.isError && (
-        <p className="mt-1 text-[10.5px] text-red-600">
+        <p className="mt-1 text-meta text-red-600">
           {getErrorMessage(commentsQuery.error, 'Could not load comments')}
         </p>
       )}
       <div className="mt-1.5 space-y-1.5">
         {comments.map((c) => (
-          <div key={c.id} className="rounded-md border border-black/5 bg-white p-2 text-[10.5px]">
+          <div key={c.id} className="rounded-md border border-black/5 bg-white p-2 text-meta">
             <span className="font-medium text-[#5a5a56]">{c.author.fullName ?? c.author.email}</span>
             <div className="text-[#5a5a56]">
               <MarkdownContent markdown={c.content} />
@@ -338,21 +338,21 @@ function DocumentCommentThread({ documentId }: { documentId: string }) {
           </div>
         ))}
         {comments.length === 0 && !commentsQuery.isLoading && (
-          <p className="text-[10.5px] text-[#76766f]">No comments yet.</p>
+          <p className="text-meta text-[#76766f]">No comments yet.</p>
         )}
       </div>
       <div className="mt-2">
         <textarea
           aria-label="New document comment"
-          className="w-full resize-none rounded-lg border border-black/15 bg-white px-2 py-1.5 text-[11px] leading-4 outline-none focus:border-blue-400"
+          className="w-full resize-none rounded-lg border border-black/15 bg-white px-2 py-1.5 text-meta leading-4 outline-none focus:border-blue-400"
           placeholder="Comment on the document as a whole (e.g. “p. 3, para 2: wrong party”)"
           rows={3}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
         />
-        {error && <p className="mt-1 text-[11px] text-red-600">{error} — your draft is kept.</p>}
+        {error && <p className="mt-1 text-meta text-red-600">{error} — your draft is kept.</p>}
         <button
-          className="mt-1 rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-[10.5px] font-medium text-white disabled:opacity-50"
+          className="mt-1 rounded-lg bg-[#0f0f0f] px-3 py-1.5 text-meta font-medium text-white disabled:opacity-50"
           disabled={!draft.trim() || postMutation.isPending}
           onClick={() => postMutation.mutate(draft.trim())}
           type="button"
@@ -545,7 +545,7 @@ function HandoffViewer({
         style={popoverStyle(selectionRegion)}
       >
         {annotationError && (
-          <p className="max-w-56 px-1.5 text-[11px] text-red-600">{annotationError} — try again.</p>
+          <p className="max-w-56 px-1.5 text-meta text-red-600">{annotationError} — try again.</p>
         )}
         <div className="flex items-center gap-0.5">
         <ToolbarButton
@@ -724,7 +724,7 @@ function HandoffViewer({
           <p className="truncate text-sm font-medium text-[#0f0f0f]">
             {handoff.documentFilename ?? 'Review document'}
           </p>
-          <p className="text-[10.5px] text-[#76766f]">
+          <p className="text-meta text-[#76766f]">
             Submitted by {handoff.submitter?.fullName ?? handoff.submitter?.email ?? '—'}
           </p>
         </div>
@@ -732,7 +732,7 @@ function HandoffViewer({
           <HandoffStatusPill status={handoff.status} returnReason={handoff.returnReason} />
           {handoff.canRemove && (
             <button
-              className="rounded-lg px-2.5 py-1.5 text-[10.5px] text-[#76766f] hover:bg-[#f4f3ef] hover:text-red-600"
+              className="rounded-lg px-2.5 py-1.5 text-meta text-[#76766f] hover:bg-[#f4f3ef] hover:text-red-600"
               onClick={onDelete}
               type="button"
             >
@@ -746,12 +746,12 @@ function HandoffViewer({
       {(isReviewer && isActive) || annotations.length > 0 ? (
         <div className="flex flex-col gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-2 sm:flex-row sm:items-center">
           {annotations.length > 0 && isActive && (
-            <span className="text-[10.5px] text-[#76766f]">
+            <span className="text-meta text-[#76766f]">
               {addressedCount} / {annotations.length} addressed
             </span>
           )}
           {actionError && (
-            <span className="inline-flex items-center gap-1.5 text-[10.5px] text-red-600">
+            <span className="inline-flex items-center gap-1.5 text-meta text-red-600">
               {actionError}
               <button
                 className="rounded px-1 text-[#76766f] hover:bg-black/5"
@@ -767,7 +767,7 @@ function HandoffViewer({
             {/* Export — available whenever there are annotations */}
             {annotations.length > 0 && (
               <button
-                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10.5px] font-medium text-[#5a5a56] hover:bg-[#f4f3ef] disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-meta font-medium text-[#5a5a56] hover:bg-[#f4f3ef] disabled:opacity-40"
                 disabled={exportMutation.isPending}
                 onClick={() => exportMutation.mutate()}
                 type="button"
@@ -780,7 +780,7 @@ function HandoffViewer({
             {isReviewer && isActive && (
               <>
                 <button
-                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10.5px] font-medium text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-meta font-medium text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
                   disabled={!hasNeedsRework || lifecycleBusy}
                   onClick={() => returnMutation.mutate()}
                   title={!hasNeedsRework ? 'Mark at least one annotation as "Needs rework" first' : undefined}
@@ -790,7 +790,7 @@ function HandoffViewer({
                   Return for rework
                 </button>
                 <button
-                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10.5px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-meta font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
                   disabled={lifecycleBusy}
                   onClick={() => setShowRejectModal(true)}
                   type="button"
@@ -799,7 +799,7 @@ function HandoffViewer({
                   Reject draft
                 </button>
                 <button
-                  className="inline-flex items-center gap-1 rounded-lg bg-[#1a6b4a] px-3 py-1.5 text-[10.5px] font-medium text-white hover:bg-[#155a3e] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-lg bg-[#1a6b4a] px-3 py-1.5 text-meta font-medium text-white hover:bg-[#155a3e] disabled:cursor-not-allowed disabled:opacity-40"
                   disabled={openCount > 0 || lifecycleBusy}
                   onClick={() => completeMutation.mutate()}
                   title={openCount > 0 ? 'Resolve all open annotations first' : undefined}
@@ -828,7 +828,7 @@ function HandoffViewer({
       {/* Rejection banner */}
       {handoff.status === 'returned' && handoff.returnReason && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5">
-          <span className="mr-1.5 text-[10.5px] font-semibold text-amber-700">Draft rejected:</span>
+          <span className="mr-1.5 text-meta font-semibold text-amber-700">Draft rejected:</span>
           <span className="text-xs text-amber-800">{handoff.returnReason}</span>
         </div>
       )}
@@ -846,7 +846,7 @@ function HandoffViewer({
       {/* Mobile sub-tabs: Document | Annotations */}
       <div className="flex shrink-0 items-center gap-1 border-b border-black/10 bg-white px-3 py-1.5 sm:hidden">
         <button
-          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-meta font-medium transition-colors ${
             mobileTab === 'document' ? 'bg-[#0f0f0f] text-white' : 'text-[#5a5a56] hover:bg-[#f4f3ef]'
           }`}
           onClick={() => setMobileTab('document')}
@@ -855,7 +855,7 @@ function HandoffViewer({
           Document
         </button>
         <button
-          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-meta font-medium transition-colors ${
             mobileTab === 'annotations' ? 'bg-[#0f0f0f] text-white' : 'text-[#5a5a56] hover:bg-[#f4f3ef]'
           }`}
           onClick={() => setMobileTab('annotations')}
@@ -863,7 +863,7 @@ function HandoffViewer({
         >
           Annotations
           {annotations.length > 0 && (
-            <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[9px] ${
+            <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-micro ${
               mobileTab === 'annotations' ? 'bg-white/20 text-white' : 'bg-[#eeecff] text-[#4a3db0]'
             }`}>
               {annotations.length}
@@ -880,7 +880,7 @@ function HandoffViewer({
             <div className="flex flex-col items-center justify-center gap-2 p-8 text-xs text-red-600">
               {fileError}
               <button
-                className="rounded-lg border border-black/10 px-3 py-1.5 text-[11px] text-[#5a5a56]"
+                className="rounded-lg border border-black/10 px-3 py-1.5 text-meta text-[#5a5a56]"
                 onClick={() => {
                   setFileError(null)
                   setFileReloadKey((k) => k + 1)
@@ -914,21 +914,21 @@ function HandoffViewer({
             : 'flex w-full flex-col sm:w-72 sm:shrink-0 sm:border-l'
         }`}>
           <div className="border-b border-black/10 px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+            <p className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
               Annotations
               {annotations.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-[#eeecff] px-1.5 py-0.5 text-[9px] text-[#4a3db0]">
+                <span className="ml-1.5 rounded-full bg-[#eeecff] px-1.5 py-0.5 text-micro text-[#4a3db0]">
                   {annotations.length}
                 </span>
               )}
             </p>
             {canAnnotate && hasTextLayer !== false && (
-              <p className="mt-0.5 text-[10.5px] text-[#76766f]">
+              <p className="mt-0.5 text-meta text-[#76766f]">
                 Select text in the PDF to annotate.
               </p>
             )}
             {hasTextLayer === false && (
-              <p className="mt-0.5 text-[10.5px] text-amber-700">
+              <p className="mt-0.5 text-meta text-amber-700">
                 Scanned PDF — no selectable text. Use document comments below.
               </p>
             )}
@@ -1006,7 +1006,7 @@ function RejectModal({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
-        {error && <p className="mt-1.5 text-[10.5px] text-red-600">{error}</p>}
+        {error && <p className="mt-1.5 text-meta text-red-600">{error}</p>}
         <div className="mt-3 flex justify-end gap-2">
           <button
             className="rounded-lg px-3 py-1.5 text-xs text-[#5a5a56] hover:bg-[#f4f3ef]"
@@ -1047,7 +1047,7 @@ function ToolbarButton({
   return (
     <button
       aria-label={label}
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 ${className}`}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-meta font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 ${className}`}
       onClick={onClick}
       type="button"
     >
@@ -1084,6 +1084,6 @@ function HandoffStatusPill({
   }
   const { label, cls } = map[status] ?? { label: status, cls: 'bg-[#f4f3ef] text-[#5a5a56]' }
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{label}</span>
+    <span className={`rounded-full px-2 py-0.5 text-meta font-medium ${cls}`}>{label}</span>
   )
 }

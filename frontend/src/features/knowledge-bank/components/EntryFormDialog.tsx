@@ -88,7 +88,7 @@ export function EntryFormDialog({
             ))}
           </select>
         </div>
-        <p className="text-[11px] leading-5 text-[#777770]">{scopeDescriptions[scope]}</p>
+        <p className="text-meta leading-5 text-[#777770]">{scopeDescriptions[scope]}</p>
         {scope === 'matter' && (
           <select
             className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs"

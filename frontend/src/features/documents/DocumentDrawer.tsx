@@ -190,7 +190,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
               {document.status}
             </StatusBadge>
           </div>
-          <p className="mt-0.5 text-[11px] text-neutral-500">
+          <p className="mt-0.5 text-meta text-neutral-500">
             {document.chunkCount} searchable chunks
           </p>
         </div>
@@ -259,7 +259,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
         <section className="flex min-h-80 shrink-0 flex-col border-t border-neutral-200 bg-white lg:h-full lg:w-[340px] lg:min-h-0 lg:border-l lg:border-t-0 xl:w-[390px]">
           <div className="shrink-0 border-b border-neutral-100 px-4 py-3 sm:px-5">
             <h3 className="text-sm font-semibold text-neutral-900">Matter comments</h3>
-            <p className="mt-0.5 text-[11px] text-neutral-500">
+            <p className="mt-0.5 text-meta text-neutral-500">
               Visible to colleagues who can access this document.
             </p>
           </div>
@@ -279,7 +279,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
               <div className="space-y-4">
                 {(commentsQuery.data ?? []).map((comment) => (
                   <article key={comment.id} className="group flex gap-2.5">
-                    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-semibold text-white">
+                    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-neutral-900 text-label font-semibold text-white">
                       {initials(comment.author.fullName || comment.author.email)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -287,7 +287,7 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
                         <span className="truncate text-xs font-medium text-neutral-900">
                           {comment.author.fullName || comment.author.email}
                         </span>
-                        <span className="text-[10px] text-neutral-400">
+                        <span className="text-label text-neutral-400">
                           {formatRelativeTime(comment.createdAt)}
                         </span>
                         {comment.canDelete && (

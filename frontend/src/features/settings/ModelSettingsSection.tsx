@@ -101,7 +101,7 @@ export function ModelSettingsSection() {
             value={apiKey}
           />
           {keyTooShort && (
-            <span className="mt-1 block text-[11px] text-red-600">That key looks too short.</span>
+            <span className="mt-1 block text-meta text-red-600">That key looks too short.</span>
           )}
         </label>
 
@@ -126,14 +126,14 @@ export function ModelSettingsSection() {
                 </option>
               ))}
             </datalist>
-            <span className="mt-1 block text-[11px] text-[#8c8c86]">
+            <span className="mt-1 block text-meta text-[#8c8c86]">
               Any OpenRouter model id. Leave blank for the default ({settings?.models[tier] ?? '…'}). Models
               used by LexChat must support tool calling.
             </span>
           </label>
         ))}
 
-        <p className="text-[11px] leading-4 text-[#8c8c86]">
+        <p className="text-meta leading-4 text-[#8c8c86]">
           All AI features send prompts — including document excerpts, Knowledge Bank entries and reviewer
           feedback — to OpenRouter and the model provider behind the model you choose.
         </p>
@@ -172,7 +172,7 @@ export function ModelSettingsSection() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h4 className="text-xs font-semibold text-[#0f0f0f]">Feature tiers</h4>
             <button
-              className="text-[11px] font-medium text-[#6f6f69] underline hover:text-[#0f0f0f] disabled:opacity-40"
+              className="text-meta font-medium text-[#6f6f69] underline hover:text-[#0f0f0f] disabled:opacity-40"
               disabled={tierMutation.isPending}
               onClick={resetTiers}
               type="button"
@@ -180,7 +180,7 @@ export function ModelSettingsSection() {
               Reset to defaults
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-[#8c8c86]">
+          <p className="mt-1 text-meta text-[#8c8c86]">
             Choose which tier each feature uses. LexChat and Birdie can also be switched per prompt.
           </p>
           <ul className="mt-3 divide-y divide-black/5">
@@ -197,7 +197,7 @@ export function ModelSettingsSection() {
                     {(['high', 'mid'] as const).map((tier) => (
                       <button
                         aria-pressed={active === tier}
-                        className={`rounded-md px-3 py-1 text-[11px] font-medium ${
+                        className={`rounded-md px-3 py-1 text-meta font-medium ${
                           active === tier ? 'bg-white text-[#0f0f0f] shadow-sm' : 'text-[#6f6f69]'
                         }`}
                         disabled={tierMutation.isPending}

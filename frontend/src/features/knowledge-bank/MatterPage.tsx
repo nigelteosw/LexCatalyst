@@ -173,7 +173,7 @@ export function MatterPage({
           </nav>
 
           <h1 className="font-serif text-4xl tracking-tight text-neutral-950">{title}</h1>
-          <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-neutral-500">{subtitle}</p>
+          <p className="mt-3 max-w-xl text-body leading-relaxed text-neutral-500">{subtitle}</p>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <input
@@ -224,7 +224,7 @@ export function MatterPage({
                   aria-selected={tab === t.id}
                   type="button"
                   onClick={() => setTab(t.id)}
-                  className={`text-[15px] transition-colors ${
+                  className={`text-body transition-colors ${
                     tab === t.id ? 'text-[#1e3a8a]' : 'text-neutral-500 hover:text-neutral-800'
                   }`}
                 >

@@ -181,12 +181,12 @@ export function ActionDetailDialog({
     <div className="space-y-4 p-5">
       <div>
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <span className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Description
           </span>
           {manager && !editingDescription && (
             <button
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#5a5a56] hover:text-[#0f0f0f]"
+              className="inline-flex items-center gap-1 text-meta font-medium text-[#5a5a56] hover:text-[#0f0f0f]"
               onClick={() => setEditingDescription(true)}
               type="button"
             >
@@ -243,7 +243,7 @@ export function ActionDetailDialog({
 
       <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Assigned to</div>
+          <div className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Assigned to</div>
           {manager ? (
             <select
               className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs"
@@ -265,7 +265,7 @@ export function ActionDetailDialog({
           )}
         </div>
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Priority</div>
+          <div className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Priority</div>
           {manager ? (
             <select
               className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs capitalize"
@@ -279,14 +279,14 @@ export function ActionDetailDialog({
             </select>
           ) : (
             <div className="mt-1">
-              <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium capitalize ${priorityColors[item.priority]}`}>
+              <span className={`rounded-full px-2 py-0.5 text-meta font-medium capitalize ${priorityColors[item.priority]}`}>
                 {item.priority}
               </span>
             </div>
           )}
         </div>
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Matter</div>
+          <div className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Matter</div>
           {manager ? (
             <select
               className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs"
@@ -311,7 +311,7 @@ export function ActionDetailDialog({
         </div>
         {item.dueDate && (
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Due date</div>
+            <div className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Due date</div>
             <div className="mt-1 text-[#0f0f0f]">
               {new Date(item.dueDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
@@ -321,7 +321,7 @@ export function ActionDetailDialog({
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <div className="inline-flex items-center gap-1 text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             <Tag size={11} /> Tags
           </div>
         </div>
@@ -329,7 +329,7 @@ export function ActionDetailDialog({
           {item.tags.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 rounded-full bg-[#eeecff] px-2 py-0.5 text-[10.5px] font-medium text-[#4a3db0]"
+              className="inline-flex items-center gap-1 rounded-full bg-[#eeecff] px-2 py-0.5 text-meta font-medium text-[#4a3db0]"
             >
               {tag}
               {manager && (
@@ -345,7 +345,7 @@ export function ActionDetailDialog({
             </span>
           ))}
           {item.tags.length === 0 && (
-            <span className="text-[11px] text-[#8a8a84]">No tags yet</span>
+            <span className="text-meta text-[#8a8a84]">No tags yet</span>
           )}
         </div>
         {manager && (
@@ -375,7 +375,7 @@ export function ActionDetailDialog({
       </div>
 
       <div>
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Status</div>
+        <div className="mb-2 text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Status</div>
         <div className="flex flex-wrap gap-2">
           {statusColumns.map((col) => (
             <button
@@ -394,7 +394,7 @@ export function ActionDetailDialog({
           ))}
         </div>
         {!canMove && (
-          <p className="mt-2 text-[10.5px] text-[#76766f]">
+          <p className="mt-2 text-meta text-[#76766f]">
             Only the assignee or a senior+ can move this ticket.
           </p>
         )}
@@ -405,7 +405,7 @@ export function ActionDetailDialog({
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[#0f0f0f]">Submit work for review</p>
-              <p className="mt-0.5 text-[11px] text-[#76766f]">
+              <p className="mt-0.5 text-meta text-[#76766f]">
                 Upload your finished PDF so a reviewer can redline it.
               </p>
             </div>
@@ -430,7 +430,7 @@ export function ActionDetailDialog({
               <p className="text-sm font-semibold text-indigo-900">
                 {item.status === 'in_progress' ? 'Draft returned for rework' : 'Handoff ready for review'}
               </p>
-              <p className="mt-0.5 text-[11px] text-slate-600">
+              <p className="mt-0.5 text-meta text-slate-600">
                 Open the full review page to annotate and respond.
               </p>
             </div>

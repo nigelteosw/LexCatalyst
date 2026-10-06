@@ -34,7 +34,7 @@ export function DemoSwitcher({ isAdmin, currentUserId, onSwitch, onReturn }: Dem
 
   return (
     <div className="border-t border-hairline px-1.5 py-1.5">
-      <div className="mb-1 px-2 text-[10.5px] text-ink-secondary">Switch user (demo)</div>
+      <div className="mb-1 px-2 text-meta text-ink-secondary">Switch user (demo)</div>
       <ul className="space-y-0.5" aria-label="Demo users">
         {impersonating && (
           <li>
@@ -43,7 +43,7 @@ export function DemoSwitcher({ isAdmin, currentUserId, onSwitch, onReturn }: Dem
               onClick={onReturn}
               type="button"
             >
-              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-line text-[9px]">↩</span>
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-line text-micro">↩</span>
               <span className="min-w-0 flex-1 truncate">Back to my account</span>
             </button>
           </li>
@@ -64,7 +64,7 @@ export function DemoSwitcher({ isAdmin, currentUserId, onSwitch, onReturn }: Dem
                 title={`${name} · ${roleLabels[user.firmRole] ?? user.firmRole}`}
                 type="button"
               >
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent-tint text-accent text-[9px] font-semibold uppercase">
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent-tint text-accent text-micro font-semibold uppercase">
                   {name
                     .split(' ')
                     .map((part) => part[0])
@@ -72,7 +72,7 @@ export function DemoSwitcher({ isAdmin, currentUserId, onSwitch, onReturn }: Dem
                     .slice(0, 2)}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{name}</span>
-                <span className="shrink-0 text-[10.5px] text-ink-secondary">{roleLabels[user.firmRole] ?? user.firmRole}</span>
+                <span className="shrink-0 text-meta text-ink-secondary">{roleLabels[user.firmRole] ?? user.firmRole}</span>
               </button>
             </li>
           )

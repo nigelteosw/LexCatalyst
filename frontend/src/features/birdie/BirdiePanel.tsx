@@ -227,12 +227,12 @@ export function BirdiePanel({ isOpen, onToggle, matterId, pageContext, onOpenSet
             <FeatureHelp title="Birdie" content={BIRDIE_HELP} size="compact" />
           </div>
           {modelName && (
-            <div className="truncate text-[11px] text-[#76766f]" title={modelId ?? undefined}>
+            <div className="truncate text-meta text-[#76766f]" title={modelId ?? undefined}>
               {modelName}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1 text-[11px] font-medium text-[#1a6b4a]">
+        <div className="flex items-center gap-1 text-meta font-medium text-[#1a6b4a]">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2d9e6b]" />
           Live
         </div>
@@ -307,7 +307,7 @@ function BirdiePanelBody({
         {(['ask', 'review', 'examples', 'progress'] as MentorTab[]).map((tab) => (
           <button
             key={tab}
-            className={`flex-1 border-b-2 py-1.5 text-[10.5px] font-medium capitalize transition-colors ${
+            className={`flex-1 border-b-2 py-1.5 text-meta font-medium capitalize transition-colors ${
               activeTab === tab
                 ? 'border-[#2d9e6b] text-[#0f0f0f]'
                 : 'border-transparent text-[#76766f] hover:text-[#5a5a56]'
@@ -363,12 +363,12 @@ function ReviewTab({
     <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-4">
       {isLoading && <div className="text-xs text-[#76766f]">Loading feedback...</div>}
       {error != null && (
-        <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">
+        <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-meta text-[#8a1f1f]">
           {getErrorMessage(error, 'Could not load reviewer feedback.')}
         </div>
       )}
       {!isLoading && error == null && rounds.length === 0 && (
-        <div className="rounded-[10px] border border-dashed border-black/15 px-3 py-3 text-[11.5px] leading-5 text-[#8c8c86]">
+        <div className="rounded-[10px] border border-dashed border-black/15 px-3 py-3 text-meta leading-5 text-[#8c8c86]">
           Feedback from your reviewers will appear here after a review is returned.
         </div>
       )}
@@ -417,20 +417,20 @@ function RoundGroup({ round, onExplain }: { round: FeedbackRound; onExplain: (pr
   return (
     <section>
       <div className="mb-2">
-        <div className="truncate text-[11.5px] font-semibold text-[#0f0f0f]">{round.documentName}</div>
-        <div className="text-[11px] text-[#76766f]">{meta}</div>
+        <div className="truncate text-meta font-semibold text-[#0f0f0f]">{round.documentName}</div>
+        <div className="text-meta text-[#76766f]">{meta}</div>
       </div>
 
-      <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Lessons</div>
+      <div className="mb-1.5 text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Lessons</div>
       <div className="mb-3 space-y-2">
         {round.lessons.map((lesson) => (
           <LessonCard key={lesson.id} lesson={lesson} />
         ))}
         {needsLessons && distill.isPending && (
-          <div className="text-[11px] text-[#76766f]">Distilling lessons…</div>
+          <div className="text-meta text-[#76766f]">Distilling lessons…</div>
         )}
         {needsLessons && distill.isError && (
-          <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">
+          <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-meta text-[#8a1f1f]">
             {getErrorMessage(distill.error, 'Could not draw up lessons.')}{' '}
             <button className="font-medium underline" onClick={() => distill.mutate()} type="button">
               Retry
@@ -439,7 +439,7 @@ function RoundGroup({ round, onExplain }: { round: FeedbackRound; onExplain: (pr
         )}
       </div>
 
-      <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">Comments</div>
+      <div className="mb-1.5 text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Comments</div>
       <div className="space-y-2">
         {round.annotations.map((a) => (
           <CommentCard
@@ -456,11 +456,11 @@ function RoundGroup({ round, onExplain }: { round: FeedbackRound; onExplain: (pr
 function LessonCard({ lesson }: { lesson: BirdieLesson }) {
   return (
     <div className="overflow-hidden rounded-[10px] border border-[#1a4a8a]/15">
-      <div className="flex items-center gap-1.5 border-b border-[#1a4a8a]/15 bg-[#e8f0fe] px-3 py-2 text-[11px] font-medium text-[#1a4a8a]">
+      <div className="flex items-center gap-1.5 border-b border-[#1a4a8a]/15 bg-[#e8f0fe] px-3 py-2 text-meta font-medium text-[#1a4a8a]">
         <Lightbulb size={11} />
         <span className="truncate">{lesson.title}</span>
       </div>
-      <div className="px-3 py-2.5 text-[11.5px] leading-[1.6] text-[#5a5a56]">{lesson.body}</div>
+      <div className="px-3 py-2.5 text-meta leading-[1.6] text-[#5a5a56]">{lesson.body}</div>
     </div>
   )
 }
@@ -468,8 +468,8 @@ function LessonCard({ lesson }: { lesson: BirdieLesson }) {
 function CommentCard({ annotation, onExplain }: { annotation: LessonAnnotation; onExplain: () => void }) {
   return (
     <div className="overflow-hidden rounded-[10px] border border-black/10">
-      <div className="space-y-1.5 px-3 py-2.5 text-[11.5px] leading-[1.6]">
-        <div className="italic text-[#8c8c86]" style={{ fontFamily: 'Georgia, serif' }}>
+      <div className="space-y-1.5 px-3 py-2.5 text-meta leading-[1.6]">
+        <div className="italic text-[#8c8c86]" style={{ fontFamily: 'var(--font-sans)' }}>
           “{annotation.anchorQuote}”
         </div>
         {annotation.suggestedText && (
@@ -481,9 +481,9 @@ function CommentCard({ annotation, onExplain }: { annotation: LessonAnnotation; 
         {annotation.note && <div className="text-[#5a5a56]">{annotation.note}</div>}
       </div>
       <div className="flex items-center justify-between border-t border-black/5 px-3 py-1.5">
-        <span className="text-[11px] text-[#76766f]">Page {annotation.pageNo}</span>
+        <span className="text-meta text-[#76766f]">Page {annotation.pageNo}</span>
         <button
-          className="text-[10.5px] font-medium text-[#1a6b4a] hover:underline"
+          className="text-meta font-medium text-[#1a6b4a] hover:underline"
           onClick={onExplain}
           type="button"
         >
@@ -498,15 +498,15 @@ function ReviewCard({ card }: { card: ReviewCard }) {
   const s = toneStyles[card.tone]
   return (
     <div className="overflow-hidden rounded-[10px] border border-black/10">
-      <div className={`flex items-center gap-1.5 border-b px-3 py-2 text-[11px] font-medium ${s.header}`}>
+      <div className={`flex items-center gap-1.5 border-b px-3 py-2 text-meta font-medium ${s.header}`}>
         <span>{s.label}</span>
         <span className="truncate">{card.title}</span>
       </div>
-      <div className="px-3 py-2.5 text-[11.5px] leading-[1.6] text-[#5a5a56]">
+      <div className="px-3 py-2.5 text-meta leading-[1.6] text-[#5a5a56]">
         {card.body}
       </div>
       {card.source && (
-        <div className="px-3 pb-2 text-[11px] text-[#76766f]">{card.source}</div>
+        <div className="px-3 pb-2 text-meta text-[#76766f]">{card.source}</div>
       )}
     </div>
   )
@@ -527,7 +527,7 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
 
   if (error) {
     return (
-      <div className="m-3 rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">
+      <div className="m-3 rounded-lg bg-[#fdeeed] px-3 py-2 text-meta text-[#8a1f1f]">
         {error instanceof Error ? error.message : 'Could not load Knowledge Bank examples.'}
       </div>
     )
@@ -539,7 +539,7 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
         <div>
           <BookMarked size={20} className="mx-auto text-[#8a8a84]" />
           <p className="mt-2 text-xs text-[#8c8c86]">No Knowledge Bank entries yet.</p>
-          <p className="mt-1 text-[11px] text-[#76766f]">Upload documents and add them to the Knowledge Bank.</p>
+          <p className="mt-1 text-meta text-[#76766f]">Upload documents and add them to the Knowledge Bank.</p>
         </div>
       </div>
     )
@@ -549,7 +549,7 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
     <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-4">
       {styleGuides.length > 0 && (
         <section>
-          <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <div className="mb-2 text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Style guides
           </div>
           <div className="space-y-2">
@@ -561,7 +561,7 @@ function ExamplesTab({ matterId }: { matterId: string | null }) {
       )}
       {knowledgeEntries.length > 0 && (
         <section>
-          <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <div className="mb-2 text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Precedents & playbooks
           </div>
           <div className="space-y-2">
@@ -579,30 +579,30 @@ function KBEntryCard({ entry }: { entry: KnowledgeBankEntry }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <div className="overflow-hidden rounded-[10px] border border-[#4a3db0]/18 bg-[#eeecff]/30">
-      <div className="flex items-center gap-1.5 bg-[#eeecff] px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#4a3db0]">
+      <div className="flex items-center gap-1.5 bg-[#eeecff] px-2.5 py-1.5 text-meta font-semibold uppercase tracking-[0.06em] text-[#4a3db0]">
         <Lightbulb size={10} />
         {entry.entryType.replace('_', ' ')}
       </div>
       <div className="px-3 py-2.5">
-        <div className="text-[11px] font-medium text-[#0f0f0f]">{entry.title}</div>
+        <div className="text-meta font-medium text-[#0f0f0f]">{entry.title}</div>
         {expanded ? (
-          <div className="mt-1.5 max-h-48 overflow-y-auto text-[11.5px] italic leading-[1.65] text-[#5a5a56]" style={{ fontFamily: 'Georgia, serif' }}>
+          <div className="mt-1.5 max-h-48 overflow-y-auto text-meta italic leading-[1.65] text-[#5a5a56]" style={{ fontFamily: 'var(--font-sans)' }}>
             {entry.bodyMarkdown}
           </div>
         ) : (
-          <div className="mt-1 line-clamp-2 text-[11px] italic text-[#8c8c86]" style={{ fontFamily: 'Georgia, serif' }}>
+          <div className="mt-1 line-clamp-2 text-meta italic text-[#8c8c86]" style={{ fontFamily: 'var(--font-sans)' }}>
             {entry.bodyMarkdown}
           </div>
         )}
         <button
-          className="mt-1.5 text-[11px] text-[#4a3db0] hover:underline"
+          className="mt-1.5 text-meta text-[#4a3db0] hover:underline"
           onClick={() => setExpanded((e) => !e)}
           type="button"
         >
           {expanded ? 'Show less' : 'Show more'}
         </button>
       </div>
-      <div className="px-3 pb-2 text-[11px] text-[#76766f]">
+      <div className="px-3 pb-2 text-meta text-[#76766f]">
         {entry.scope.replace('_', '-')} · v{entry.version}
       </div>
     </div>
@@ -742,11 +742,11 @@ function AskTab({
       >
         {messages.length === 0 ? (
           <div className="space-y-2">
-            <div className="mb-1 text-[11px] text-[#76766f]">Try asking</div>
+            <div className="mb-1 text-meta text-[#76766f]">Try asking</div>
             {STARTERS.map((s) => (
               <button
                 key={s}
-                className="w-full rounded-[9px] border border-black/10 bg-[#f4f3ef] px-3 py-2 text-left text-[11.5px] leading-5 text-[#5a5a56] transition-colors hover:border-black/20 hover:bg-[#eeecea]"
+                className="w-full rounded-[9px] border border-black/10 bg-[#f4f3ef] px-3 py-2 text-left text-meta leading-5 text-[#5a5a56] transition-colors hover:border-black/20 hover:bg-[#eeecea]"
                 onClick={() => send(s)}
                 type="button"
               >
@@ -759,11 +759,11 @@ function AskTab({
             {messages.map((msg) => (
               <div key={msg.id} className={msg.role === 'user' ? 'flex justify-end' : ''}>
                 {msg.role === 'user' ? (
-                  <div className="max-w-[88%] rounded-[10px] rounded-br-[3px] bg-[#0f0f0f] px-3 py-2 text-[12px] leading-[1.65] text-white">
+                  <div className="max-w-[88%] rounded-[10px] rounded-br-[3px] bg-[#0f0f0f] px-3 py-2 text-meta leading-[1.65] text-white">
                     {msg.body}
                   </div>
                 ) : (
-                  <div className="rounded-[3px_10px_10px_10px] border border-black/10 bg-[#f4f3ef] px-3 py-2.5 text-[12px] leading-[1.65] text-[#0f0f0f]">
+                  <div className="rounded-[3px_10px_10px_10px] border border-black/10 bg-[#f4f3ef] px-3 py-2.5 text-meta leading-[1.65] text-[#0f0f0f]">
                     {msg.body ? (
                       <MarkdownContent markdown={msg.body} />
                     ) : (
@@ -782,19 +782,19 @@ function AskTab({
               </div>
             ))}
             {error && (
-              <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-[11px] text-[#8a1f1f]">{error}</div>
+              <div className="rounded-lg bg-[#fdeeed] px-3 py-2 text-meta text-[#8a1f1f]">{error}</div>
             )}
           </div>
         )}
       </div>
 
       <div className="shrink-0 border-t border-black/10 bg-white p-2">
-        <p className="mb-1.5 text-[10px] leading-4 text-[#76766f]">Shared text and your ticket data go to OpenRouter and your chosen model provider.</p>
+        <p className="mb-1.5 text-label leading-4 text-[#76766f]">Shared text and your ticket data go to OpenRouter and your chosen model provider.</p>
         <div className="flex items-end gap-1.5 rounded-[10px] border border-black/15 bg-[#f4f3ef] p-1.5 pl-3 focus-within:border-black/30 focus-within:bg-white">
           <textarea
             ref={textareaRef}
             aria-label="Ask Birdie"
-            className="min-h-8 max-h-20 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-[12px] leading-5 text-[#0f0f0f] outline-none placeholder:text-[#8a8a84]"
+            className="min-h-8 max-h-20 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-meta leading-5 text-[#0f0f0f] outline-none placeholder:text-[#8a8a84]"
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -850,20 +850,20 @@ function ProgressTab() {
 
   return (
     <div className="app-scroll-region h-full overflow-y-auto p-3 space-y-4">
-      <div className="rounded-[10px] border border-black/10 bg-[#f4f3ef] px-3 py-2.5 text-[11.5px] leading-5 text-[#5a5a56]">
+      <div className="rounded-[10px] border border-black/10 bg-[#f4f3ef] px-3 py-2.5 text-meta leading-5 text-[#5a5a56]">
         Based on your questions and drafts. Updates as you work — a learning map, not a performance report.
       </div>
       {skills.map((section) => (
         <section key={section.category}>
-          <div className="mb-2 text-[10.5px] font-medium text-[#5a5a56]">{section.category}</div>
+          <div className="mb-2 text-meta font-medium text-[#5a5a56]">{section.category}</div>
           <div className="space-y-1.5">
             {section.items.map((item) => (
               <div key={item.label} className="flex items-center gap-2.5 rounded-[8px] bg-[#f4f3ef] px-2.5 py-2">
-                <span className="min-w-0 flex-1 text-[11px] text-[#5a5a56]">{item.label}</span>
+                <span className="min-w-0 flex-1 text-meta text-[#5a5a56]">{item.label}</span>
                 <div className="h-1 w-14 overflow-hidden rounded-full bg-[#dddcd8]">
                   <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.value}%` }} />
                 </div>
-                <span className="w-7 text-right text-[11px] text-[#76766f]">{item.value}%</span>
+                <span className="w-7 text-right text-meta text-[#76766f]">{item.value}%</span>
               </div>
             ))}
           </div>

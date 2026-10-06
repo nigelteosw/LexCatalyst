@@ -8,7 +8,7 @@ type DemoBarProps = {
 export function DemoBar({ name, role, onReturn }: DemoBarProps) {
   return (
     <div
-      className="flex shrink-0 items-center justify-center gap-3 bg-[#fef3dc] px-3 py-1.5 text-[11.5px] text-[#8a5a00]"
+      className="flex shrink-0 items-center justify-center gap-3 bg-[#fef3dc] px-3 py-1.5 text-meta text-[#8a5a00]"
       role="status"
     >
       <span>

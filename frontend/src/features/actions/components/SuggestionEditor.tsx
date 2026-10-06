@@ -43,7 +43,7 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, err
       onKeyDown={handleKeyDown}
     >
       <div className="flex items-center justify-between border-b border-black/8 px-3 py-2">
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-600">
+        <div className="flex items-center gap-1.5 text-meta font-semibold text-blue-600">
           <Lightbulb size={12} />
           Suggest replacement
         </div>
@@ -59,7 +59,7 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, err
 
       <div className="space-y-2.5 p-3">
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <label className="mb-1 block text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Suggested wording
           </label>
           <textarea
@@ -73,7 +73,7 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, err
         </div>
 
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#76766f]">
+          <label className="mb-1 block text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">
             Rationale <span className="font-normal normal-case text-[#c4c3bc]">(optional)</span>
           </label>
           <textarea
@@ -86,21 +86,21 @@ export function SuggestionEditor({ selectedText, onSave, onCancel, isSaving, err
         </div>
 
         {error && (
-          <p className="rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-600">{error} — your draft is kept; try again.</p>
+          <p className="rounded-md bg-red-50 px-2 py-1 text-meta text-red-600">{error} — your draft is kept; try again.</p>
         )}
 
         <div className="flex items-center justify-between pt-0.5">
-          <span className="text-[10.5px] text-[#c4c3bc]">⌘ Enter to save</span>
+          <span className="text-meta text-[#c4c3bc]">⌘ Enter to save</span>
           <div className="flex gap-2">
             <button
-              className="rounded-lg px-3 py-1.5 text-[11px] text-[#5a5a56] hover:bg-[#f4f3ef]"
+              className="rounded-lg px-3 py-1.5 text-meta text-[#5a5a56] hover:bg-[#f4f3ef]"
               onClick={onCancel}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-meta font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               disabled={!suggestedText.trim() || isSaving}
               onClick={handleSave}
               type="button"

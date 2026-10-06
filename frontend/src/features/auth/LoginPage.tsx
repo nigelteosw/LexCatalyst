@@ -115,7 +115,7 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
             </h3>
             <ul className="mt-3 space-y-2.5">
               {TRUST.map((line) => (
-                <li key={line} className="flex items-start gap-2.5 text-[13px] leading-5 text-neutral-600">
+                <li key={line} className="flex items-start gap-2.5 text-body leading-5 text-neutral-600">
                   <ShieldCheck aria-hidden="true" size={14} className="mt-0.5 shrink-0 text-[#1a6b4a]" />
                   {line}
                 </li>

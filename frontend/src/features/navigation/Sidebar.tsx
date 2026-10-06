@@ -389,7 +389,7 @@ export function Sidebar({
               onClick={() => setUserMenuOpen((open) => !open)}
               type="button"
             >
-              <div className="t-micro grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent uppercase text-white">
+              <div className="t-micro grid h-[32px] w-[32px] shrink-0 place-items-center rounded-full bg-accent uppercase text-white">
                 {userInitials}
               </div>
               {(
@@ -485,7 +485,7 @@ function NavItem({
         ) : (
           <span
             aria-label={`${badge} pending ${label} tasks`}
-            className="t-micro inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-warning-tint px-1 text-warning"
+            className="t-meta inline-flex h-6 min-w-[24px] font-semibold tabular-nums items-center justify-center rounded-full bg-warning-tint px-1 text-warning"
           >
             {badge}
           </span>

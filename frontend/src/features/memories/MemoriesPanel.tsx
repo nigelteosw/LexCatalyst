@@ -409,11 +409,11 @@ export function MemoriesPanel() {
                                 </div>
                               </div>
                               <div className="mt-3 flex items-center gap-3">
-                                <span className="text-[11px] font-medium text-neutral-500 tracking-wide">
+                                <span className="text-meta font-medium text-neutral-500 tracking-wide">
                                   {new Date(memory.updatedAt).toLocaleDateString()}
                                 </span>
                                 <div className="h-1 w-1 rounded-full bg-neutral-200" />
-                                <span className="text-[11px] font-medium text-neutral-500 tracking-wide">
+                                <span className="text-meta font-medium text-neutral-500 tracking-wide">
                                   Confidence: {(memory.confidence * 100).toFixed(0)}%
                                 </span>
                               </div>

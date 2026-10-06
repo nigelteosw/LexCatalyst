@@ -330,9 +330,9 @@ export function ChatPanel({
             </div>
           </div>
           {sendDisabledReason && (
-            <div className="mt-2 text-center text-[11px] text-amber-700">{sendDisabledReason}</div>
+            <div className="mt-2 text-center text-meta text-amber-700">{sendDisabledReason}</div>
           )}
-          <p className="mt-2 text-center text-[11px] text-neutral-500">
+          <p className="mt-2 text-center text-meta text-neutral-500">
             Enter to send · Shift+Enter for a new line · LexChat can make mistakes, so check important information.
           </p>
         </form>
@@ -373,7 +373,7 @@ function ChatMessage({ matters, message, openSourceN, onOpenSource, userInitials
       {message.body && (
         <button
           aria-label={copied ? 'Copied' : 'Copy message'}
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-meta text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
           onClick={copy}
           type="button"
         >
@@ -384,7 +384,7 @@ function ChatMessage({ matters, message, openSourceN, onOpenSource, userInitials
       {onDelete && (
         <button
           aria-label="Delete message"
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-neutral-500 hover:bg-red-50 hover:text-red-700"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-meta text-neutral-500 hover:bg-red-50 hover:text-red-700"
           onClick={() => {
             if (window.confirm('Delete this message?')) onDelete()
           }}
@@ -407,7 +407,7 @@ function ChatMessage({ matters, message, openSourceN, onOpenSource, userInitials
           >
             {userInitials}
           </span>
-          <div className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-relaxed text-neutral-900">
+          <div className="min-w-0 flex-1 whitespace-pre-wrap text-body leading-relaxed text-neutral-900">
             {message.body}
           </div>
         </div>
@@ -444,7 +444,7 @@ function ChatMessage({ matters, message, openSourceN, onOpenSource, userInitials
         ) : (
           message.body && (
             <MarkdownContent
-              className="font-serif text-[17px] leading-8 text-neutral-900"
+              className="font-serif text-reading leading-8 text-neutral-900"
               footnotes={message.sources?.map((s) => s.n)}
               markdown={message.body}
               onFootnoteClick={onOpenSource}
@@ -491,7 +491,7 @@ function SourceList({
             >
               <span className="w-3 shrink-0 text-sm font-semibold text-accent">{source.n}</span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px] font-medium text-neutral-900">{source.title}</span>
+                <span className="block truncate text-body font-medium text-neutral-900">{source.title}</span>
                 <span className="block truncate text-sm text-neutral-500">{describeSource(source, matters)}</span>
               </span>
             </button>
@@ -571,7 +571,7 @@ function ToolStepRow({ step }: { step: ToolStep }) {
         )}
       </div>
       {input && (
-        <div className="mt-1 break-words font-mono text-[11px] leading-4 text-neutral-500">
+        <div className="mt-1 break-words font-mono text-meta leading-4 text-neutral-500">
           {input}
         </div>
       )}
