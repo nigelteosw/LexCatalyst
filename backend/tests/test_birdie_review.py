@@ -206,3 +206,13 @@ class RetrievalTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LessonSourceTests(unittest.TestCase):
+    def test_lessons_are_numbered_sources(self) -> None:
+        lessons = [{"title": "Exact deadlines (from Sarah Chen, v1.pdf)", "body": "Give the date.",
+                    "date": "2026-10-06"}]
+        sources, block = r._collect_sources([], [], [], lessons)
+        self.assertEqual(sources["S1"]["kind"], "lesson")
+        self.assertIn("[S1] (lesson) Exact deadlines", block)
+        self.assertIn("Give the date.", block)

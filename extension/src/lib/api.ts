@@ -219,7 +219,7 @@ export type SuggestionType = 'replace' | 'insert' | 'comment'
 export type SuggestionCategory = 'style' | 'substance' | 'question'
 export type SuggestionStatus = 'pending' | 'accepted' | 'rejected'
 export type SuggestionSource = {
-  kind: 'kb' | 'document' | 'style_guide' | 'elitigation'
+  kind: 'kb' | 'document' | 'style_guide' | 'elitigation' | 'lesson'
   title: string
   id: string | null
   path: string | null

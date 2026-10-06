@@ -24,6 +24,7 @@ const GROUPS: { group: Group; title: string }[] = [
   { group: 'decision', title: 'Needs your decision' },
 ]
 const KIND_LABELS: Record<SuggestionSource['kind'], string> = {
+  lesson: 'Your lesson',
   style_guide: 'Style guide',
   kb: 'Knowledge Bank',
   document: 'Related document',

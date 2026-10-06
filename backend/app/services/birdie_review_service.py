@@ -20,6 +20,7 @@ from app.services.audit_service import record_retrieval
 from app.services.birdie_service import BIRDIE_SYSTEM_PROMPT
 from app.services.case_law_service import CaseSource, find_case_sources, validate_case_citations
 from app.services.knowledge_bank_service import search_kb_for_chat
+from app.services.lesson_service import list_feedback_rounds
 from app.services.llm_service import get_llm
 from app.services.precedent_service import search_precedents
 
@@ -47,6 +48,7 @@ Rules:
 - Use amounts, not percentages, when the consideration is stated in the draft (work out the figure).
 - Never introduce a defined term the draft does not define.
 - Do not suggest anything the draft already does correctly. No generic checklists: ask for the specific missing information.
+- Lessons from the user's reviewers are standing instructions: check the draft against every lesson and flag each breach, citing the lesson as source_ref. A lesson is enough source for a substance suggestion.
 - Hedge at most once in a sentence. Keep each reason to one line.
 """
 
@@ -243,7 +245,25 @@ async def gather_firm_sources(db: Session, *, user: User, review: BirdieReview):
 # ---------------------------------------------------------------- sources
 
 
-def _collect_sources(precedents, kb_entries, cases: list[CaseSource]) -> tuple[dict[str, dict], str]:
+MAX_LESSON_SOURCES = 12
+
+
+def gather_lessons(db: Session, *, user: User) -> list[dict]:
+    """Lessons distilled from the user's own returned review rounds (submitter only)."""
+    lessons: list[dict] = []
+    for r in list_feedback_rounds(db, user=user, limit=5):
+        who = r.reviewer_name or "your reviewer"
+        for lesson in r.lessons:
+            lessons.append(
+                {"title": f"{lesson.title} (from {who}, {r.document_name})", "body": lesson.body,
+                 "date": r.date.date().isoformat()}
+            )
+    return lessons[:MAX_LESSON_SOURCES]
+
+
+def _collect_sources(
+    precedents, kb_entries, cases: list[CaseSource], lessons: list[dict] | None = None
+) -> tuple[dict[str, dict], str]:
     """Number every source the model may cite. Returns ({ref: payload}, prompt block)."""
     sources: dict[str, dict] = {}
     lines: list[str] = []
@@ -256,6 +276,9 @@ def _collect_sources(precedents, kb_entries, cases: list[CaseSource]) -> tuple[d
         )
         lines.append(f"[{ref}] ({payload['kind']}) {payload['title']}" + (f" ({meta})" if meta else ""))
         lines.append(f"    {excerpt[:EXCERPT_CHARS]}")
+
+    for lesson in lessons or []:
+        add({"kind": "lesson", "title": lesson["title"], "date": lesson["date"]}, lesson["body"])
 
     seen: set[str] = set()
     for r in precedents:
@@ -324,7 +347,8 @@ async def run_review(review_id: str) -> None:
                 user_message="Review this draft; find Singapore judgments only if the draft turns on a point of law.",
                 web_text=text,
             )
-            sources, block = _collect_sources(precedents, kb_entries, cases)
+            lessons = gather_lessons(db, user=user)
+            sources, block = _collect_sources(precedents, kb_entries, cases, lessons)
             messages = [
                 {"role": "system", "content": BIRDIE_SYSTEM_PROMPT + REVIEW_ADDENDUM},
                 {"role": "user", "content": f"Sources:\n{block or '(none found)'}\n\nDraft:\n{text}"},
