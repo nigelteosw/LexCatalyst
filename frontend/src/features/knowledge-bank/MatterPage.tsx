@@ -47,9 +47,9 @@ function ItemRow({
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-x-4 px-1 py-5 text-left transition-colors hover:bg-black/[0.025] sm:grid-cols-[44px_minmax(0,1fr)_110px_70px]"
+      className="grid w-full grid-cols-1 items-start gap-x-4 px-1 py-4 text-left transition-colors hover:bg-black/[0.025] sm:grid-cols-[44px_minmax(0,1fr)_110px_70px] sm:py-5"
     >
-      <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-50 text-[#1e3a8a]">{icon}</span>
+      <span className="hidden h-11 w-11 place-items-center rounded-lg bg-blue-50 text-[#1e3a8a] sm:grid">{icon}</span>
       <div className="min-w-0">
         <h3 className="text-base font-medium leading-snug text-neutral-900">{title}</h3>
         {detail && <p className="mt-1 line-clamp-1 text-sm text-neutral-500">{detail}</p>}
@@ -73,7 +73,7 @@ function Section({
 }) {
   return (
     <section className="mt-6">
-      <h2 className="flex items-center gap-2.5 border-b border-neutral-200 pb-3 font-serif text-xl text-neutral-900">
+      <h2 className="sr-only">
         {icon}
         {label}
         <span className="font-sans text-sm text-neutral-400">{count}</span>
@@ -174,7 +174,7 @@ export function MatterPage({
             <span className="text-neutral-700">{caseLabel}</span>
           </nav>
 
-          <h1 className="font-serif text-4xl tracking-tight text-neutral-950">{title}</h1>
+          <h1 className="font-serif text-3xl sm:text-4xl tracking-tight text-neutral-950">{title}</h1>
           <div className="mt-3 flex flex-wrap items-center gap-2.5">
             {matter && (
               <StatusBadge tone={matter.status === 'active' ? 'success' : 'neutral'}>{matter.status}</StatusBadge>

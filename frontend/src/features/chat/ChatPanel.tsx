@@ -189,24 +189,24 @@ export function ChatPanel({
               ))}
             </div>
           ) : (
-            <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
-              <div className="grid h-12 w-12 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-700 shadow-sm">
+            <div className="flex min-h-[40vh] flex-col items-center justify-center text-center sm:min-h-[50vh]">
+              <div className="hidden h-12 w-12 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-700 shadow-sm sm:grid">
                 <MessageSquare aria-hidden="true" size={22} />
               </div>
               <h3 className="mt-5 text-2xl font-semibold tracking-tight text-neutral-900">
                 What are you working on?
               </h3>
-              <p className="mt-2 max-w-md text-sm leading-relaxed text-neutral-600">
+              <p className="mt-2 hidden max-w-md text-sm leading-relaxed text-neutral-600 sm:block">
                 Ask about your documents and matters. Answers cite your firm’s knowledge and your own files.
               </p>
-              <div className="mt-8 grid w-full max-w-2xl gap-2.5 sm:grid-cols-2">
-                {SUGGESTED_PROMPTS.map((suggestion) => (
+              <div className="mt-6 grid w-full max-w-2xl gap-2 sm:mt-8 sm:grid-cols-2 sm:gap-2.5">
+                {SUGGESTED_PROMPTS.map((suggestion, i) => (
                   <button
                     key={suggestion}
-                    className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-left text-sm leading-snug text-neutral-700 shadow-sm transition-colors hover:border-neutral-300 hover:bg-neutral-50"
+                    className={`rounded-xl border border-neutral-200 bg-white px-4 py-3 text-left text-sm leading-snug text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50 ${i >= 3 ? 'hidden sm:block' : ''}`}
                     onClick={() => {
                       onPromptChange(suggestion)
-                      textareaRef.current?.focus()
+                      textareaRef.current?.focus({ preventScroll: true })
                     }}
                     type="button"
                   >
@@ -214,7 +214,7 @@ export function ChatPanel({
                   </button>
                 ))}
               </div>
-              <div className="mt-5">
+              <div className="mt-5 hidden sm:block">
                 <FeatureHelp title="LexChat" content={CHAT_HELP} />
               </div>
             </div>
@@ -261,7 +261,7 @@ export function ChatPanel({
               ref={textareaRef}
               aria-label={inputLabel}
               rows={1}
-              className="min-h-[48px] max-h-[min(12rem,25dvh)] w-full resize-none overflow-y-auto bg-transparent px-1 py-3 text-sm leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
+              className="min-h-[48px] max-h-[min(12rem,25dvh)] w-full resize-none overflow-y-auto bg-transparent px-1 py-3 text-base leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400"
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault()
@@ -293,7 +293,7 @@ export function ChatPanel({
                 variant="ghost"
               >
                 {isUploadingFile ? <LoaderCircle size={16} className="animate-spin" /> : <Paperclip size={16} />}
-                Attach
+                <span className="hidden sm:inline">Attach</span>
               </Button>
               <input
                 ref={fileInputRef}
@@ -332,7 +332,7 @@ export function ChatPanel({
           {sendDisabledReason && (
             <div className="mt-2 text-center text-meta text-amber-700">{sendDisabledReason}</div>
           )}
-          <p className="mt-2 text-center text-meta text-neutral-500">
+          <p className="mt-2 hidden text-center text-meta text-neutral-500 sm:block">
             Enter to send · Shift+Enter for a new line · LexChat can make mistakes, so check important information.
           </p>
         </form>

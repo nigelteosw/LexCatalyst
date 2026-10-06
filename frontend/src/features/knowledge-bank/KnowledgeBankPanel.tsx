@@ -2,29 +2,25 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react'
 import {
-  AlertTriangle,
   ArrowLeft,
   BookMarked,
   FileText,
   ListChecks,
   Upload,
-  Check,
   ExternalLink,
   FileCheck2,
   History,
   LoaderCircle,
-  MoreHorizontal,
   Plus,
 
   ShieldCheck,
-  Tags,
   Trash2,
   X,
 } from 'lucide-react'
+import { OverflowMenu } from '../../shared/ui/OverflowMenu'
 import type { LucideIcon } from 'lucide-react'
 import {
   useInfiniteQuery,
@@ -33,16 +29,13 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import {
-  approveKnowledgeBankRedaction,
   backfillKnowledgeBankEmbeddings,
   deleteKnowledgeBankEntry,
   fetchDocumentFile,
   getKnowledgeBankEntry,
   getKnowledgeBankEntryStatuses,
-  getRedactionProposal,
   listKnowledgeBankAuditLog,
   listKnowledgeBankEntryPage,
-  promoteKnowledgeBankEntry,
   updateKnowledgeBankEntry,
 } from '../../shared/api/api'
 import { Button } from '../../shared/ui/Button'
@@ -118,7 +111,6 @@ import type {
   KnowledgeBankEntryType,
   KnowledgeBankScope,
   Matter,
-  RedactionProposal,
 } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
@@ -1075,70 +1067,6 @@ function EntryCard({
   )
 }
 
-/** Small "more actions" menu so secondary actions don't crowd the header. */
-function OverflowMenu({
-  items,
-}: {
-  items: Array<{ label: string; onSelect: () => void; disabled?: boolean }>
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onPointerDown(event: PointerEvent) {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false)
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  if (items.length === 0) return null
-  return (
-    <div ref={ref} className="relative">
-      <button
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label="More actions"
-        className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
-        onClick={() => setOpen((value) => !value)}
-        type="button"
-      >
-        <MoreHorizontal size={16} />
-      </button>
-      {open && (
-        <div
-          className="absolute right-0 z-20 mt-1.5 w-52 rounded-lg border border-neutral-200 bg-white py-1 shadow-lg"
-          role="menu"
-        >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              className="block w-full px-3 py-2 text-left text-xs text-neutral-700 hover:bg-neutral-50 disabled:text-neutral-400"
-              disabled={item.disabled}
-              onClick={() => {
-                setOpen(false)
-                item.onSelect()
-              }}
-              role="menuitem"
-              type="button"
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function formatDateTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'recently'
@@ -1148,294 +1076,6 @@ function formatDateTime(value: string) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date)
-}
-
-function EntryContextPanel({
-  entry,
-  canEdit,
-  canChangeScope,
-  isDeleting,
-  matters,
-  onDelete,
-  onUpdated,
-}: {
-  entry: KnowledgeBankEntry | null
-  canEdit: boolean
-  canChangeScope: boolean
-  isDeleting: boolean
-  matters: Matter[]
-  onDelete: (entry: KnowledgeBankEntry) => void
-  onUpdated: () => void
-}) {
-  const queryClient = useQueryClient()
-  const [isEditing, setIsEditing] = useState(false)
-  const [draftTitle, setDraftTitle] = useState('')
-  const [draftBody, setDraftBody] = useState('')
-  const [redactionDraft, setRedactionDraft] = useState('')
-  const [promotion, setPromotion] = useState<RedactionProposal | null>(null)
-
-  const redactionQuery = useQuery({
-    queryKey: ['kbRedaction', entry?.id],
-    queryFn: () => getRedactionProposal(entry!.id),
-    enabled: entry?.piiStatus === 'pending_review',
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: () =>
-      updateKnowledgeBankEntry(entry!.id, {
-        title: draftTitle,
-        bodyMarkdown: draftBody,
-      }),
-    onSuccess: () => {
-      setIsEditing(false)
-      queryClient.invalidateQueries({ queryKey: ['kbEntry', entry?.id] })
-      onUpdated()
-    },
-  })
-  const promoteMutation = useMutation({
-    mutationFn: (targetScope: 'team' | 'firm_wide') =>
-      promoteKnowledgeBankEntry(entry!.id, targetScope),
-    onSuccess: (proposal) => {
-      setPromotion(proposal)
-      setRedactionDraft(proposal.redactedContent)
-      onUpdated()
-    },
-  })
-  const approveMutation = useMutation({
-    mutationFn: (proposal: RedactionProposal) =>
-      approveKnowledgeBankRedaction(proposal.entry.id, {
-        redactedContent: redactionDraft || proposal.redactedContent,
-        redactedFields: proposal.redactedFields,
-      }),
-    onSuccess: () => {
-      setPromotion(null)
-      onUpdated()
-    },
-  })
-
-  if (!entry) {
-    return (
-      <div className="grid flex-1 place-items-center p-6 text-center">
-        <div>
-          <BookMarked size={24} className="mx-auto text-[#8a8a84]" />
-          <p className="mt-3 text-xs leading-5 text-[#8c8c86]">
-            Select an entry to review its content, provenance, and sharing status.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  const redaction = promotion ?? redactionQuery.data ?? null
-
-  return (
-    <>
-      <header className="border-b border-black/10 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h3 className="text-base font-semibold leading-6 text-neutral-900">{entry.title}</h3>
-          </div>
-          {canEdit && (
-            <button
-              aria-label="Delete entry"
-              className="grid h-8 w-8 place-items-center rounded-lg text-[#76766f] hover:bg-[#fdeeed] hover:text-[#8a1f1f]"
-              disabled={isDeleting}
-              onClick={() => onDelete(entry)}
-              type="button"
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-        </div>
-        <p className="mt-1.5 text-xs capitalize text-neutral-500">
-          {[
-            scopeLabels[entry.scope],
-            entry.entryType.replaceAll('_', ' '),
-            entry.version > 1 ? `v${entry.version}` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
-        {entry.piiStatus !== 'clean' && (
-          <div className="mt-2">
-            <Pill label={entry.piiStatus.replaceAll('_', ' ')} tone={piiTone(entry.piiStatus)} />
-          </div>
-        )}
-        {canChangeScope && (
-          <div className="mt-3">
-            <ScopeAccessEditor
-              key={entry.id}
-              entry={entry}
-              matters={matters}
-              onUpdated={onUpdated}
-              compact
-            />
-          </div>
-        )}
-      </header>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        {canEdit && isEditing ? (
-          <div className="space-y-3">
-            <input
-              className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-black/30"
-              onChange={(event) => setDraftTitle(event.target.value)}
-              value={draftTitle}
-            />
-            <textarea
-              className="min-h-64 w-full resize-y rounded-lg border border-black/10 px-3 py-2 text-xs leading-5 outline-none focus:border-black/30"
-              onChange={(event) => setDraftBody(event.target.value)}
-              value={draftBody}
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                className="rounded-lg px-3 py-2 text-xs text-[#6f6f69] hover:bg-[#f4f3ef]"
-                onClick={() => setIsEditing(false)}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-lg bg-[#0f0f0f] px-3 py-2 text-xs text-white"
-                onClick={() => updateMutation.mutate()}
-                type="button"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        ) : redaction && canEdit ? (
-          <RedactionReview
-            proposal={redaction}
-            redactionDraft={redactionDraft || redaction.redactedContent}
-            isApproving={approveMutation.isPending}
-            onChange={setRedactionDraft}
-            onApprove={() => approveMutation.mutate(redaction)}
-          />
-        ) : (
-          <>
-            <MarkdownContent markdown={entry.bodyMarkdown} className="text-body leading-6 text-[#4f4f49]" />
-            {entry.tags.length > 0 && (
-              <div className="mt-5 border-t border-black/10 pt-4">
-                <div className="flex items-center gap-1.5 text-label font-semibold uppercase tracking-[0.08em] text-[#76766f]">
-                  <Tags size={12} />
-                  Tags
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {entry.tags.map((tag) => (
-                    <Pill key={tag} label={tag} tone="neutral" />
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {canEdit && (
-      <footer className="border-t border-black/10 p-3">
-        {(updateMutation.isError || promoteMutation.isError || approveMutation.isError) && (
-          <div className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-            {getErrorMessage(
-              updateMutation.error ?? promoteMutation.error ?? approveMutation.error,
-            )}
-          </div>
-        )}
-        {!redaction && (
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              className="rounded-lg border border-black/10 px-3 py-2 text-xs text-[#5a5a56] hover:bg-[#f4f3ef]"
-              onClick={() => {
-                setDraftTitle(entry.title)
-                setDraftBody(entry.bodyMarkdown)
-                setIsEditing(true)
-              }}
-              type="button"
-            >
-              Edit
-            </button>
-            {canChangeScope && (entry.scope === 'matter' || entry.scope === 'team') ? (
-              <button
-                className="rounded-lg bg-[#0f0f0f] px-3 py-2 text-xs text-white hover:bg-[#333]"
-                disabled={promoteMutation.isPending}
-                onClick={() =>
-                  promoteMutation.mutate(entry.scope === 'matter' ? 'team' : 'firm_wide')
-                }
-                type="button"
-              >
-                {promoteMutation.isPending
-                  ? 'Scanning...'
-                  : entry.scope === 'matter'
-                    ? 'Promote to team'
-                    : 'Promote firm-wide'}
-              </button>
-            ) : (
-              <div />
-            )}
-          </div>
-        )}
-      </footer>
-      )}
-    </>
-  )
-}
-
-function RedactionReview({
-  proposal,
-  redactionDraft,
-  isApproving,
-  onChange,
-  onApprove,
-}: {
-  proposal: RedactionProposal
-  redactionDraft: string
-  isApproving: boolean
-  onChange: (value: string) => void
-  onApprove: () => void
-}) {
-  return (
-    <div>
-      <div className="flex items-start gap-2 rounded-[10px] border border-[#8a5a00]/20 bg-[#fef3dc] p-3 text-xs leading-5 text-[#805400]">
-        <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-        Lawyer review is required before this copy can cross its current boundary.
-      </div>
-      <div className="mt-4 text-label font-semibold uppercase tracking-[0.08em] text-[#76766f]">
-        Proposed substitutions
-      </div>
-      <div className="mt-2 space-y-2">
-        {Object.entries(proposal.redactedFields).length > 0 ? (
-          Object.entries(proposal.redactedFields).map(([key, value]) => (
-            <div key={key} className="rounded-lg bg-[#f4f3ef] px-3 py-2 text-meta text-[#5a5a56]">
-              {value}
-            </div>
-          ))
-        ) : (
-          <div className="rounded-lg bg-[#e8f5ee] px-3 py-2 text-meta text-[#1a6b4a]">
-            No structured identifiers were detected. Review the content manually before approval.
-          </div>
-        )}
-      </div>
-      <label className="mt-4 block">
-        <span className="text-label font-semibold uppercase tracking-[0.08em] text-[#76766f]">
-          Redacted content
-        </span>
-        <textarea
-          className="mt-2 min-h-72 w-full resize-y rounded-lg border border-black/10 p-3 text-xs leading-5 outline-none focus:border-black/30"
-          onChange={(event) => onChange(event.target.value)}
-          value={redactionDraft}
-        />
-      </label>
-      <button
-        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#1a6b4a] px-3 py-2.5 text-xs font-medium text-white hover:bg-[#14583d]"
-        disabled={isApproving}
-        onClick={onApprove}
-        type="button"
-      >
-        <Check size={13} />
-        {isApproving ? 'Approving...' : 'Approve redacted copy'}
-      </button>
-    </div>
-  )
 }
 
 function AuditLogView({
@@ -1532,13 +1172,6 @@ function scopeTone(scope: KnowledgeBankScope): 'green' | 'blue' | 'purple' | 'ne
   if (scope === 'firm_wide') return 'green'
   if (scope === 'team') return 'blue'
   if (scope === 'matter') return 'purple'
-  return 'neutral'
-}
-
-function piiTone(status: KnowledgeBankEntry['piiStatus']): 'green' | 'amber' | 'red' | 'neutral' {
-  if (status === 'redacted') return 'green'
-  if (status === 'pending_review') return 'amber'
-  if (status === 'flagged') return 'red'
   return 'neutral'
 }
 

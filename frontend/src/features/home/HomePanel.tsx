@@ -33,7 +33,7 @@ export function HomePanel({ currentUser, onMatterChange }: Props) {
         <header className="flex flex-wrap items-center justify-between gap-5">
           <div>
             <p className="t-meta mb-2 text-ink-secondary">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-            <h1 className="break-words font-serif text-4xl tracking-tight text-ink">{getGreeting()}{name ? `, ${name}` : ''}</h1>
+            <h1 className="break-words font-serif text-3xl sm:text-4xl tracking-tight text-ink">{getGreeting()}{name ? `, ${name}` : ''}</h1>
           </div>
           <Button onClick={() => { onMatterChange(null); nav.startNewChat() }} variant="primary">
             <MessageSquare size={16} /> New LexChat

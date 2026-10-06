@@ -96,7 +96,7 @@ export function WellbeingPanel({ currentUser }: WellbeingPanelProps) {
         <div className="mx-auto max-w-5xl">
           <header>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-4xl tracking-tight text-neutral-950">Wellbeing</h1>
+              <h1 className="font-serif text-3xl sm:text-4xl tracking-tight text-neutral-950">Wellbeing</h1>
               <FeatureHelp title="Wellbeing" content={WELLBEING_HELP} />
             </div>
             <p className="mt-3 max-w-xl text-body leading-relaxed text-neutral-500">

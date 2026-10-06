@@ -1,6 +1,7 @@
+import { OverflowMenu } from '../../shared/ui/OverflowMenu'
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react'
+import { MessageSquare, Plus } from 'lucide-react'
 import {
   createMatter,
   deleteMatter,
@@ -223,38 +224,32 @@ export function MattersSection({
                   <MessageSquare size={15} />
                 </Button>
                 {matter && canManage && (
-                  <>
-                    <Button
-                      aria-label={`Edit ${matter.title}`}
-                      onClick={() => {
-                        saveMutation.reset()
-                        setDraft({
-                          id: matter.id,
-                          title: matter.title,
-                          caseNumber: matter.caseNumber,
-                          clientName: matter.clientName ?? '',
-                          status: matter.status,
-                        })
-                      }}
-                      size="icon"
-                      title="Edit"
-                      variant="ghost"
-                    >
-                      <Pencil size={15} />
-                    </Button>
-                    <Button
-                      aria-label={`Delete ${matter.title}`}
-                      onClick={() => {
-                        deleteMutation.reset()
-                        setPendingDelete(matter)
-                      }}
-                      size="icon"
-                      title="Delete"
-                      variant="danger"
-                    >
-                      <Trash2 size={15} />
-                    </Button>
-                  </>
+                  <OverflowMenu
+                    label={`More actions for ${matter.title}`}
+                    items={[
+                      {
+                        label: 'Edit',
+                        onSelect: () => {
+                          saveMutation.reset()
+                          setDraft({
+                            id: matter.id,
+                            title: matter.title,
+                            caseNumber: matter.caseNumber,
+                            clientName: matter.clientName ?? '',
+                            status: matter.status,
+                          })
+                        },
+                      },
+                      {
+                        label: 'Delete',
+                        danger: true,
+                        onSelect: () => {
+                          deleteMutation.reset()
+                          setPendingDelete(matter)
+                        },
+                      },
+                    ]}
+                  />
                 )}
               </div>
             </div>

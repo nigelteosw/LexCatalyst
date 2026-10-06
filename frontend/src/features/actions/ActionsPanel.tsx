@@ -268,10 +268,10 @@ export function ActionsPanel({ matters, currentUser }: ActionsPanelProps) {
     <section className="app-scroll-region flex h-full min-h-0 flex-col overflow-y-auto bg-[#fafaf8] sm:overflow-hidden">
       <header className="shrink-0 px-4 pt-5 sm:px-5 sm:pt-10 lg:px-12 lg:pt-14">
         <div className="flex items-center gap-2">
-          <h1 className="font-serif text-4xl tracking-tight text-neutral-950">Workboard</h1>
+          <h1 className="font-serif text-3xl sm:text-4xl tracking-tight text-neutral-950">Workboard</h1>
           <FeatureHelp title="Workboard" content={WORKBOARD_HELP} />
         </div>
-        <p className="mt-3 text-body leading-relaxed text-neutral-500">
+        <p className="mt-3 hidden text-body leading-relaxed text-neutral-500 sm:block">
           Firm-wide workload. Everyone sees the same board.
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-5">
