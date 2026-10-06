@@ -63,12 +63,22 @@ export function SourcePanel({
           </div>
         ) : (
           <p className="text-sm text-neutral-500">
-            LexChat read this whole {source.kind === 'document' ? 'document' : 'entry'}; open it to see the full text.
+            {source.kind === 'elitigation'
+              ? 'A judgment excerpt is unavailable. Open the judgment to read the full text.'
+              : `LexChat read this whole ${source.kind === 'document' ? 'document' : 'entry'}; open it to see the full text.`}
           </p>
         )}
-        <Button className="mt-6 border border-neutral-200" onClick={openFull} variant="secondary">
-          {source.kind === 'document' ? 'Open full document' : 'Open Knowledge Bank entry'}
-        </Button>
+        {source.kind === 'elitigation' ? (
+          source.url && /^https:\/\/www\.elitigation\.sg\/gd\/s\/\d{4}_[A-Z]+_\d+$/.test(source.url) && (
+            <a className="mt-6 inline-flex text-sm font-medium text-accent underline" href={source.url} target="_blank" rel="noopener noreferrer">
+              Open full judgment on eLitigation
+            </a>
+          )
+        ) : (
+          <Button className="mt-6 border border-neutral-200" onClick={openFull} variant="secondary">
+            {source.kind === 'document' ? 'Open full document' : 'Open Knowledge Bank entry'}
+          </Button>
+        )}
       </div>
     </aside>
   )

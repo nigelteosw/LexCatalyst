@@ -96,7 +96,7 @@ def parse_search_results(html: str, limit: int) -> list[Judgment]:
 def parse_judgment_paragraphs(html: str) -> list[tuple[str, str]]:
     soup = BeautifulSoup(html, "html.parser")
     paragraphs: list[tuple[str, str]] = []
-    for p in soup.select("p.Judg-1"):
+    for p in soup.select("p.Judg-1, div.Judg-1"):
         match = _PARAGRAPH_NUMBER.match(_clean(p.get_text(" ")))
         if match:
             paragraphs.append((match.group(1), match.group(2)))
@@ -124,11 +124,13 @@ def best_paragraphs(
     return [paragraphs[index] for index in sorted(chosen)]
 
 
-async def search_judgments(query: str, limit: int = 5) -> list[Judgment]:
+async def search_judgments(
+    query: str, limit: int = 5, *, newest_first: bool = False, year: int | None = None,
+) -> list[Judgment]:
     params = {
         "Filter": "SUPCT",
-        "YearOfDecision": "All",
-        "SortBy": "Score",
+        "YearOfDecision": str(year) if year is not None else "All",
+        "SortBy": "DateOfDecision" if newest_first else "Score",
         "SearchPhrase": query,
         "CurrentPage": "1",
         "SortAscending": "False",

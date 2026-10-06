@@ -69,13 +69,14 @@ type BackendMessage = {
 
 type BackendMessageSource = {
   n: number
-  kind: 'document' | 'kb_entry'
+  kind: 'document' | 'kb_entry' | 'elitigation'
   id: string
   title: string
   locator: string | null
   matter_id: string | null
   scope?: string | null
   excerpt?: string | null
+  url?: string | null
 }
 
 function mapMessageSources(sources: BackendMessageSource[] | null | undefined): MessageSource[] | undefined {
@@ -89,6 +90,7 @@ function mapMessageSources(sources: BackendMessageSource[] | null | undefined): 
     matterId: source.matter_id,
     scope: source.scope ?? null,
     excerpt: source.excerpt ?? null,
+    url: source.url ?? null,
   }))
 }
 

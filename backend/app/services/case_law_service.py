@@ -87,12 +87,20 @@ async def find_case_sources(
     if not phrase:
         return []
     try:
-        judgments = await search_judgments(phrase, limit=5)
+        return await search_case_sources(db, user=user, query=phrase)
     except ElitigationError as exc:
         print(f"eLitigation search failed: {exc}")
         return []
+
+
+async def search_case_sources(
+    db: Session, *, user: User, query: str, newest_first: bool = False,
+    year: int | None = None,
+) -> list[CaseSource]:
+    """Shared lookup for Birdie and LexChat; search failures remain explicit to callers."""
+    judgments = await search_judgments(query, limit=5, newest_first=newest_first, year=year)
     excerpts = await asyncio.gather(
-        *(fetch_judgment_excerpt(j, phrase) for j in judgments[:EXCERPT_JUDGMENTS]),
+        *(fetch_judgment_excerpt(j, query) for j in judgments[:EXCERPT_JUDGMENTS]),
         return_exceptions=True,
     )
     paragraphs_by_url = {
@@ -103,7 +111,7 @@ async def find_case_sources(
         for j in judgments
     ]
     record_retrieval(
-        db, user_id=user.id, kind="case_search", query=phrase, returned_ids=[s.citation for s in sources]
+        db, user_id=user.id, kind="case_search", query=query, returned_ids=[s.citation for s in sources]
     )
     return sources
 

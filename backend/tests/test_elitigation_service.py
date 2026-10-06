@@ -31,6 +31,12 @@ class ParseSearchResultsTests(unittest.TestCase):
 
 
 class JudgmentParagraphTests(unittest.TestCase):
+    def test_extracts_modern_div_paragraphs(self) -> None:
+        self.assertEqual(
+            el.parse_judgment_paragraphs('<div class="Judg-1 mb-3">12\u2003The property was held on trust.</div>'),
+            [("12", "The property was held on trust.")],
+        )
+
     def test_extracts_numbered_paragraphs(self) -> None:
         paragraphs = el.parse_judgment_paragraphs(JUDGMENT_HTML)
         self.assertEqual([number for number, _ in paragraphs], ["1", "2", "3"])

@@ -1,5 +1,6 @@
 import json
 from collections.abc import AsyncGenerator
+from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,8 @@ from app.services.knowledge_bank_service import (
 )
 from app.services.memory_service import list_memories
 from app.services.rag_service import search_documents
+from app.services.case_law_service import search_case_sources
+from app.services.elitigation_service import ElitigationError
 
 class SourceRegistry:
     """Numbers the sources a turn consults so the answer can cite them as [n] footnotes."""
@@ -31,6 +34,7 @@ class SourceRegistry:
         matter_id: str | None = None,
         scope: str | None = None,
         excerpt: str | None = None,
+        url: str | None = None,
     ) -> int:
         key = (kind, id, locator)
         if key in self._index:
@@ -49,6 +53,8 @@ class SourceRegistry:
                 "excerpt": excerpt[:MAX_EXCERPT_CHARS] if excerpt else None,
             }
         )
+        if url is not None:
+            self.sources[-1]["url"] = url
         self._index[key] = number
         return number
 
@@ -59,6 +65,28 @@ MAX_KB_BODY_PREVIEW = 2000
 MAX_EXCERPT_CHARS = 1500
 
 TOOLS: list[dict] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_elitigation",
+            "description": (
+                "Search public Singapore court judgments on eLitigation. Use for case-law "
+                "research and whenever the user asks for eLitigation cases. For recent/latest "
+                "cases set newest_first=true; use year only for a specific requested year. "
+                "Send a short legal-topic search phrase, never client names, confidential "
+                "facts or document excerpts. Returns verified citations, dates, URLs and excerpts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Short public legal-topic keywords or boolean phrase (max 200 characters)"},
+                    "newest_first": {"type": "boolean", "description": "True for recent/latest judgments; defaults to false (relevance)."},
+                    "year": {"type": "integer", "description": "Optional decision year; omit to search all years."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -161,6 +189,42 @@ async def _execute_tool(
     registry: SourceRegistry,
 ) -> tuple[str, str]:
     """Return (result_text_for_llm, short_summary_for_ui). Sources are numbered via `registry`."""
+    if name == "search_elitigation":
+        query = str(args.get("query", "")).strip()
+        if not query or len(query) > 200:
+            return "Provide a short legal-topic query of 1–200 characters.", "invalid arguments"
+        year = args.get("year")
+        if year is not None and (type(year) is not int or not 1965 <= year <= date.today().year):
+            return f"Provide a decision year between 1965 and {date.today().year}.", "invalid arguments"
+        newest_first = args.get("newest_first", False)
+        if type(newest_first) is not bool:
+            return "newest_first must be a boolean.", "invalid arguments"
+        try:
+            cases = await search_case_sources(
+                db, user=user, query=query, newest_first=newest_first, year=year,
+            )
+        except ElitigationError:
+            return (
+                "eLitigation search unavailable. Tell the user the lookup failed; "
+                "do not claim that no matching judgments exist.", "search unavailable",
+            )
+        if not cases:
+            return "No eLitigation judgments matched this search. Try different legal-topic keywords.", "no results"
+        blocks = []
+        for case in cases:
+            excerpt = "\n".join(f"[para {n}] {text}" for n, text in case.paragraphs)
+            number = registry.add(
+                kind="elitigation", id=case.url, title=f"{case.title} {case.citation}",
+                locator=f"Decided {case.decision_date}" if case.decision_date else "Decision date unavailable",
+                scope="public", excerpt=excerpt or None, url=case.url,
+            )
+            blocks.append(
+                f"[{number}] {case.citation} — {case.title}\n"
+                f"Decision date: {case.decision_date or 'unavailable'}\nURL: {case.url}\n"
+                f"{excerpt or 'Judgment excerpt unavailable; do not infer holdings from the title.'}"
+            )
+        return "\n\n---\n\n".join(blocks), f"{len(cases)} judgment{'s' if len(cases) != 1 else ''}"
+
     if name == "search_documents":
         query = str(args.get("query", "")).strip()
         if not query:

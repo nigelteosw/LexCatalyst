@@ -134,6 +134,8 @@ Routers are thin — one file per domain under `app/routers/`. Business logic li
 ```txt
 app/services/
   agent_service.py        # Tool dispatch inside streamed chat (search, KB, memory)
+  elitigation_service.py  # Public Singapore judgments search, decision-year filter and date sorting
+  case_law_service.py     # Shared audited judgment/excerpt lookup for LexChat and Birdie
   action_service.py       # Action board items
   birdie_service.py       # Birdie AI mentor
   birdie_review_service.py # Draft review: anchored replace/insert/comment suggestions (extension)
@@ -288,6 +290,8 @@ If a new backend route is added, document the route and expected authentication 
 If the LLM or embedding provider changes, update both `README.md` and this file.
 
 All AI features run through OpenRouter on the user's own key. Prompts (including document excerpts) leave for OpenRouter and the chosen model provider; keep that disclosure in the UI and README.
+
+LexChat's streamed tool loop includes `search_elitigation` for public Singapore judgments (short legal-topic query only; no client facts or document excerpts sent to eLitigation). Recent-case requests use newest-first decision-date sorting; an optional year filters the decision year. Numbered sources include judgment links, dates and available excerpts. Search errors must remain distinct from empty results. The non-streaming `/chat` route retains internal retrieval only.
 
 The Chrome extension (`extension/`) runs its selection content script only on origins the user turns on, and sends user-shared webpage text to Birdie as `web_context` on `POST /birdie/stream` and highlighted clauses to `POST /precedent/search`; keep the side-panel disclosure in sync with the provider line above. Birdie cites case law only from eLitigation (`case_law_service.py`); only a search phrase is sent there.
 

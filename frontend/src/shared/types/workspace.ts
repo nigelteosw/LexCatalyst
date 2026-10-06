@@ -9,7 +9,7 @@ export type ToolStep = {
 /** A numbered footnote source behind a LexChat answer; the answer cites it as [n]. */
 export type MessageSource = {
   n: number
-  kind: 'document' | 'kb_entry'
+  kind: 'document' | 'kb_entry' | 'elitigation'
   id: string
   title: string
   locator: string | null
@@ -18,6 +18,8 @@ export type MessageSource = {
   scope: string | null
   /** The passage the answer relied on. */
   excerpt: string | null
+  /** Public eLitigation judgment URL, absent for internal sources. */
+  url?: string | null
 }
 
 export type Message = {

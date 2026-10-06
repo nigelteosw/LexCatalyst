@@ -373,6 +373,8 @@ Retry: clicking "Retry" on a failed KB entry resets it to `processing`; the
 embedded worker claims it from the durable Postgres queue.
 
 ### ReAct Agent Loop
+LexChat (`POST /chat/stream`, JWT required with matter-access checks) exposes `search_elitigation` alongside its internal retrieval tools. It searches public Singapore judgments with a short legal-topic phrase, supports newest-first decision-date sorting and an optional decision year, and returns numbered sources with dates, excerpts and full-judgment links. Lookups are audited as `case_search`. Failed searches are reported as unavailable, separately from empty results; missing excerpts do not support inferred holdings. Only the search phrase goes to eLitigation; prompts and retrieved judgment excerpts go to OpenRouter and the user's chosen model provider. The non-streaming `/chat` endpoint retains its internal retrieval flow.
+
 1. **Build context** — `prepare_agent_context` injects memories + thread summary into the system prompt (NOT KB/docs — those come via tools).
 2. **Stream** — `provider.stream_with_tools` yields `token` and `tool_calls` events.
 3. **Execute** — each tool returns `(result_text, summary)`. RBAC and audit logging applied at the tool layer.

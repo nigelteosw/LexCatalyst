@@ -10,7 +10,7 @@ import { citedSources, describeSource } from './sourceLabels'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
 
 const CHAT_HELP: HelpContent = {
-  intro: 'A matter-aware AI assistant that searches your documents and knowledge bank before every answer.',
+  intro: 'A matter-aware AI assistant that searches your documents, knowledge bank, and public Singapore judgments on eLitigation.',
   steps: [
     {
       emoji: '💬',
@@ -26,6 +26,11 @@ const CHAT_HELP: HelpContent = {
       emoji: '🔍',
       title: 'Automatic knowledge retrieval',
       body: 'Before each response, the AI searches your accessible Knowledge Bank entries and document chunks for relevant context — without you having to ask.',
+    },
+    {
+      emoji: '⚖️',
+      title: 'Research Singapore court judgments',
+      body: 'Ask for eLitigation cases, including recent judgments or a specific decision year. Open a numbered source to view its excerpt and full judgment. Only short legal-topic search phrases are sent to eLitigation. Prompts and retrieved excerpts go to OpenRouter and your chosen model provider.',
     },
     {
       emoji: '⚖️',
@@ -535,6 +540,7 @@ function ToolSteps({ steps }: { steps: ToolStep[] }) {
 }
 
 const TOOL_LABELS: Record<string, string> = {
+  search_elitigation: 'Searching eLitigation judgments',
   search_documents: 'Searching documents',
   search_knowledge_bank: 'Searching knowledge bank',
   search_memories: 'Searching memories',

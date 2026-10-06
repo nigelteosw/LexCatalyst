@@ -12,6 +12,9 @@ function titleCase(value: string) {
 
 /** One-line description under a source's title, e.g. "M-2026-0142 · p. 3" or "Firm-wide · Playbook". */
 export function describeSource(source: MessageSource, matters: Matter[]): string {
+  if (source.kind === 'elitigation') {
+    return ['eLitigation', source.locator].filter(Boolean).join(' · ')
+  }
   const matter = source.matterId ? matters.find((m) => m.id === source.matterId) : undefined
   const origin = matter
     ? matter.caseNumber
