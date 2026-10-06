@@ -20,6 +20,10 @@ def _fake_upload(monkeypatch):
         return document
     monkeypatch.setattr(property_workboard_demo_service.document_service, 'create_pending_document', create_pending_document)
 
+    async def seed_style_guide(db, *, presenter):  # KB entries need embeddings; not under test here
+        return False
+    monkeypatch.setattr(property_workboard_demo_service, '_seed_style_guide', seed_style_guide)
+
 
 def test_property_demo_is_additive_repeatable_and_grants_matter_access(monkeypatch):
     _fake_upload(monkeypatch)

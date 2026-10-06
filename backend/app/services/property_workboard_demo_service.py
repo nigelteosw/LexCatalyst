@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     ActionItem,
+    KnowledgeBankEntry,
     ChatMessage,
     ChatThread,
     Document,
@@ -24,7 +25,8 @@ from app.models import (
     TeamMember,
     User,
 )
-from app.services import document_service
+from app.schemas import KnowledgeBankEntryCreate
+from app.services import document_service, knowledge_bank_service
 from app.services.demo_pdfs import DemoPdf
 from app.services.resource_metadata_service import (
     sync_action_metadata,
@@ -86,6 +88,28 @@ CHATS = [
 
 # --- Bishan end-to-end case: Jane's OTP review note, reviewed by Sarah ------------------------
 OTP_TICKET = "Review option to purchase for Bishan condominium"
+STYLE_GUIDE_TITLE = "Firm style guide: Singapore conveyancing correspondence"
+STYLE_GUIDE_BODY = """## Dates and deadlines
+
+- State every deadline as a date and time: "by 4pm on 20 October 2026", never "within 14 days".
+- Write dates as 20 October 2026. Use the 12-hour clock without full stops: 4pm, 10.30am.
+
+## Obligations and undertakings
+
+- Use "shall" for obligations and "may" for rights. "Will" is for statements of fact or intention only.
+- Use the contractual standard: "deliver vacant possession", not "hand over in good condition".
+
+## Stamp duty and figures
+
+- Never state a BSD or ABSD rate or amount until the purchasers' citizenship and existing property holdings are confirmed and the current IRAS rates are checked. Say "ABSD may apply" until then.
+- Write percentages as "per cent" in letters ("20 per cent").
+
+## Letters
+
+- "Dear Sirs" closes with "Yours faithfully"; a named addressee closes with "Yours sincerely".
+- Refer to the property by its full unit number and development name.
+- Associates send nothing to clients or other solicitors before the supervising lawyer has reviewed it.
+"""
 _NOTE_INTRO = [
     ("title", "Bishan Condominium Purchase: Option to Purchase Review Note"),
     ("para", "Prepared by Jane Pereira for Sarah Chen. Synthetic demo document; all parties and the property are fictional."),
@@ -206,6 +230,27 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
     return {"review_rounds_created": 2}
 
 
+async def _seed_style_guide(db: Session, *, presenter: User) -> bool:
+    """Firm-wide conveyancing style guide that Birdie's draft review cites. Created once."""
+    if db.scalar(select(KnowledgeBankEntry.id).where(KnowledgeBankEntry.title == STYLE_GUIDE_TITLE)):
+        return False
+    try:
+        await knowledge_bank_service.create_kb_entry(
+            db,
+            user=presenter,
+            schema=KnowledgeBankEntryCreate(
+                scope="firm_wide", entry_type="style_guide", title=STYLE_GUIDE_TITLE,
+                body_markdown=STYLE_GUIDE_BODY,
+                tags=["style", "conveyancing", "Singapore property", DEMO_TAG],
+            ),
+        )
+        return True
+    except Exception as exc:  # embedding / provider failures should not abort the seed
+        db.rollback()
+        _log.warning("Property style guide failed: %s", exc)
+        return False
+
+
 async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
     users = {u.google_id.split(":", 1)[1].split("-")[0]: u for u in create_dummy_users(db)}
     participants = [presenter, *users.values()]
@@ -274,7 +319,9 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
         otp.due_date = now - timedelta(days=1)
         db.commit()
     review = await _seed_bishan_review(db, matter=matters[0], team=team, users=users)
+    style_guide = await _seed_style_guide(db, presenter=presenter)
     return {
+        "style_guide_created": style_guide,
         "tickets_created": len(created),
         "matters": len(matters),
         "chats_created": chats_created,
