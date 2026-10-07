@@ -4,6 +4,7 @@ Task descriptions are fictional workflow prompts, not legal advice. No LLM calls
 data are involved. The Bishan review note PDFs go through the normal upload pipeline (R2 + worker
 + OpenAI embeddings), so a synthetic document is uploaded and embedded.
 """
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -31,6 +32,7 @@ from app.services.demo_pdfs import DemoPdf
 from app.services.resource_metadata_service import (
     sync_action_metadata,
     sync_handoff_metadata,
+    sync_document_metadata,
     sync_metadata_safe,
 )
 from app.services.user_service import create_dummy_users
@@ -177,21 +179,55 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
     jane, sarah = users["jane"], users["sarah"]
     ticket = db.scalar(select(ActionItem).where(ActionItem.matter_id == matter.id, ActionItem.title == OTP_TICKET))
     filenames = ("Bishan OTP review note v1.pdf", "Bishan OTP review note v2.pdf")
-    if ticket is None or db.scalar(
-        select(Document.id).where(Document.matter_id == matter.id, Document.filename.in_(filenames))
-    ):
+    if ticket is None:
         return {"review_rounds_created": 0}
 
     v1_pdf, v2_pdf = DemoPdf(NOTE_V1_BLOCKS), DemoPdf(NOTE_V2_BLOCKS)
     docs = []
     for filename, pdf in zip(filenames, (v1_pdf, v2_pdf)):
-        document = await document_service.create_pending_document(
-            db, user_id=jane.id, filename=filename, content_type="application/pdf",
-            file_bytes=pdf.bytes, matter_id=matter.id, team_id=team.id,
-        )
+        document = db.scalar(select(Document).where(
+            Document.matter_id == matter.id, Document.filename == filename,
+            Document.user_id == jane.id,
+        ))
+        if document is None:
+            document = await document_service.create_pending_document(
+                db, user_id=jane.id, filename=filename, content_type="application/pdf",
+                file_bytes=pdf.bytes, matter_id=matter.id, team_id=team.id,
+            )
+        elif document.status == "failed" or (document.status == "uploaded" and not document.storage_key):
+            try:
+                if not document.storage_key:
+                    document.storage_key = await asyncio.to_thread(
+                        document_service.upload_document_file,
+                        file_bytes=pdf.bytes, user_id=jane.id, document_id=document.id,
+                        filename=filename, content_type="application/pdf",
+                    )
+                document.status = "processing"
+                document.error_message = None
+                document.processing_attempts = 0
+                document.processing_started_at = None
+                document.updated_at = datetime.now(UTC)
+                db.commit()
+                sync_metadata_safe(db, sync_document_metadata, document)
+            except (document_service.StorageError, ValueError) as exc:
+                db.rollback()
+                document.status = "failed"
+                document.error_message = str(exc)[:document_service.MAX_ERROR_LENGTH]
+                db.commit()
+                sync_metadata_safe(db, sync_document_metadata, document)
         if document.status == "failed":
             _log.warning("Property demo document %s failed: %s", filename, document.error_message)
         docs.append(document)
+
+    document_summary = {
+        "documents_failed": sum(d.status == "failed" for d in docs),
+        "documents_processing": sum(d.status in ("uploaded", "processing") for d in docs),
+    }
+    existing_rounds = list(db.scalars(select(ReviewHandoff).where(
+        ReviewHandoff.action_id == ticket.id, ReviewHandoff.document_id.in_([d.id for d in docs]),
+    )))
+    if existing_rounds:
+        return {"review_rounds_created": 0, **document_summary}
 
     now = datetime.now(UTC)
     round1 = ReviewHandoff(
@@ -227,7 +263,7 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
     sync_metadata_safe(db, sync_action_metadata, ticket)
     for handoff in (round1, round2):
         sync_metadata_safe(db, sync_handoff_metadata, handoff)
-    return {"review_rounds_created": 2}
+    return {"review_rounds_created": 2, **document_summary}
 
 
 async def _seed_style_guide(db: Session, *, presenter: User) -> bool:

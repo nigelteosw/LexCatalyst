@@ -11,7 +11,7 @@ export function isPlaceholder(anchor: string): boolean {
 
 // Offsets index into source_text and never overlap; defensively skip any that do or fall outside it.
 export function buildSegments(sourceText: string, suggestions: Suggestion[]): Segment[] {
-  const ordered = [...suggestions].sort((a, b) => a.anchorStart - b.anchorStart)
+  const ordered = suggestions.filter((s) => s.status !== 'rejected').sort((a, b) => a.anchorStart - b.anchorStart)
   const segments: Segment[] = []
   let cursor = 0
   for (const suggestion of ordered) {

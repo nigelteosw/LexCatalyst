@@ -277,3 +277,17 @@ test('list sorting works through desktop headers and mobile controls', async ({ 
   await page.getByRole('button', { name: 'Sort descending', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Sort ascending', exact: true })).toBeVisible()
 })
+
+
+test('associate can open the matter from a Workboard ticket', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await workspace(page)
+  await page.route('**/me', route => route.fulfill({ json: { ...user, firm_role: 'associate', is_admin: false } }))
+  await page.route('**/actions', route => route.fulfill({ json: [{ ...action, matter_id: 'm1', assignee_id: 'u1' }] }))
+  await page.goto('/actions/a1')
+  const link = page.getByRole('link', { name: matter.title, exact: true })
+  await expect(link).toBeVisible()
+  await link.click()
+  await expect(page).toHaveURL(/\/matters\/m1$/)
+  await expect(page.getByRole('heading', { name: matter.title })).toBeVisible()
+})

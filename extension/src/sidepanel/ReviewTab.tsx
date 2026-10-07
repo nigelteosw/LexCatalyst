@@ -395,8 +395,7 @@ export function ReviewTab({ browser, model, needsKey, onError }: Props) {
       {review?.status === 'ready' && counts && (
         <>
           <p className="text-xs text-stone-600">
-            {counts.drafted} drafted, {counts.fixed} fixes, {counts.decision} questions. Nothing changes until you
-            accept it.
+            {counts.drafted} drafted, {counts.fixed} fixes, {counts.decision} questions. Accept changes the draft below. Copy accepted text and paste it into your document; Birdie does not edit Google Docs.
           </p>
           <DraftView review={review} activeId={activeId} onSelect={setActiveId} />
           {GROUPS.map(({ group, title }) => {

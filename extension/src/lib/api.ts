@@ -1,4 +1,4 @@
-import { clearToken, getGoogleIdToken, getToken, setToken } from './auth'
+import { clearToken, getDemoPresenterToken, getGoogleIdToken, getToken, setDemoPresenterToken, setToken } from './auth'
 import { API_URL } from './config'
 import { splitSseBuffer } from './sse'
 import type { WebContext } from './webContext'
@@ -32,8 +32,8 @@ async function checkAuth(response: Response): Promise<void> {
   }
 }
 
-async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers: await authHeaders() })
+async function apiJson<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, { ...init, headers: token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : await authHeaders() })
   await checkAuth(response)
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
@@ -51,20 +51,24 @@ export async function signIn(): Promise<ExtensionUser> {
   })
   const payload = await response.json().catch(() => null)
   if (!response.ok) throw new Error(typeof payload?.detail === 'string' ? payload.detail : 'Sign-in failed')
+  await clearToken()
   await setToken(payload.access_token as string)
   return toUser(payload.user as ApiUser)
 }
 
 // Demo mode only (admin): the backend returns 404 otherwise, and the picker stays hidden.
 export async function listDemoUsers(): Promise<ExtensionUser[]> {
-  return (await apiJson<ApiUser[]>('/demo/users')).map(toUser)
+  return (await apiJson<ApiUser[]>('/demo/users', {}, (await getDemoPresenterToken()) ?? undefined)).map(toUser)
 }
 
 export async function switchDemoUser(userId: string): Promise<ExtensionUser> {
+  const presenterToken = (await getDemoPresenterToken()) ?? (await getToken())
+  if (!presenterToken) throw new UnauthorizedError('Not signed in')
   const payload = await apiJson<{ access_token: string; user: ApiUser }>('/demo/switch', {
     method: 'POST',
     body: JSON.stringify({ user_id: userId }),
-  })
+  }, presenterToken)
+  await setDemoPresenterToken(presenterToken)
   await setToken(payload.access_token)
   return toUser(payload.user)
 }

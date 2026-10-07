@@ -1,6 +1,16 @@
 import { GOOGLE_CLIENT_ID } from './config'
 
-const TOKEN_KEY = 'lexcatalystToken'
+export const TOKEN_KEY = 'lexcatalystToken'
+const PRESENTER_KEY = 'lexcatalystDemoPresenterToken'
+
+export async function getDemoPresenterToken(): Promise<string | null> {
+  const stored = await chrome.storage.session.get(PRESENTER_KEY)
+  return (stored[PRESENTER_KEY] as string | undefined) ?? null
+}
+
+export async function setDemoPresenterToken(token: string): Promise<void> {
+  await chrome.storage.session.set({ [PRESENTER_KEY]: token })
+}
 
 export async function getToken(): Promise<string | null> {
   const stored = await chrome.storage.local.get(TOKEN_KEY)
@@ -13,6 +23,7 @@ export async function setToken(token: string): Promise<void> {
 
 export async function clearToken(): Promise<void> {
   await chrome.storage.local.remove(TOKEN_KEY)
+  await chrome.storage.session.remove(PRESENTER_KEY)
 }
 
 // Google OAuth implicit flow. The redirect URI https://<extension-id>.chromiumapp.org/

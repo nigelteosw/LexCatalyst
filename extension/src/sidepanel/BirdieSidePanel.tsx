@@ -51,7 +51,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   const [llm, setLlm] = useState<LlmSettings | null>(null)
   const [override, setOverride] = useState<ModelChoice | null>(loadSavedChoice)
   const choice: ModelChoice = override ?? { tier: llm?.featureTiers.birdie ?? 'mid' }
-  const needsKey = llm !== null && !llm.hasKey
+  const needsKey = llm === null || !llm.hasKey
   const abortRef = useRef<AbortController | null>(null)
   const browser = useBrowserContext(tabId)
   const lastTurnsJson = useRef('[]')
@@ -63,7 +63,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   }, [])
 
   // Demo mode: load the seeded users once per real sign-in. A switched-in user is usually not an
-  // admin, so the list is kept rather than refetched; sign out to return to your own account.
+  // admin; switching uses the presenter session retained separately from the acting user's token.
   const signedInId = auth.status === 'signedIn' ? auth.user.id : null
   useEffect(() => {
     if (!signedInId || demoUsers.length > 0) return
@@ -89,8 +89,14 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   }, [])
 
   useEffect(() => {
-    if (auth.status === 'signedIn') fetchLlmSettings().then(setLlm).catch(handleError)
-  }, [auth.status, handleError])
+    setLlm(null)
+    if (!signedInId) return
+    let cancelled = false
+    fetchLlmSettings()
+      .then((settings) => { if (!cancelled) setLlm(settings) })
+      .catch((err) => { if (!cancelled) handleError(err) })
+    return () => { cancelled = true }
+  }, [signedInId, handleError])
 
   useEffect(() => {
     if (!turnsLoaded) return
@@ -151,8 +157,11 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   async function handleSwitchUser(userId: string) {
     try {
       const user = await switchDemoUser(userId)
-      await clearTurns()
-      setTurns([])
+      newChat()
+      setLlm(null)
+      setOverride(null)
+      saveChoice(null)
+      setBusy(false)
       setAuth({ status: 'signedIn', user })
     } catch (err) {
       handleError(err)
@@ -269,6 +278,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
           <span className="flex items-center gap-2 text-xs text-[#76766f]">
             {demoUsers.length > 0 && auth.status === 'signedIn' && (
               <select
+                disabled={busy}
                 aria-label="View as demo user"
                 className="max-w-28 rounded border border-black/10 bg-white px-1 py-0.5 text-xs"
                 value={demoUsers.some((u) => u.id === auth.user.id) ? auth.user.id : ''}
@@ -310,7 +320,7 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
       )}
 
       {view === 'review' && (
-        <ReviewTab browser={browser} model={choice} needsKey={needsKey} onError={handleError} />
+        <ReviewTab key={signedInId} browser={browser} model={choice} needsKey={needsKey} onError={handleError} />
       )}
 
       {view === 'chat' && (

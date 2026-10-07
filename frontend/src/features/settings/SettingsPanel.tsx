@@ -117,9 +117,12 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
     mutationFn: seedPropertyWorkboard,
     onSuccess: (summary) => {
       queryClient.invalidateQueries()
-      setMessage(summary.ticketsCreated > 0 || summary.chatsCreated > 0
+      const documentStatus = summary.documentsFailed > 0
+        ? ` ${summary.documentsFailed} document(s) failed — check R2/OpenAI configuration, then reload the property demo to retry.`
+        : summary.documentsProcessing > 0 ? ` ${summary.documentsProcessing} document(s) processing — wait until they are ready.` : ''
+      setMessage((summary.ticketsCreated > 0 || summary.chatsCreated > 0
         ? `Property Workboard demo loaded: ${summary.ticketsCreated} synthetic tasks and ${summary.chatsCreated} sample chats across ${summary.matters} Singapore property matters.`
-        : 'Property Workboard demo is already loaded. Existing tasks were kept.')
+        : 'Property Workboard demo is already loaded. Existing tasks were kept.') + documentStatus)
     },
     onError: (error) => setMessage(getErrorMessage(error)),
   })

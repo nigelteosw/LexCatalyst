@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ArrowLeft, Check, Pencil, Tag, Trash2, X } from 'lucide-react'
 import type {
   ActionItem,
@@ -289,7 +290,8 @@ export function ActionDetailDialog({
         <div>
           <div className="text-meta font-semibold uppercase tracking-[0.08em] text-[#76766f]">Matter</div>
           {manager ? (
-            <select
+            <div>
+              <select
               className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs"
               value={item.matterId ?? ''}
               onChange={(e) => onUpdate({ matterId: e.target.value || null })}
@@ -301,13 +303,15 @@ export function ActionDetailDialog({
                   {m.caseNumber} · {m.title}
                 </option>
               ))}
-            </select>
-          ) : (
-            <div className="mt-1 text-[#0f0f0f]">
-              {item.matterId
-                ? matters.find((m) => m.id === item.matterId)?.title ?? '—'
-                : '—'}
+              </select>
+              <Link className="mt-1 block text-xs text-accent underline underline-offset-2" to={`/matters/${item.matterId ?? 'general'}`}>Open matter</Link>
             </div>
+          ) : (
+            <Link className="mt-1 block text-accent underline underline-offset-2" to={`/matters/${item.matterId ?? 'general'}`}>
+              {item.matterId
+                ? matters.find((m) => m.id === item.matterId)?.title ?? 'Open matter'
+                : 'General'}
+            </Link>
           )}
         </div>
         {item.dueDate && (

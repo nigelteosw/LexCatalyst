@@ -2354,11 +2354,11 @@ export async function seedDemoData(): Promise<DemoSeedSummary> {
   return request<DemoSeedSummary>('/demo/seed', { method: 'POST', headers: presenterAuthHeader() })
 }
 
-export async function seedPropertyWorkboard(): Promise<{ ticketsCreated: number; matters: number; chatsCreated: number }> {
-  const result = await request<{ tickets_created: number; matters: number; chats_created: number }>('/demo/workboard/property', {
+export async function seedPropertyWorkboard(): Promise<{ ticketsCreated: number; matters: number; chatsCreated: number; documentsFailed: number; documentsProcessing: number }> {
+  const result = await request<{ tickets_created: number; matters: number; chats_created: number; documents_failed?: number; documents_processing?: number }>('/demo/workboard/property', {
     method: 'POST', headers: presenterAuthHeader(),
   })
-  return { ticketsCreated: result.tickets_created, matters: result.matters, chatsCreated: result.chats_created }
+  return { ticketsCreated: result.tickets_created, matters: result.matters, chatsCreated: result.chats_created, documentsFailed: result.documents_failed ?? 0, documentsProcessing: result.documents_processing ?? 0 }
 }
 
 // DEMO_MODE only: mimic a role (including 'admin') on the signed-in account.

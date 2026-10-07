@@ -92,3 +92,60 @@ def test_property_demo_route_is_hidden_without_demo_admin(monkeypatch):
     monkeypatch.setattr(demo, 'get_settings', lambda: SimpleNamespace(demo_mode=True))
     admin = SimpleNamespace(is_admin=True)
     assert demo.require_demo_admin(admin) is admin
+
+
+def test_property_demo_retries_failed_pdfs_without_duplicate_rounds(monkeypatch):
+    _fake_upload(monkeypatch)
+    engine = create_engine('sqlite://')
+    for model in (Team, User, TeamMember, Matter, MatterMember, Document, ActionItem, ResourceMetadata,
+                  ChatThread, ChatMessage, ReviewHandoff, ReviewAnnotation, ReviewLesson):
+        model.__table__.create(engine)
+    with Session(engine) as db:
+        presenter = User(email='retry@example.test', google_id='retry', is_admin=True, firm_role='partner')
+        db.add(presenter)
+        db.commit()
+        asyncio.run(seed_property_workboard(db, presenter=presenter))
+        documents = list(db.scalars(select(Document)))
+        for document in documents:
+            document.status = 'failed'
+            document.error_message = 'R2 unavailable'
+        documents[1].storage_key = 'already-uploaded'
+        db.commit()
+        monkeypatch.setattr(property_workboard_demo_service.document_service, 'upload_document_file',
+                            lambda **kwargs: 'demo/' + kwargs['document_id'])
+        result = asyncio.run(seed_property_workboard(db, presenter=presenter))
+        assert [d.status for d in documents] == ['processing', 'processing']
+        assert all(d.storage_key and d.error_message is None for d in documents)
+        assert documents[1].storage_key == 'already-uploaded'
+        assert result['documents_processing'] == 2
+        assert result['documents_failed'] == 0
+        assert len(list(db.scalars(select(ReviewHandoff)))) == 2
+
+
+def test_property_demo_completes_a_partial_document_seed(monkeypatch):
+    _fake_upload(monkeypatch)
+    engine = create_engine('sqlite://')
+    for model in (Team, User, TeamMember, Matter, MatterMember, Document, ActionItem, ResourceMetadata,
+                  ChatThread, ChatMessage, ReviewHandoff, ReviewAnnotation, ReviewLesson):
+        model.__table__.create(engine)
+    original = property_workboard_demo_service.document_service.create_pending_document
+    calls = 0
+    async def interrupted(db, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError('seed interrupted')
+        return await original(db, **kwargs)
+    monkeypatch.setattr(property_workboard_demo_service.document_service, 'create_pending_document', interrupted)
+    with Session(engine) as db:
+        presenter = User(email='partial@example.test', google_id='partial', is_admin=True, firm_role='partner')
+        db.add(presenter)
+        db.commit()
+        import pytest
+        with pytest.raises(RuntimeError, match='seed interrupted'):
+            asyncio.run(seed_property_workboard(db, presenter=presenter))
+        monkeypatch.setattr(property_workboard_demo_service.document_service, 'create_pending_document', original)
+        result = asyncio.run(seed_property_workboard(db, presenter=presenter))
+        assert result['review_rounds_created'] == 2
+        assert len(list(db.scalars(select(Document)))) == 2
+        assert len(list(db.scalars(select(ReviewLesson)))) == 4

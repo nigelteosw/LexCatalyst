@@ -43,6 +43,12 @@ describe('buildSegments', () => {
     expect(out.filter((x) => x.kind === 'mark').length).toBe(1)
   })
 
+  it('leaves rejected replacements and insertions as unchanged source text', () => {
+    const rejected = s({ anchorStart: 2, anchorEnd: 6, status: 'rejected' })
+    expect(buildSegments(text, [rejected])).toEqual([{ kind: 'text', text }])
+    expect(buildSegments(text, [{ ...rejected, type: 'insert' }])).toEqual([{ kind: 'text', text }])
+  })
+
   it('returns the whole text when there are no suggestions', () => {
     expect(buildSegments(text, [])).toEqual([{ kind: 'text', text }])
   })

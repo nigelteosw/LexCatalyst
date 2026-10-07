@@ -25,9 +25,10 @@ export function loadSavedChoice(): ModelChoice | null {
   return null
 }
 
-export function saveChoice(choice: ModelChoice): void {
+export function saveChoice(choice: ModelChoice | null): void {
   try {
-    localStorage.setItem(STORAGE_KEY, choice.tier ?? `model:${choice.model}`)
+    if (choice) localStorage.setItem(STORAGE_KEY, choice.tier ?? `model:${choice.model}`)
+    else localStorage.removeItem(STORAGE_KEY)
   } catch {
     // storage unavailable
   }

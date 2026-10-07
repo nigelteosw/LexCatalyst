@@ -54,7 +54,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - **Sortable list:** Task, Status, Assignee, and Due headers toggle ascending/descending order. Mobile uses a Sort by selector and direction button. Status follows workflow order; unassigned and undated tickets remain last for their respective sorts. Sorting applies to the currently loaded, filtered tickets.
 - Admin demo tools can idempotently add Sarah Chen (senior associate) and Jane Pereira (associate) to the firm roster.
 
-Settings → Development & Testing → **Load property Workboard demo** adds 12 synthetic Singapore property-law tasks across four demo matters and all five stages, plus four private sample chats each for the presenter, Sarah, Jane and Marcus (16 chats in total). Chats contain pre-written fictional exchanges, stay linked to their matter and respect existing per-user chat ownership. Available to admins with `DEMO_MODE=true`; `POST /demo/workboard/property` requires an authenticated demo admin and returns 404 otherwise. Repeated loads preserve existing tasks and add no duplicates. The seed uses no external providers and contains fictional workflow prompts, not legal advice.
+Settings → Development & Testing → **Load property Workboard demo** adds 12 synthetic Singapore property-law tasks across four demo matters and all five stages, plus four private sample chats each for the presenter, Sarah, Jane and Marcus (16 chats in total). Chats contain pre-written fictional exchanges, stay linked to their matter and respect existing per-user chat ownership. Available to admins with `DEMO_MODE=true`; `POST /demo/workboard/property` requires an authenticated demo admin and returns 404 otherwise. Repeated loads preserve existing tasks and add no duplicates. The seed also adds Jane’s two Bishan OTP review PDFs, Sarah’s four comments and lessons, and a firm conveyancing style guide. PDF upload and processing require R2 and OpenAI embeddings; the style guide also requires embeddings. All content is fictional. Reloading retries failed PDFs and completes interrupted uploads without duplicating review rounds. Settings reports failed or processing PDFs; wait for them to be ready before presenting.
 
 ### Documents — In-App Review
 - Open a document from its matter or a citation to review it at `/knowledge/documents/:id`. PDFs render inline; DOCX files provide an authenticated download.
@@ -555,3 +555,5 @@ Authenticated Workboard and review-handoff routes:
 
 ## License
 Proprietary — Internal hackathon project.
+
+The extension retains the demo presenter session separately while viewing seeded users, so **View as** can switch repeatedly without giving those users admin rights. Sign out clears both sessions. Accepting draft-review suggestions changes Birdie’s copy only: use **Copy accepted text**, then paste into Google Docs.
