@@ -175,6 +175,13 @@ class PageContext(BaseModel):
     wiki_page_title: str | None = None
     kb_entry_title: str | None = None
     action_title: str | None = None
+    # IDs of the open resource. The backend resolves them with access checks; client-sent titles
+    # above are never trusted over what the database says.
+    thread_id: str | None = Field(default=None, max_length=36)
+    document_id: str | None = Field(default=None, max_length=36)
+    wiki_page_id: str | None = Field(default=None, max_length=36)
+    kb_entry_id: str | None = Field(default=None, max_length=36)
+    action_id: str | None = Field(default=None, max_length=36)
 
 
 class WebContext(BaseModel):

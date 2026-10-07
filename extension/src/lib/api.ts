@@ -6,7 +6,27 @@ import type { WebContext } from './webContext'
 export type ExtensionUser = { id: string; email: string; fullName: string | null }
 export type CaseLink = { citation: string; title: string; decisionDate: string | null; url: string }
 export type SearchStep = { id: string; query: string; status: 'running' | 'done' | 'failed'; summary?: string }
-export type BirdieTurn = { role: 'user' | 'assistant'; content: string; cases?: CaseLink[]; searches?: SearchStep[] }
+export type QuotedPassage = { title: string; text: string }
+// `quoted` is the highlighted passage a user turn was about; it goes back to the model with later turns.
+export type BirdieTurn = {
+  role: 'user' | 'assistant'
+  content: string
+  cases?: CaseLink[]
+  searches?: SearchStep[]
+  quoted?: QuotedPassage
+}
+export type BirdieMatter = { id: string | null; title: string | null }
+
+const QUOTED_HISTORY_CHARS = 2000
+
+export function historyForRequest(turns: BirdieTurn[]): { role: 'user' | 'assistant'; content: string }[] {
+  return turns.slice(-40).map(({ role, content, quoted }) => ({
+    role,
+    content: quoted
+      ? `[Passage the user had highlighted on "${quoted.title}":\n${quoted.text.slice(0, QUOTED_HISTORY_CHARS)}]\n\n${content}`
+      : content,
+  }))
+}
 
 export type LlmTier = 'high' | 'mid'
 export type ModelChoice = { tier: LlmTier; model?: undefined } | { model: string; tier?: undefined }
@@ -82,7 +102,11 @@ export async function streamBirdie(opts: {
   message: string
   history: BirdieTurn[]
   webContext: WebContext | null
+  matterId?: string | null
+  // false once the user has cleared the matter: do not guess one again from the words.
+  inferMatter?: boolean
   signal?: AbortSignal
+  onMatter?: (matter: BirdieMatter) => void
   onSources?: (cases: CaseLink[]) => void
   onSearchStep?: (step: SearchStep) => void
   onWorkboardChange?: () => void
@@ -93,11 +117,19 @@ export async function streamBirdie(opts: {
     title: opts.webContext.title,
     text: opts.webContext.text,
     source: opts.webContext.source,
+    truncated: opts.webContext.truncated,
   }
   const response = await fetch(`${API_URL}/birdie/stream`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ message: opts.message, history: opts.history.slice(-40).map(({ role, content }) => ({ role, content })), web_context: webContext, ...opts.model }),
+    body: JSON.stringify({
+      message: opts.message,
+      history: historyForRequest(opts.history),
+      matter_id: opts.matterId ?? null,
+      infer_matter: opts.inferMatter ?? true,
+      web_context: webContext,
+      ...opts.model,
+    }),
     signal: opts.signal,
   })
   await checkAuth(response)
@@ -116,7 +148,8 @@ export async function streamBirdie(opts: {
     const { events, rest } = splitSseBuffer(buffer)
     buffer = rest
     for (const { event, data } of events) {
-      if (event === 'sources') opts.onSources?.(toCaseLinks(data.cases))
+      if (event === 'matter') opts.onMatter?.({ id: (data.id as string | null) ?? null, title: (data.title as string | null) ?? null })
+      else if (event === 'sources') opts.onSources?.(toCaseLinks(data.cases))
       else if (event === 'tool_call' && data.tool === 'search_elitigation') {
         opts.onSearchStep?.({ id: String(data.step_id), query: String(data.query ?? ''), status: 'running' })
       } else if (event === 'tool_result' && data.tool === 'search_elitigation') {

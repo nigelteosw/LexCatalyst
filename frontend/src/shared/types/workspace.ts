@@ -445,6 +445,12 @@ export type BirdiePageContext = {
   wikiPageTitle?: string | null
   kbEntryTitle?: string | null
   actionTitle?: string | null
+  // IDs of the open resource; the backend resolves titles and text with access checks.
+  threadId?: string | null
+  documentId?: string | null
+  wikiPageId?: string | null
+  kbEntryId?: string | null
+  actionId?: string | null
 }
 
 export type LlmFeature = {

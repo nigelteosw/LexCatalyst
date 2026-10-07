@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.services.birdie_workboard_service import _require_matter
-from app.models import User
+from app.models import Matter, User
 from app.providers.openrouter import OpenRouterError, OpenRouterKeyMissing
 from app.services.error_reporting import unexpected_error_detail
 from app.schemas import FeedbackRoundResponse, LessonResponse, LlmTier, PageContext, WebContext
@@ -22,7 +22,7 @@ from app.services.case_law_service import (
     validate_case_citations,
     with_page_source,
 )
-from app.services.birdie_service import infer_matter_id, stream_birdie_response
+from app.services.birdie_service import infer_matter_id, resolve_page_context, stream_birdie_response
 
 router = APIRouter(tags=["birdie"])
 
@@ -37,6 +37,7 @@ class BirdieRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     history: list[BirdieMessage] = Field(default_factory=list, max_length=40)
     matter_id: str | None = None
+    infer_matter: bool = True  # false once the user has cleared the matter
     page_context: PageContext | None = None
     web_context: WebContext | None = None
     tier: LlmTier | None = None
@@ -55,10 +56,18 @@ async def birdie_stream(
     except (ValueError, HTTPException):
         db.rollback()
         request.matter_id = None
-    if request.matter_id is None:
-        request.matter_id = infer_matter_id(
+    if request.matter_id is None and request.infer_matter:
+        # The open resource's matter beats guessing from words, and is stable between turns.
+        page_matter = resolve_page_context(db, current_user, request.page_context).matter_id
+        try:
+            _require_matter(db, current_user, page_matter)
+        except (ValueError, HTTPException):
+            db.rollback()
+            page_matter = None
+        request.matter_id = page_matter or infer_matter_id(
             db, current_user, message=request.message, web_context=request.web_context
         )
+    matter = db.get(Matter, request.matter_id) if request.matter_id else None
 
     def event(name: str, payload: dict) -> str:
         return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
@@ -70,6 +79,9 @@ async def birdie_stream(
             case_sources = with_page_source(
                 [], page_case_source(request.web_context.url, request.web_context.title) if request.web_context else None
             )
+
+            # Tell the client which matter this turn used, so the user can see and correct it.
+            yield event("matter", {"id": matter.id, "title": matter.title} if matter else {"id": None, "title": None})
 
             chunks: list[str] = []
             async for event_name, payload in stream_birdie_response(

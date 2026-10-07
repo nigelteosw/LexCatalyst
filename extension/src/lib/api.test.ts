@@ -107,3 +107,14 @@ describe('review mapping', () => {
     expect(review.suggestions).toEqual([])
   })
 })
+
+describe('historyForRequest', () => {
+  it('keeps the highlighted passage with the turn it belonged to', async () => {
+    const { historyForRequest } = await import('./api')
+    const [turn] = historyForRequest([
+      { role: 'user', content: 'Is this usual?', quoted: { title: 'SPA', text: 'Completion in 8 weeks' } },
+    ])
+    expect(turn.content).toContain('Completion in 8 weeks')
+    expect(turn.content).toContain('Is this usual?')
+  })
+})

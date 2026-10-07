@@ -13,6 +13,8 @@ export type BrowserContext = {
   clearSelection: () => void
   clearPage: () => void
   clearAll: () => void
+  // Re-reads the page now, so a send never uses text from before the user's last edit.
+  refreshPage: () => Promise<WebContext | null>
   share: (ctx: WebContext) => void
   enableCurrentSite: () => Promise<void>
 }
@@ -25,13 +27,23 @@ export function useBrowserContext(pinnedTabId?: number): BrowserContext {
   const [page, setPage] = useState<WebContext | null>(null)
   const [error, setError] = useState<string | null>(null)
   const tabRef = useRef<ActiveTab | null>(null)
+  const siteEnabledRef = useRef(false)
+  const loadSeq = useRef(0)
 
-  const loadPage = useCallback(async (current: ActiveTab) => {
+  // Returns the page text, or null if it could not be read. Only the newest read may update state, so a
+  // slow read from before a navigation (same tab, new URL) cannot overwrite the current page.
+  const loadPage = useCallback(async (current: ActiveTab): Promise<WebContext | null> => {
+    const seq = ++loadSeq.current
+    const isCurrent = () =>
+      seq === loadSeq.current && tabRef.current?.id === current.id && tabRef.current.url === current.url
     try {
       const text = await readTabText(current)
-      if (tabRef.current?.id === current.id) setPage(buildWebContext({ ...text, source: 'page' }))
+      const next = buildWebContext({ ...text, source: 'page' })
+      if (isCurrent()) setPage(next)
+      return isCurrent() ? next : null
     } catch {
-      setPage(null)
+      if (isCurrent()) setPage(null)
+      return null
     }
   }, [])
 
@@ -43,7 +55,9 @@ export function useBrowserContext(pinnedTabId?: number): BrowserContext {
     if (!changed) return
     setSelection(null)
     setPage(null)
+    loadSeq.current++
     const enabled = current ? await isSiteEnabled(current.url) : false
+    siteEnabledRef.current = enabled
     setSiteEnabled(enabled)
     if (current && enabled) {
       // Sites enabled before the bubble existed (or tabs opened earlier) have no bubble yet; injecting is idempotent.
@@ -110,9 +124,16 @@ export function useBrowserContext(pinnedTabId?: number): BrowserContext {
       setError("Birdie can't read this page without permission")
       return
     }
+    siteEnabledRef.current = true
     setSiteEnabled(true)
     await injectSelectionScript(current.id).catch(console.error)
     await loadPage(current)
+  }, [loadPage])
+
+  const refreshPage = useCallback(async () => {
+    const current = tabRef.current
+    if (!current || !siteEnabledRef.current) return null
+    return loadPage(current)
   }, [loadPage])
 
   return {
@@ -127,6 +148,7 @@ export function useBrowserContext(pinnedTabId?: number): BrowserContext {
       setSelection(null)
       setPage(null)
     },
+    refreshPage,
     share: setSelection,
     enableCurrentSite,
   }

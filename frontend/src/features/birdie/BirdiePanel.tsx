@@ -651,8 +651,11 @@ function AskTab({
   }, [messages])
 
   useEffect(() => () => abortRef.current?.abort(), [])
+  // A conversation belongs to one matter: switching matter ends it, so facts never carry across.
   useEffect(() => {
     abortRef.current?.abort()
+    setMessages([])
+    setError(null)
   }, [matterId])
   useEffect(() => {
     const textarea = textareaRef.current

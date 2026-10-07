@@ -1614,6 +1614,17 @@ export async function listResourceMetadata(params?: {
 
 type BirdieHistoryMessage = { role: 'user' | 'assistant'; content: string }
 
+function toBackendPageContext(ctx: BirdiePageContext) {
+  return {
+    view: ctx.view,
+    thread_id: ctx.threadId,
+    document_id: ctx.documentId,
+    wiki_page_id: ctx.wikiPageId,
+    kb_entry_id: ctx.kbEntryId,
+    action_id: ctx.actionId,
+  }
+}
+
 export async function streamBirdieMessage({
   message,
   history,
@@ -1644,7 +1655,7 @@ export async function streamBirdieMessage({
   const response = await fetch(`${API_BASE_URL}/birdie/stream`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ message, history, matter_id: matterId, page_context: pageContext, ...model }),
+    body: JSON.stringify({ message, history, matter_id: matterId, page_context: pageContext && toBackendPageContext(pageContext), ...model }),
     signal,
   })
 

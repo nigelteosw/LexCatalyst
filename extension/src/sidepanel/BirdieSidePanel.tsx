@@ -3,6 +3,7 @@ import {
   fetchLlmSettings,
   type LlmSettings,
   type ModelChoice,
+  type BirdieMatter,
   type BirdieTurn,
   type CaseLink,
   type SearchStep,
@@ -47,6 +48,9 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
   const [streamingCases, setStreamingCases] = useState<CaseLink[]>([])
   const [streamingSearches, setStreamingSearches] = useState<SearchStep[]>([])
   const [busy, setBusy] = useState(false)
+  // The matter this conversation is about: inferred by the backend, shown, and correctable here.
+  const [matter, setMatter] = useState<BirdieMatter | null>(null)
+  const [inferMatter, setInferMatter] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [llm, setLlm] = useState<LlmSettings | null>(null)
   const [override, setOverride] = useState<ModelChoice | null>(loadSavedChoice)
@@ -129,6 +133,8 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
     setStreamingSearches([])
     setDraft('')
     setError(null)
+    setMatter(null)
+    setInferMatter(true)
     clearAll()
     setView('chat')
     clearTurns().catch(console.error)
@@ -183,25 +189,39 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
       return
     }
     const history = turns
-    const webContext = browser.selection ?? browser.page
+    setBusy(true)
+    // Re-read the page now: the user may have edited it since the tab loaded.
+    const selection = browser.selection
+    const webContext = selection ?? (await browser.refreshPage())
     let cases: CaseLink[] = []
     let searches: SearchStep[] = []
-    setTurns([...history, { role: 'user', content: message }])
+    setTurns([
+      ...history,
+      {
+        role: 'user',
+        content: message,
+        quoted: selection ? { title: selection.title || selection.url, text: selection.text } : undefined,
+      },
+    ])
     setDraft('')
     browser.clearSelection()
     setStreaming('')
     setStreamingCases([])
     setStreamingSearches([])
     setError(null)
-    setBusy(true)
     abortRef.current = new AbortController()
     try {
       const answer = await streamBirdie({
         message,
         history,
         webContext,
+        matterId: matter?.id ?? null,
+        inferMatter,
         model: choice,
         signal: abortRef.current.signal,
+        onMatter: (next) => {
+          if (next.id) setMatter(next)
+        },
         onSources: (found) => {
           cases = found
           setStreamingCases(found)
@@ -356,6 +376,24 @@ export function BirdieSidePanel({ tabId }: { tabId?: number } = {}) {
       )}
 
       <footer className="space-y-2 border-t border-stone-200 p-3">
+        {matter?.id && (
+          <div className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-2 py-1 text-xs">
+            <span className="line-clamp-1">
+              <strong>Matter:</strong> {matter.title}
+            </span>
+            <button
+              className="shrink-0 underline"
+              disabled={busy}
+              title="Wrong matter? Clear it and start a new conversation."
+              onClick={() => {
+                newChat()
+                setInferMatter(false)
+              }}
+            >
+              Change
+            </button>
+          </div>
+        )}
         <ContextChips context={browser} onSearchCases={() => void send(CASE_SEARCH_PROMPT)} />
         <form
           className="flex gap-2"

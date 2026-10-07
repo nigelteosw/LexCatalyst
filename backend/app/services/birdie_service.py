@@ -6,8 +6,10 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.dependencies import require_matter_member
-from app.models import ActionItem, Document, Matter, ReviewHandoff, User
+from dataclasses import dataclass
+
+from app.dependencies import check_kb_read, require_matter_member
+from app.models import ActionItem, ChatThread, Document, Matter, ReviewHandoff, User
 from app.services.llm_service import get_llm
 from app.services.birdie_workboard_service import WORKBOARD_TOOLS, execute_workboard_tool
 from app.services.agent_service import TOOLS as _AGENT_TOOLS
@@ -24,6 +26,10 @@ from app.services.lesson_service import format_feedback_context
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
 from app.services.memory_service import format_memory_context, list_memories
 from app.services.organization_service import list_matters
+from app.services.document_service import get_document_full_text
+from app.services.wiki_service import get_wiki_page
+from app.services.action_service import get_action_item
+from app.services.knowledge_bank_service import get_kb_entry
 
 BIRDIE_SYSTEM_PROMPT = """You are Birdie, a drafting assistant for lawyers at a law firm. You draft, rewrite and review contracts, memos, emails and comments. Every output must be ready to send to a supervising partner without further editing.
 
@@ -189,19 +195,50 @@ def _format_workboard_context(db: Session, user: User, matter_id: str | None = N
     return "\n\nWorkboard snapshot (your assigned tickets in the current matter; use tools for live data):\n" + json.dumps(result)
 
 
-def _format_page_context(ctx: PageContext | None) -> str:
+_PAGE_TEXT_CHARS = 12_000
+
+
+@dataclass
+class ResolvedPage:
+    prompt: str = ""
+    title: str | None = None
+    matter_id: str | None = None
+
+
+def resolve_page_context(db: Session, user: User, ctx: PageContext | None) -> ResolvedPage:
+    """Describe the resource the user has open, loaded server-side with the user's own access.
+
+    Client-sent titles are ignored: an ID the user cannot read resolves to nothing. The text of the
+    open document, wiki page, KB entry or ticket goes to the user's OpenRouter model like other context.
+    """
     if not ctx or not ctx.view:
-        return ""
+        return ResolvedPage()
     location = _VIEW_LABELS.get(ctx.view, f"the {ctx.view} page")
-    detail = (
-        (ctx.thread_title and f', in thread "{ctx.thread_title}"')
-        or (ctx.document_name and f', reading "{ctx.document_name}"')
-        or (ctx.wiki_page_title and f', reading the "{ctx.wiki_page_title}" page')
-        or (ctx.kb_entry_title and f', viewing KB entry "{ctx.kb_entry_title}"')
-        or (ctx.action_title and f', reviewing action "{ctx.action_title}"')
-        or ""
-    )
-    return f"\n\nCurrent context (what the user is working on right now):\nThe user is on {location}{detail}."
+    title = matter_id = body = kind = None
+    if ctx.document_id and (found := get_document_full_text(db, user_id=user.id, document_id=ctx.document_id, max_chars=_PAGE_TEXT_CHARS)):
+        document, body = found
+        kind, title, matter_id = "document", document.filename, document.matter_id
+    elif ctx.wiki_page_id and (page := get_wiki_page(db, user_id=user.id, page_id=ctx.wiki_page_id)):
+        kind, title, matter_id, body = "wiki page", page.title, page.matter_id, page.body_markdown
+    elif ctx.kb_entry_id and (entry := get_kb_entry(db, ctx.kb_entry_id)) and check_kb_read(db, user, entry):
+        kind, title, matter_id, body = "Knowledge Bank entry", entry.title, entry.matter_id, entry.body_markdown
+    elif ctx.action_id and (item := get_action_item(db, ctx.action_id)) and user.id in (item.assignee_id, item.assigner_id):
+        kind, title, matter_id, body = "Workboard ticket", item.title, item.matter_id, item.description or ""
+    elif ctx.thread_id and (thread := db.get(ChatThread, ctx.thread_id)) and thread.user_id == user.id:
+        kind, title, matter_id = "chat thread", thread.title, thread.matter_id
+    text = f"\n\nCurrent context (what the user is working on right now):\nThe user is on {location}"
+    if not title:
+        return ResolvedPage(prompt=text + ".")
+    text += f', viewing the {kind} "{title}".'
+    if body:
+        clipped = body[:_PAGE_TEXT_CHARS]
+        text += (
+            "\nWhen the user says \"this\" or \"the document\", they mean this resource. Its text:\n"
+            f"<<<OPEN_RESOURCE\n{clipped.replace('OPEN_RESOURCE>>>', '')}\nOPEN_RESOURCE>>>"
+        )
+        if len(body) > _PAGE_TEXT_CHARS:
+            text += "\n[Only the start of the resource is shown.]"
+    return ResolvedPage(prompt=text, title=title, matter_id=matter_id)
 
 
 _WEB_END_MARKER = "WEB_CONTENT>>>"
@@ -282,10 +319,14 @@ async def build_birdie_messages(
     web_context: WebContext | None = None,
     case_sources: list[CaseSource] | None = None,
 ) -> list[dict[str, str]]:
+    page = resolve_page_context(db, user, page_context)
+    # Search on what the user is looking at, not just the typed words: "Is this usual?" means nothing alone.
+    focus = web_context.text[:600] if web_context and web_context.source == "selection" else ""
+    query = " ".join(part for part in (user_message, focus, page.title or "") if part)[:1500]
     kb_entries = await search_kb_for_chat(
         db,
         user_id=user.id,
-        query=user_message,
+        query=query,
         matter_id=matter_id,
         limit=4,
     )
@@ -298,7 +339,7 @@ async def build_birdie_messages(
     system_content += _format_matter_context(db, user, matter_id)
     system_content += _format_workboard_context(db, user, matter_id)
     system_content += format_feedback_context(db, user=user)
-    system_content += _format_page_context(page_context)
+    system_content += page.prompt
     system_content += _format_web_context(web_context)
     system_content += format_case_sources(case_sources or [])
     system_content += ELITIGATION_GUIDANCE
