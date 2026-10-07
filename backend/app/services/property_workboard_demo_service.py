@@ -174,6 +174,45 @@ NOTE_V1_LESSONS = [
 ]
 
 
+async def _ensure_demo_document(
+    db: Session, *, owner: User, matter: Matter, team: Team, filename: str, pdf: DemoPdf
+) -> Document:
+    """Create (or recover) one synthetic demo PDF on a matter; embedding runs through the normal worker."""
+    document = db.scalar(select(Document).where(
+        Document.matter_id == matter.id, Document.filename == filename,
+        Document.user_id == owner.id,
+    ))
+    if document is None:
+        document = await document_service.create_pending_document(
+            db, user_id=owner.id, filename=filename, content_type="application/pdf",
+            file_bytes=pdf.bytes, matter_id=matter.id, team_id=team.id,
+        )
+    elif document.status == "failed" or (document.status == "uploaded" and not document.storage_key):
+        try:
+            if not document.storage_key:
+                document.storage_key = await asyncio.to_thread(
+                    document_service.upload_document_file,
+                    file_bytes=pdf.bytes, user_id=owner.id, document_id=document.id,
+                    filename=filename, content_type="application/pdf",
+                )
+            document.status = "processing"
+            document.error_message = None
+            document.processing_attempts = 0
+            document.processing_started_at = None
+            document.updated_at = datetime.now(UTC)
+            db.commit()
+            sync_metadata_safe(db, sync_document_metadata, document)
+        except (document_service.StorageError, ValueError) as exc:
+            db.rollback()
+            document.status = "failed"
+            document.error_message = str(exc)[:document_service.MAX_ERROR_LENGTH]
+            db.commit()
+            sync_metadata_safe(db, sync_document_metadata, document)
+    if document.status == "failed":
+        _log.warning("Property demo document %s failed: %s", filename, document.error_message)
+    return document
+
+
 async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users: dict[str, User]) -> dict:
     """Two review rounds on Jane's OTP note: v1 returned with Sarah's comments and lessons, v2 waiting."""
     jane, sarah = users["jane"], users["sarah"]
@@ -183,41 +222,10 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
         return {"review_rounds_created": 0}
 
     v1_pdf, v2_pdf = DemoPdf(NOTE_V1_BLOCKS), DemoPdf(NOTE_V2_BLOCKS)
-    docs = []
-    for filename, pdf in zip(filenames, (v1_pdf, v2_pdf)):
-        document = db.scalar(select(Document).where(
-            Document.matter_id == matter.id, Document.filename == filename,
-            Document.user_id == jane.id,
-        ))
-        if document is None:
-            document = await document_service.create_pending_document(
-                db, user_id=jane.id, filename=filename, content_type="application/pdf",
-                file_bytes=pdf.bytes, matter_id=matter.id, team_id=team.id,
-            )
-        elif document.status == "failed" or (document.status == "uploaded" and not document.storage_key):
-            try:
-                if not document.storage_key:
-                    document.storage_key = await asyncio.to_thread(
-                        document_service.upload_document_file,
-                        file_bytes=pdf.bytes, user_id=jane.id, document_id=document.id,
-                        filename=filename, content_type="application/pdf",
-                    )
-                document.status = "processing"
-                document.error_message = None
-                document.processing_attempts = 0
-                document.processing_started_at = None
-                document.updated_at = datetime.now(UTC)
-                db.commit()
-                sync_metadata_safe(db, sync_document_metadata, document)
-            except (document_service.StorageError, ValueError) as exc:
-                db.rollback()
-                document.status = "failed"
-                document.error_message = str(exc)[:document_service.MAX_ERROR_LENGTH]
-                db.commit()
-                sync_metadata_safe(db, sync_document_metadata, document)
-        if document.status == "failed":
-            _log.warning("Property demo document %s failed: %s", filename, document.error_message)
-        docs.append(document)
+    docs = [
+        await _ensure_demo_document(db, owner=jane, matter=matter, team=team, filename=filename, pdf=pdf)
+        for filename, pdf in zip(filenames, (v1_pdf, v2_pdf))
+    ]
 
     document_summary = {
         "documents_failed": sum(d.status == "failed" for d in docs),
@@ -264,6 +272,57 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
     for handoff in (round1, round2):
         sync_metadata_safe(db, sync_handoff_metadata, handoff)
     return {"review_rounds_created": 2, **document_summary}
+
+
+# --- Tampines HDB resale (DEMO-SG-PROP-002): synthetic documents behind the matter's tickets ---
+# No eligibility, CPF or stamp-duty conclusions: those stay open until facts and current rules are checked.
+TAMPINES_DOCUMENTS = [
+    ("Tampines HDB resale: option to purchase (extract).pdf", [
+        ("title", "Option to Purchase (Extract): HDB Resale Flat"),
+        ("para", "Between Mr and Mrs Lim (the Sellers) and Mr Goh (the Buyer). Synthetic demo document; all parties and the flat are fictional."),
+        ("heading", "1. Flat"),
+        ("para", "Block 123, Tampines Street 11, Unit #09-456 (fictional), a four-room HDB flat on a 99-year lease."),
+        ("heading", "2. Option fee and exercise"),
+        ("para", "The Buyer has paid an option fee of S$1,000. The option may be exercised by 4pm on 27 October 2026 by written notice to the Sellers' solicitors."),
+        ("heading", "3. Purchase price and financing"),
+        ("para", "The purchase price is S$560,000. The Buyer's CPF usage and any housing loan are to be confirmed in writing before the resale application is submitted."),
+        ("heading", "4. Vacant possession"),
+        ("para", "The Sellers shall deliver vacant possession on completion, with the flat free of occupants and the Sellers' belongings."),
+    ]),
+    ("Tampines resale: client information checklist.pdf", [
+        ("title", "Client Information Checklist: Tampines HDB Resale"),
+        ("para", "Prepared for the Lim family file. Synthetic demo document. Open items are listed as questions; no eligibility or stamp-duty conclusion is drawn."),
+        ("heading", "1. Parties and ownership history"),
+        ("para", "Confirm the full names, citizenship and identity documents of each Seller and the Buyer, and when the Sellers acquired the flat."),
+        ("heading", "2. Financing"),
+        ("para", "Ask whether the Buyer will use CPF savings or a housing loan, and obtain the in-principle approval if a loan is proposed."),
+        ("heading", "3. Stamp duty"),
+        ("para", "Ask whether the Buyer owns any other property. Check the current IRAS rates before stating any amount to the client."),
+        ("heading", "4. Documents to collect"),
+        ("para", "Option to purchase, HDB resale application reference, the Sellers' outstanding loan statement and the latest valuation, if any."),
+    ]),
+    ("Tampines resale: seller's solicitors on vacant possession.pdf", [
+        ("title", "Correspondence Extract: Vacant Possession"),
+        ("para", "From the Sellers' solicitors to our firm. Synthetic demo document."),
+        ("heading", "Handover"),
+        ("para", "Our clients propose to hand over the flat on 30 November 2026, once their move to the new home is complete."),
+        ("para", "Our clients will remove their belongings before completion but ask that minor fittings, including the curtain rails, stay in the flat."),
+        ("heading", "Outstanding"),
+        ("para", "Please confirm whether your client accepts the proposed handover date and the fittings that will remain."),
+    ]),
+]
+
+
+async def _seed_tampines_documents(db: Session, *, matter: Matter, team: Team, users: dict[str, User]) -> dict:
+    owner = users["jane"]
+    docs = [
+        await _ensure_demo_document(db, owner=owner, matter=matter, team=team, filename=name, pdf=DemoPdf(blocks))
+        for name, blocks in TAMPINES_DOCUMENTS
+    ]
+    return {
+        "tampines_documents": len(docs),
+        "tampines_documents_failed": sum(d.status == "failed" for d in docs),
+    }
 
 
 async def _seed_style_guide(db: Session, *, presenter: User) -> bool:
@@ -355,6 +414,7 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
         otp.due_date = now - timedelta(days=1)
         db.commit()
     review = await _seed_bishan_review(db, matter=matters[0], team=team, users=users)
+    tampines = await _seed_tampines_documents(db, matter=matters[1], team=team, users=users)
     style_guide = await _seed_style_guide(db, presenter=presenter)
     return {
         "style_guide_created": style_guide,
@@ -362,4 +422,5 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
         "matters": len(matters),
         "chats_created": chats_created,
         **review,
+        **tampines,
     }

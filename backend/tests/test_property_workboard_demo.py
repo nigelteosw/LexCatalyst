@@ -43,6 +43,9 @@ def test_property_demo_is_additive_repeatable_and_grants_matter_access(monkeypat
         assert first['matters'] == 4
         assert first['chats_created'] == 16
         assert first['review_rounds_created'] == 2
+        tampines = db.scalar(select(Matter).where(Matter.case_number == 'DEMO-SG-PROP-002'))
+        tampines_docs = list(db.scalars(select(Document).where(Document.matter_id == tampines.id)))
+        assert first['tampines_documents'] == 3 and len(tampines_docs) == 3
         rounds = {h.status: h for h in db.scalars(select(ReviewHandoff))}
         assert set(rounds) == {'returned', 'ready_for_review'}
         assert len(rounds['returned'].annotations) == 4
@@ -105,7 +108,7 @@ def test_property_demo_retries_failed_pdfs_without_duplicate_rounds(monkeypatch)
         db.add(presenter)
         db.commit()
         asyncio.run(seed_property_workboard(db, presenter=presenter))
-        documents = list(db.scalars(select(Document)))
+        documents = list(db.scalars(select(Document).where(Document.filename.like('Bishan%'))))
         for document in documents:
             document.status = 'failed'
             document.error_message = 'R2 unavailable'
@@ -147,5 +150,5 @@ def test_property_demo_completes_a_partial_document_seed(monkeypatch):
         monkeypatch.setattr(property_workboard_demo_service.document_service, 'create_pending_document', original)
         result = asyncio.run(seed_property_workboard(db, presenter=presenter))
         assert result['review_rounds_created'] == 2
-        assert len(list(db.scalars(select(Document)))) == 2
+        assert len(list(db.scalars(select(Document)))) == 5  # 2 Bishan notes + 3 Tampines documents
         assert len(list(db.scalars(select(ReviewLesson)))) == 4
