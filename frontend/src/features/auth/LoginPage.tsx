@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
 import { BookMarked, ClipboardCheck, HeartPulse, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react'
+import { DemoTermsDialog } from './DemoTermsDialog'
 
 export interface LoginPageProps {
   onLoginSuccess: (credential: string) => void
@@ -27,6 +28,8 @@ const TRUST = [
 export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProps) {
   const googleContainerRef = useRef<HTMLDivElement>(null)
   const [googleBtnWidth, setGoogleBtnWidth] = useState(280)
+  const [agreed, setAgreed] = useState(false)
+  const [termsOpen, setTermsOpen] = useState(false)
 
   useEffect(() => {
     const el = googleContainerRef.current
@@ -93,20 +96,63 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
             </div>
           )}
 
-          <div className="mt-8 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <div ref={googleContainerRef} className="w-full overflow-hidden">
-              <GoogleLogin
-                onSuccess={(cred) => {
-                  if (cred.credential) onLoginSuccess(cred.credential)
-                }}
-                onError={() => onLoginError('Google sign-in failed. Please try again.')}
-                useOneTap
-                shape="rectangular"
-                theme="outline"
-                width={String(googleBtnWidth)}
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
+            <p className="font-semibold">Demonstration only</p>
+            <p className="mt-1">
+              This is a demo. Please do not enter personal, client or confidential information. Nothing
+              here is used for advertising or promotion.
+            </p>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <label className="flex items-start gap-2.5 text-sm leading-5 text-neutral-700">
+              <input
+                checked={agreed}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1e3a8a]"
+                onChange={(e) => setAgreed(e.target.checked)}
+                type="checkbox"
               />
+              <span>
+                I have read and agree to the{' '}
+                <button
+                  className="font-medium text-[#1e3a8a] underline underline-offset-2"
+                  onClick={() => setTermsOpen(true)}
+                  type="button"
+                >
+                  Demo Terms
+                </button>
+                .
+              </span>
+            </label>
+            <div className="relative mt-4">
+              <div
+                ref={googleContainerRef}
+                aria-hidden={!agreed}
+                className={`w-full overflow-hidden transition-opacity ${agreed ? '' : 'opacity-50'}`}
+              >
+                <GoogleLogin
+                  onSuccess={(cred) => {
+                    if (agreed && cred.credential) onLoginSuccess(cred.credential)
+                  }}
+                  onError={() => onLoginError('Google sign-in failed. Please try again.')}
+                  useOneTap={agreed}
+                  shape="rectangular"
+                  theme="outline"
+                  width={String(googleBtnWidth)}
+                />
+              </div>
+              {!agreed && (
+                <button
+                  aria-label="Tick the box to agree to the Demo Terms before signing in"
+                  className="absolute inset-0 cursor-not-allowed"
+                  onClick={() => onLoginError('Please tick the box to agree to the Demo Terms before signing in.')}
+                  type="button"
+                />
+              )}
             </div>
           </div>
+
+          {termsOpen && <DemoTermsDialog onClose={() => setTermsOpen(false)} />}
 
           <section aria-labelledby="trust-heading" className="mt-8 rounded-xl border border-neutral-200 bg-white/60 p-5">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-neutral-900" id="trust-heading">
@@ -123,9 +169,6 @@ export function LoginPage({ onLoginSuccess, onLoginError, error }: LoginPageProp
             </ul>
           </section>
 
-          <p className="mt-5 text-xs leading-relaxed text-neutral-500">
-            By signing in you agree to your firm’s acceptable-use and data-handling policies.
-          </p>
         </div>
       </div>
     </div>
