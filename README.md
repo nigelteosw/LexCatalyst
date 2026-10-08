@@ -1,13 +1,13 @@
 # LexCatalyst
 
-LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load for junior lawyers and improve efficiency for legal teams. It transforms raw legal documents into structured, searchable knowledge, provides matter-aware AI assistance, and tracks team wellbeing through weekly check-ins.
+LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load for junior lawyers and improve efficiency for legal teams. It transforms raw legal documents into structured, searchable knowledge, provides matter-aware AI assistance.
 
 ## Core Features
 
 ### Home & Workspace
 
 - **Daily overview:** active matters, tasks due in the next seven days, reviews waiting, and open tickets related to the signed-in user.
-- **Pick up work:** attention items, searchable matters, the three most recent LexChats, and three recent documents. Partners/admins also have a wellbeing summary.
+- **Pick up work:** attention items, searchable matters, the three most recent LexChats, and three recent documents.
 - **Matter-first navigation:** Home manages matters; each matter page holds its documents, chats, and pending work. Unfiled items appear under General. There is no standalone document library.
 - **Responsive interface:** Geist for UI text and Newsreader for headings, with shared type tokens that scale modestly with screen width. The sidebar uses smaller labels, evenly spaced icon slots, and reduced-motion support. Collapse it with the header control; click the logo in the collapsed rail to expand it. The account menu includes profile settings, sign-out, and demo user switching when enabled.
 
@@ -38,12 +38,6 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - Pulls firm KB context (RBAC-respecting), recent reviewer feedback, and the current matter’s own assigned tickets for grounded answers.
 - **Workboard tools, web and extension:** create self-assigned tickets; read, edit title/description, move status, reassign, or delete tickets currently assigned to you; report live completed/outstanding/overdue counts. Even admins cannot manage other people’s tickets through Birdie. Reassignment ends access. Linked reviews protect status, assignment and deletion; use the review workflow.
 - **Privacy:** Birdie prompts (document excerpts, KB entries, reviewer feedback, Workboard ticket data) go to OpenRouter and the chosen model provider.
-
-### Wellbeing — Weekly Team Check-ins
-- Survey responses are linked to the submitting user and upserted per user, question, and week.
-- `POST /survey/responses/batch` submits one authenticated user's complete check-in in a single transaction; partner/admin access is still required for `/survey/results` and question management routes.
-- Partners/admins see only normalized question-level aggregates with at least three respondents; no per-user results are returned.
-- All authenticated users can submit. Existing responses without a user ID are excluded from cohort reports.
 
 ### Workboard — Task Delegation
 - Board and list views share a five-stage flow: To do → Drafting → Internal review → With client / counterparty → Done. Existing drafting and review tickets keep their stages; `with_client` is accepted by the authenticated action update endpoint.
@@ -99,7 +93,7 @@ Settings → Development & Testing → **Load property Workboard demo** adds 12 
 - **Docker Compose** for local PostgreSQL
 - **Railway** for the static frontend, FastAPI web service with its embedded worker, and managed PostgreSQL
 - **Cloudflare R2** as the S3-compatible object store
-- **Alembic head:** `z3e4f5a6b7c8`
+- **Alembic head:** `a7b8c9d0e1f2`
 
 Editable high-level architecture diagrams:
 
@@ -134,7 +128,6 @@ Editable high-level architecture diagrams:
 │   │       ├── document_service.py            # Upload + full-text reader
 │   │       ├── ingestion_service.py           # PDF/DOCX extraction (OCR fallback)
 │   │       ├── action_service.py              # Task items with RBAC
-│   │       ├── survey_service.py              # User-linked weekly surveys + aggregation
 │   │       ├── user_service.py                # Role updates
 │   │       ├── memory_service.py              # Personal memory store
 │   │       ├── organization_service.py        # Teams + matters
@@ -156,7 +149,7 @@ Editable high-level architecture diagrams:
 │   │   │   ├── actions/                       # Kanban task board
 │   │   │   ├── memories/                      # Memory CRUD and async Dream results
 │   │   │   ├── wiki/                          # Wiki editor and graph
-│   │   │   └── ...                            # Auth, Birdie, settings, wellbeing
+│   │   │   └── ...                            # Auth, Birdie, settings
 │   │   └── shared/
 │   │       ├── api/api.ts                     # API client and SSE handling
 │   │       ├── lib/                           # Shared async/error helpers
@@ -328,7 +321,7 @@ cd backend && source .venv/bin/activate
 make seed-demo PRESENTER=you@example.com   # or Settings → Development & Testing → Load demo data
 ```
 
-The seed creates a Corporate team, the *Meridian Capital — Share Purchase* matter, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), six weeks of wellbeing check-ins, memories and wiki pages. Re-running resets previous demo data and never touches your own.
+The seed creates a Corporate team, the *Meridian Capital — Share Purchase* matter, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), memories and wiki pages. Re-running resets previous demo data and never touches your own.
 
 With demo mode on, admins get a **Switch user** picker in the sidebar to act as Sarah Chen (senior associate), Jane Pereira (associate) or Marcus Webb without Google. Switching works only into seeded `dummy:` users, never real accounts, and a banner shows who you are acting as. See `docs/demo-script.md` for the full walkthrough.
 
@@ -347,12 +340,12 @@ The first three routes return 404 unless demo mode is on and the caller is an ad
 
 ## Roles & Permissions
 
-| Role | Manage any firm-wide entry | Create matters | Create actions | Manage surveys | View survey results |
-|---|---|---|---|---|---|
-| `admin` (firm IT/ops) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `partner` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `senior_associate` | — | ✅ | ✅ | — | — |
-| `associate` | — | ✅ | — | — | — |
+| Role | Manage any firm-wide entry | Create matters | Create actions |
+|---|---|---|---|
+| `admin` (firm IT/ops) | ✅ | ✅ | ✅ |
+| `partner` | ✅ | ✅ | ✅ |
+| `senior_associate` | — | ✅ | ✅ |
+| `associate` | — | ✅ | — |
 
 KB scope visibility (read access):
 - `firm_wide` — every authenticated user
@@ -510,12 +503,12 @@ The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`.
 | `g4b5c6d7e8f9` | Adds tags to action items | No |
 | `h5c6d7e8f9a0` | Keeps only KB edit audit rows and enforces the edit-only constraint | Yes, removes non-edit audit history |
 | `i6d7e8f9a0b1` | Adds durable document-worker claim fields and queue index | No |
-| `n1c2d3e4f5a6` | Links new survey responses to users and prevents duplicate weekly answers | No |
 | `o1d2e3f4a5b6` | Adds durable Dream claim fields and stores automated memory justifications | No |
 | `p1e2f3a4b5c6` | Adds document comments | No |
 | `q2f3a4b5c6d7` | Adds review handoffs, structured findings, and active handoff links on actions | No |
 | `r3a4b5c6d7e8` | Adds durable review-handoff worker claim fields | No |
 | `u6d7e8f9a0b1` | Adds explicit reverse scoring for positively worded survey questions | No |
+| `a7b8c9d0e1f2` | Drops `survey_responses` and `survey_questions` (wellbeing questionnaire removed); downgrade recreates empty tables | Yes, deletes all survey responses |
 
 `h5c6d7e8f9a0` intentionally removes historical read/share/redaction audit rows.
 Knowledge and document records are unaffected.

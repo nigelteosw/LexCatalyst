@@ -25,8 +25,6 @@ from app.models import (
     Memory,
     ReviewAnnotation,
     ReviewHandoff,
-    SurveyQuestion,
-    SurveyResponse,
     Team,
     TeamMember,
     User,
@@ -48,7 +46,6 @@ from app.services.resource_metadata_service import (
     sync_metadata_safe,
 )
 from app.services.storage_service import StorageError, delete_document_file
-from app.services.survey_service import current_week_start, seed_survey_questions
 from app.services.user_service import create_dummy_users
 
 _log = logging.getLogger(__name__)
@@ -181,14 +178,6 @@ JANE_MEMORIES = [
     ("episodic", "Sarah flagged an uncapped indemnity in my NDA draft this week."),
 ]
 
-# Agreement scores 1-5 per week (oldest first). Workload / mental-health items are bad when high;
-# team-dynamics / learning items are reverse scored (good when high).
-SURVEY_PATTERNS = {
-    "jane": {"pressure": [3, 4, 5, 5, 4, 3], "support": [4, 3, 2, 2, 3, 4]},
-    "sarah": {"pressure": [3, 3, 4, 3, 3, 3], "support": [4, 4, 3, 4, 4, 4]},
-    "marcus": {"pressure": [2, 3, 3, 3, 2, 2], "support": [4, 4, 4, 3, 4, 4]},
-}
-
 WIKI_PAGES = [
     (
         "Meridian share purchase: overview",
@@ -268,7 +257,6 @@ def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> Non
         db.delete(thread)
     for memory in db.scalars(select(Memory).where(Memory.user_id.in_(demo_user_ids))):
         db.delete(memory)
-    db.execute(delete(SurveyResponse).where(SurveyResponse.user_id.in_(demo_user_ids)))
 
     if matter:
         db.execute(delete(MatterMember).where(MatterMember.matter_id == matter.id))
@@ -428,29 +416,6 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
         sync_metadata_safe(db, sync_handoff_metadata, handoff)
     summary.update(tickets=len(TICKETS), review_rounds=2, annotations=len(NDA_FEEDBACK))
 
-    # Wellbeing --------------------------------------------------------------------------------
-    questions = _active_questions(db)
-    week0 = current_week_start()
-    count = 0
-    for key, user in (("jane", jane), ("sarah", sarah), ("marcus", marcus)):
-        for week_idx in range(6):
-            week_of = week0 - timedelta(weeks=5 - week_idx)
-            for question in questions:
-                pattern = SURVEY_PATTERNS[key][
-                    "support" if question.reverse_scored else "pressure"
-                ]
-                db.add(
-                    SurveyResponse(
-                        user_id=user.id,
-                        question_id=question.id,
-                        score=pattern[week_idx],
-                        week_of=week_of,
-                    )
-                )
-                count += 1
-    db.commit()
-    summary["survey_responses"] = count
-
     # Memories, chat thread, wiki --------------------------------------------------------------
     for category, content in JANE_MEMORIES:
         db.add(Memory(user_id=jane.id, category=category, content=content, scope="personal"))
@@ -513,15 +478,3 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
     )
     summary["documents_still_processing"] = processing is not None
     return summary
-
-
-def _active_questions(db: Session) -> list[SurveyQuestion]:
-    questions = list(
-        db.scalars(select(SurveyQuestion).where(SurveyQuestion.is_active.is_(True)))
-    )
-    if not questions:
-        seed_survey_questions(db)
-        questions = list(
-            db.scalars(select(SurveyQuestion).where(SurveyQuestion.is_active.is_(True)))
-        )
-    return questions

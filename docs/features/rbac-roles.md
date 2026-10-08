@@ -31,7 +31,7 @@ Without enforced access control, an AI knowledge bank becomes a confidentiality 
 
 | Role | Who they are |
 |---|---|
-| `partner` | Equity / non-equity partner. Approves firm-wide content. Sees survey results. |
+| `partner` | Equity / non-equity partner. Approves firm-wide content. |
 | `senior_associate` | Senior associate. Can delegate work, manage team/matter knowledge. |
 | `associate` | Junior associate / trainee. Default. |
 | `is_admin` (flag) | Firm IT / ops. Bypasses all checks. Used for the firm administrator who needs to clean up data. |
@@ -81,7 +81,6 @@ This matches how legal knowledge actually flows:
 | **KB redaction detail** | `require_kb_owner` — only entry creator can see original_content. |
 | **KB backfill** | `current_user.is_admin` check on POST /kb/backfill-embeddings. |
 | **Agent tool calls** | Semantic search reuses `_user_kb_scope_filter`, and `get_kb_entry` calls `check_kb_read`. An LLM that hallucinates a UUID cannot fetch private content. |
-| **Survey results** | `require_partner_or_admin`. |
 | **Action creation** | `is_senior_or_above`. |
 | **Action delete** | Assignee, assigner, or senior+ only (returns 404 for everyone else, same as not found). |
 

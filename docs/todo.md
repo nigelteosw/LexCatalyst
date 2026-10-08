@@ -62,10 +62,6 @@ product features. The existing review implementation needs refinement, not rebui
 
 Each item has a full implementation plan under `docs/plans/`. They're listed in the order I'd recommend shipping them.
 
-- [ ] **Wellbeing questionnaire polish + team monitor page** — Plan: [`docs/plans/wellbeing-questionnaire-monitor.md`](./plans/wellbeing-questionnaire-monitor.md)
-  - Polish the existing weekly check-in: progress indicator, draft auto-save, and optional free-text context per question.
-  - Extend the partner-only user dashboard with category snapshots, multi-week trend lines, flag indicators, and a recent context stream.
-
 - [ ] **Rename KB `action` type → `skill`** — Plan: [`docs/plans/kb-skills-rename.md`](./plans/kb-skills-rename.md)
   - Reframe the third KB category as reusable hard-skill + soft-skill markdown blocks the agent can load into its context.
   - Migration to rename existing rows; update enum literals across schemas, frontend types, and KB panel UI.

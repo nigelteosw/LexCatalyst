@@ -27,7 +27,6 @@ from app.config import get_settings
 from app.database import SessionLocal, create_db_tables
 from app.models import Document, DreamJob, KnowledgeBankEntry
 from app.routers import all_routers
-from app.services.survey_service import seed_survey_questions
 from app.worker import run_worker
 
 
@@ -94,15 +93,6 @@ def _run_startup_tasks() -> None:
             create_db_tables()
         except SQLAlchemyError as exc:
             print(f"Database startup skipped: {exc}")
-
-    # Seed survey questions if empty
-    db = SessionLocal()
-    try:
-        seed_survey_questions(db)
-    except Exception as exc:
-        print(f"Failed to seed survey questions: {exc}")
-    finally:
-        db.close()
 
 
 @asynccontextmanager

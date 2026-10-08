@@ -9,7 +9,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
-    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -824,72 +823,6 @@ class PiiRedaction(Base):
     @original_content.setter
     def original_content(self, value: str) -> None:
         self._original_content = encrypt_text(value) or ""
-
-
-class SurveyQuestion(Base):
-    __tablename__ = "survey_questions"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    text: Mapped[str] = mapped_column(Text, nullable=False)
-    category: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
-    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    reverse_scored: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default="false",
-    )
-    created_by_id: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_id])
-    responses: Mapped[list["SurveyResponse"]] = relationship(
-        back_populates="question",
-        cascade="all, delete-orphan",
-    )
-
-
-class SurveyResponse(Base):
-    __tablename__ = "survey_responses"
-    __table_args__ = (
-        UniqueConstraint(
-            "user_id",
-            "question_id",
-            "week_of",
-            name="uq_survey_response_user_question_week",
-        ),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
-    question_id: Mapped[str] = mapped_column(
-        ForeignKey("survey_questions.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    score: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    week_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
-    submitted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    user: Mapped[User | None] = relationship()
-    question: Mapped[SurveyQuestion] = relationship(back_populates="responses")
 
 
 class DreamJob(Base):

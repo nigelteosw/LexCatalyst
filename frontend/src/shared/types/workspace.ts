@@ -252,38 +252,6 @@ export type KnowledgeBankScope = 'firm_wide' | 'team' | 'matter' | 'private'
 export type KnowledgeBankEntryType = 'knowledge_bank' | 'style_guide' | 'action'
 export type PiiStatus = 'clean' | 'flagged' | 'pending_review' | 'redacted'
 
-export type SurveyCategory = 'workload' | 'mental_health' | 'team_dynamics' | 'learning'
-
-export type SurveyQuestion = {
-  id: string
-  text: string
-  category: SurveyCategory
-  orderIndex: number
-  isActive: boolean
-  reverseScored: boolean
-  createdAt: string
-}
-
-export type SurveyWeekResult = {
-  weekOf: string
-  avgScore: number
-  responseCount: number
-}
-
-export type SurveyQuestionResult = {
-  questionId: string
-  questionText: string
-  category: string
-  weeks: SurveyWeekResult[]
-}
-
-export type SurveyResults = {
-  currentWeekOf: string
-  minimumCohortSize: number
-  currentCohortSize: number | null
-  questions: SurveyQuestionResult[]
-}
-
 export type ActionStatus = 'pending' | 'in_progress' | 'review' | 'with_client' | 'done'
 export type ActionPriority = 'low' | 'medium' | 'high'
 

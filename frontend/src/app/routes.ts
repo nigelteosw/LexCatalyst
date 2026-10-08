@@ -6,7 +6,6 @@ type ChatView = { view: 'chat'; threadId: string | null }
 type WikiView = { view: 'wiki'; pageId: string | null }
 type DocumentsView = { view: 'documents'; documentId: string | null }
 type MemoriesView = { view: 'memories' }
-type WellbeingView = { view: 'wellbeing' }
 type KnowledgeBankView = { view: 'knowledge_bank'; entryId: string | null }
 type ActionsView = { view: 'actions'; actionId: string | null }
 type HandoffReviewView = { view: 'handoff_review'; actionId: string }
@@ -19,7 +18,6 @@ export type AppView =
   | WikiView
   | DocumentsView
   | MemoriesView
-  | WellbeingView
   | KnowledgeBankView
   | ActionsView
   | HandoffReviewView
@@ -77,9 +75,6 @@ function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute:
   }
   if (section === 'memories' && !id) {
     return { current: { view: 'memories' }, isKnownRoute: true }
-  }
-  if (section === 'wellbeing' && !id) {
-    return { current: { view: 'wellbeing' }, isKnownRoute: true }
   }
   if (section === 'knowledge') {
     return { current: { view: 'knowledge_bank', entryId: id }, isKnownRoute: true }
@@ -158,10 +153,6 @@ export function useWorkspaceNavigation() {
     ),
     selectMemories: useCallback(
       (options?: NavigationOptions) => go('/memories', options),
-      [go],
-    ),
-    selectWellbeing: useCallback(
-      (options?: NavigationOptions) => go('/wellbeing', options),
       [go],
     ),
     selectKnowledgeBank: useCallback(

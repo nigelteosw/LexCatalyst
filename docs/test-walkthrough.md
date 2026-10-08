@@ -106,7 +106,6 @@ Quick regression pass as Jane, with the Meridian matter selected:
 | 5.2 | Documents | NDA, SPA extract and Disclosure letter, all **ready** |
 | 5.3 | Knowledge Bank | 5 entries (style guide, three playbooks, one Meridian note) |
 | 5.4 | Workboard | 5 tickets across Pending, In progress, Review and Done |
-| 5.5 | Wellbeing → trends (as yourself or any user) | Six weeks of data; Jane's workload strain rises then eases. Needs three respondents (Jane, Sarah, Marcus) |
 | 5.6 | Home → Memory | Jane's four memories |
 | 5.7 | Home → Lex-Wiki | Three linked pages and a graph |
 

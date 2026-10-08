@@ -15,7 +15,6 @@ Each file in `features/` answers one question: *why does this feature exist for 
 | [Birdie mentor](./features/birdie-mentor.md) | Juniors | "Lack of mentorship", "Scared to ask stupid Qns", "No psychological safety" |
 | [Agent chat](./features/agent-chat.md) | Everyone | Confidential, matter-aware Q&A with citations |
 | [Knowledge Bank](./features/knowledge-bank.md) | Whole firm | Style standardisation, retraining costs, institutional memory leak |
-| [Wellbeing surveys](./features/wellbeing-surveys.md) | Juniors → Partners | Burnout signals without retaliation risk |
 | [Workboard](./features/actions-delegation.md) | Seniors → Juniors | Workload triage and visible distribution |
 | [RBAC & roles](./features/rbac-roles.md) | Whole firm | Confidentiality at the right granularity |
 | [Personal memory](./features/memory.md) | Each user | Style guide and instructions per individual |
@@ -34,7 +33,6 @@ These are deeper technical design docs written before implementation. They expla
 
 Per-feature implementation plans, each tied to an open TODO. These have enough detail to start coding from — schemas, migrations, file touchpoints, and verification steps — but no code has been written yet.
 
-- [`plans/wellbeing-questionnaire-monitor.md`](./plans/wellbeing-questionnaire-monitor.md) — Polish the weekly check-in and replace the partner Results tab with a richer monitor.
 - [`plans/kb-skills-rename.md`](./plans/kb-skills-rename.md) — Rename the third KB category from `action` to `skill`; introduce always-load skills.
 - [`plans/pdf-viewer-comments.md`](./plans/pdf-viewer-comments.md) — Inline PDF drawer with matter-wide comments.
 

@@ -53,9 +53,6 @@ const MatterPage = lazy(() =>
 const WikiPanel = lazy(() =>
   import('../features/wiki/WikiPanel').then((module) => ({ default: module.WikiPanel })),
 )
-const WellbeingPanel = lazy(() =>
-  import('../features/wellbeing/WellbeingPanel').then((module) => ({ default: module.WellbeingPanel })),
-)
 const KnowledgeBankPanel = lazy(() =>
   import('../features/knowledge-bank/KnowledgeBankPanel').then((module) => ({
     default: module.KnowledgeBankPanel,
@@ -684,8 +681,6 @@ function App() {
                 <MemoriesPanel />
               ) : current.view === 'wiki' ? (
                 <WikiPanel currentUser={currentUser} />
-              ) : current.view === 'wellbeing' ? (
-                <WellbeingPanel currentUser={currentUser} />
               ) : current.view === 'documents' ? (
                 <DocumentsPanel currentUser={currentUser} />
               ) : current.view === 'matter' ? (
@@ -801,7 +796,6 @@ function mobileViewTitle(view: import('./routes').AppView['view']) {
     knowledge_bank: 'Knowledge Bank',
     memories: 'Memories',
     settings: 'Settings',
-    wellbeing: 'Wellbeing',
     wiki: 'Lex-Wiki',
   }
   return labels[view] ?? 'LexCatalyst'

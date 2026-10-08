@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { MessageSquare } from 'lucide-react'
-import { listActionItems, listMatters, listChatThreads, getSurveyResults } from '../../shared/api/api'
+import { listActionItems, listMatters, listChatThreads } from '../../shared/api/api'
 import type { CurrentUser } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
 import { Button } from '../../shared/ui/Button'
@@ -59,7 +59,6 @@ export function HomePanel({ currentUser, onMatterChange }: Props) {
           <aside className="min-w-0 space-y-8">
             <RecentChatsSection onMatterChange={onMatterChange} />
             <RecentDocumentsSection />
-            {(currentUser?.isAdmin || currentUser?.firmRole === 'partner') && <WellbeingSummary />}
           </aside>
         </div>
       </div>
@@ -99,12 +98,6 @@ function RecentChatsSection({ onMatterChange }: Pick<Props, 'onMatterChange'>) {
         ))}</div>}
     </section>
   )
-}
-
-function WellbeingSummary() {
-  const { selectWellbeing } = useWorkspaceNavigation()
-  const query = useQuery({ queryKey: ['surveyResults'], queryFn: getSurveyResults, staleTime: 60_000, retry: false })
-  return <button type="button" onClick={() => selectWellbeing()} className="t-meta w-full border-t border-line pt-4 text-left text-ink-secondary hover:text-accent">Team wellbeing <span className="float-right">{query.isPending ? '…' : query.isError ? 'Unavailable' : `${query.data?.currentCohortSize ?? 0} responses`} →</span></button>
 }
 
 function getGreeting() {

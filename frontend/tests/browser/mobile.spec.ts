@@ -24,7 +24,6 @@ async function workspace(page: Page) {
     if (path === '/me') data = user
     else if (path === '/chat/threads') data = [{ id: 't1', title: 'Synthetic conversation', matter_id: null, created_at: '2026-01-01', updated_at: '2026-01-01' }]
     else if (path === '/chat/threads/t1/messages') data = [{ id: 'msg1', role: 'assistant', content: 'The agreement requires review.[1]', created_at: '2026-01-01', sources: [{ n: 1, kind: 'document', id: 'd1', title: 'Synthetic agreement', locator: 'Page 1', matter_id: null, excerpt: 'Synthetic source text.' }] }]
-    else if (path === '/survey/questions') data = [{ id: 'q1', text: 'How manageable is your current workload?', category: 'workload', order_index: 1, is_active: true, reverse_scored: false, created_at: '2026-01-01' }]
     else if (path === '/matters') data = [matter]
     else if (path === '/users') data = [user]
     else if (path === '/wiki/pages') data = [wiki]
@@ -65,7 +64,7 @@ for (const width of [320, 390, 768, 1280]) {
     page.on('pageerror', (error) => errors.push(error.message))
     await page.setViewportSize({ width, height: 800 })
     await workspace(page)
-    for (const path of ['/home', '/chat', '/matters/general', '/matters/m1', '/knowledge', '/knowledge/k1', '/memories', '/wiki', '/wiki/w1', '/wellbeing', '/actions', '/actions/a1', '/actions/a1/review', '/settings', '/knowledge/documents/d1']) {
+    for (const path of ['/home', '/chat', '/matters/general', '/matters/m1', '/knowledge', '/knowledge/k1', '/memories', '/wiki', '/wiki/w1', '/actions', '/actions/a1', '/actions/a1/review', '/settings', '/knowledge/documents/d1']) {
       await page.goto(path)
       await expect(page.locator('main').first()).toBeVisible()
       await expect(page.getByText('Loading workspace...')).toHaveCount(0)

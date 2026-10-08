@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
-import { BookMarked, ClipboardCheck, HeartPulse, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react'
+import { BookMarked, ClipboardCheck, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react'
 import { DemoTermsDialog } from './DemoTermsDialog'
 
 export interface LoginPageProps {
@@ -13,7 +13,6 @@ const FEATURES = [
   { icon: Sparkles, label: 'Birdie', desc: 'A private mentor that turns senior feedback into lessons' },
   { icon: ClipboardCheck, label: 'Workboard', desc: 'Delegate, review and redline matter work' },
   { icon: BookMarked, label: 'Knowledge Bank', desc: 'Your firm’s playbooks, style guides and precedents' },
-  { icon: HeartPulse, label: 'Wellbeing', desc: 'Anonymous team check-ins that surface workload early' },
 ]
 
 // Each line describes behaviour that exists in the product; do not add claims

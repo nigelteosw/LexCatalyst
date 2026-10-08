@@ -60,7 +60,6 @@ frontend/
       memories/       # Memories panel + async Dream consolidation
       navigation/     # Collapsible sidebar; chats grouped by matter (chat page only)
       settings/       # Settings panel
-      wellbeing/      # Wellbeing survey panel
       wiki/           # Wiki panel + graph canvas
     shared/
       api/api.ts      # All fetch calls; snake_case↔camelCase mapping here
@@ -157,7 +156,6 @@ app/services/
   review_handoff_service.py     # Review rounds: access, capabilities, lifecycle, locks
   review_pdf_export_service.py  # Pure PDF overlay + notes appendix rendering
   storage_service.py      # Cloudflare R2 upload/download
-  survey_service.py
   user_service.py
   wiki_service.py
 ```
@@ -178,7 +176,7 @@ Do not add a tool registry unless it removes real duplication.
 
 All schema changes go through Alembic (`backend/migrations/`). Never add new tables or indexes only to `create_db_tables()` — that path runs only when `AUTO_CREATE_TABLES=true`, which is not the case in production.
 
-Current head: `z3e4f5a6b7c8`
+Current head: `a7b8c9d0e1f2`
 
 ```sh
 cd backend && source .venv/bin/activate
@@ -206,7 +204,6 @@ The following items from the original plan are complete:
 - Memory CRUD and retrieval
 - Knowledge Bank (scoped RBAC, PII redaction, audit log, promotion flow)
 - Wiki (markdown pages, graph view, document ingestion)
-- Wellbeing surveys
 - Action board (kanban)
 - Birdie AI mentor (streaming)
 - Dream memory consolidation (DB-backed async jobs, durable across restarts)

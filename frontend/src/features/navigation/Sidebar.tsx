@@ -5,7 +5,6 @@ import {
   ChevronsLeft,
   ChevronsUpDown,
   FolderInput,
-  HeartPulse,
   Home,
   MessageSquare,
   MoreHorizontal,
@@ -18,7 +17,6 @@ import {
   deleteChatThread,
   listKnowledgeBankEntryPage,
   listActionItems,
-  listSurveyQuestions,
   moveChatThread,
   renameChatThread,
 } from '../../shared/api/api'
@@ -84,7 +82,6 @@ export function Sidebar({
     selectHome,
     selectThread,
     selectKnowledgeBank,
-    selectWellbeing,
     selectActions,
     selectSettings,
   } = useWorkspaceNavigation()
@@ -183,7 +180,7 @@ export function Sidebar({
     if (window.innerWidth < 1024) onClose()
   }
 
-  function prefetchWorkspace(view: 'knowledge_bank' | 'wellbeing' | 'actions') {
+  function prefetchWorkspace(view: 'knowledge_bank' | 'actions') {
     if (view === 'knowledge_bank') {
       queryClient.prefetchInfiniteQuery({
         queryKey: [
@@ -203,10 +200,6 @@ export function Sidebar({
           }),
         initialPageParam: 0,
       })
-      return
-    }
-    if (view === 'wellbeing') {
-      queryClient.prefetchQuery({ queryKey: ['surveyQuestions', 'active'], queryFn: () => listSurveyQuestions(true) })
       return
     }
     queryClient.prefetchQuery({ queryKey: ['actions'], queryFn: listActionItems })
@@ -288,9 +281,6 @@ export function Sidebar({
             <NavItem icon={BookMarked} label="Knowledge Bank" collapsed={isCollapsed} active={kbActive}
               onPrefetch={() => prefetchWorkspace('knowledge_bank')}
               onClick={() => { selectKnowledgeBank(); closeMobile() }} />
-            <NavItem icon={HeartPulse} label="Wellbeing" collapsed={isCollapsed} active={current.view === 'wellbeing'}
-              onPrefetch={() => prefetchWorkspace('wellbeing')}
-              onClick={() => { selectWellbeing(); closeMobile() }} />
             <NavItem icon={CheckSquare} label="Workboard" collapsed={isCollapsed} active={current.view === 'actions'}
               badge={pendingTaskCount} onPrefetch={() => prefetchWorkspace('actions')}
               onClick={() => { selectActions(); closeMobile() }} />
@@ -352,14 +342,6 @@ export function Sidebar({
                     onClick={() => {
                       setUserMenuOpen(false)
                       selectSettings()
-                      closeMobile()
-                    }}
-                  />
-                  <UserMenuItem
-                    label="Wellbeing"
-                    onClick={() => {
-                      setUserMenuOpen(false)
-                      selectWellbeing()
                       closeMobile()
                     }}
                   />

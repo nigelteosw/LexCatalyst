@@ -124,7 +124,6 @@ _VIEW_LABELS = {
     "knowledge_bank": "the Knowledge Bank",
     "actions": "the Workboard",
     "memories": "the Memories page",
-    "wellbeing": "the Wellbeing page",
     "settings": "the Settings page",
 }
 

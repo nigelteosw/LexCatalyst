@@ -191,8 +191,8 @@ They are **not implemented** unless checked. Use synthetic documents for the dem
 - [ ] Rehearse with submitter, reviewer and unrelated user: upload PDF → annotate → reply → return →
   resubmit → resolve → complete → export → promote → retrieve approved KB content. Repeat with reload,
   expired login, failed save, scan, long clause, rotated PDF, and a narrow viewport.
-- [ ] Address the single-response survey validation and chat final-answer/disconnect cases in the
-  retained inventory next, each with a regression test. Reproduce before changing agent-loop policy.
+- [ ] Address the chat final-answer/disconnect cases in the retained inventory next, each with a
+  regression test. Reproduce before changing agent-loop policy.
 - [ ] Align `plan.md`'s old email/password and hosting recommendations with Google OAuth/Railway in
   `AGENTS.md` and README. Keep the source-of-truth file in place; moving it alone provides little benefit.
 - [ ] Explicitly document single-firm synthetic demo scope. Defer multi-tenant rollout, refresh-token
@@ -225,14 +225,6 @@ constant assertion with two behavioural tests. CI still outstanding (see §5).
 ### ~~P0 — `MAX_MEMORY_RESULTS` is declared but never applied~~ ✅ fixed
 `list_memories` gained a `contains` filter (SQL `ilike`, wildcards escaped); the `search_memories`
 tool now passes it along with `limit=MAX_MEMORY_RESULTS`.
-
-### P1 — Single-response survey endpoint skips validation the batch endpoint performs
-`submit_survey_responses` (`app/services/survey_service.py`) verifies every `question_id` exists and
-`is_active`. `submit_survey_response` — behind `POST /survey/responses` — does not. An unknown
-`question_id` reaches the DB and surfaces as an unhandled `IntegrityError` → 500, and an *inactive*
-question can still be answered, quietly polluting cohort aggregates.
-
-Extract the validation and call it from both paths.
 
 ### P1 — Agent loop can end with no answer at all
 `run_agent_loop` (`app/services/agent_service.py`) breaks out of the round loop only when the model
@@ -357,7 +349,7 @@ Every backend call for every domain lives in one file, and the auth-header logic
 times** (lines 256, 531, 575, 737, 1478, 1942) because `request()` doesn't cover FormData, blobs, or
 SSE. A change to auth handling means six edits.
 
-Split into `shared/api/{chat,documents,kb,wiki,actions,surveys,birdie}.ts` over a shared
+Split into `shared/api/{chat,documents,kb,wiki,actions,birdie}.ts` over a shared
 `http.ts` exposing `request`, `requestBlob`, `requestForm`, and `requestStream`.
 
 ### P1 — `App.tsx` is a 778-line god component
@@ -423,10 +415,6 @@ fires. Fetch only the un-summarised slice using the existing `summary_up_to` cur
 
 ### P2 — `save_memory_candidates` loads all of a user's memories to dedupe
 Replace the Python set-membership check with a `SELECT ... WHERE lower(content) IN (...)`.
-
-### P2 — Survey trend query is unbounded in time
-`_survey_trends_statement` aggregates every week ever recorded and returns it all to the dashboard.
-Add a rolling window (e.g. last 12 weeks).
 
 ### P2 — OCR converts every page at 150 DPI with no page cap
 `_extract_pdf_ocr` (`app/services/ingestion_service.py`) calls `convert_from_bytes` on the whole

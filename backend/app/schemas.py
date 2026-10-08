@@ -18,7 +18,6 @@ ResourceMetadataType = Literal[
 KnowledgeBankEntryType = Literal["knowledge_bank", "style_guide", "action"]
 PiiStatus = Literal["clean", "flagged", "pending_review", "redacted"]
 KbEntryStatus = Literal["processing", "ready", "failed"]
-SurveyCategory = Literal["workload", "mental_health", "team_dynamics", "learning"]
 ActionStatus = Literal["pending", "in_progress", "review", "with_client", "done"]
 ActionPriority = Literal["low", "medium", "high"]
 WikiPageStatus = Literal["draft", "published", "archived"]
@@ -540,68 +539,6 @@ class UserResponse(BaseModel):
 
 class UserSettingsUpdate(BaseModel):
     firm_role: FirmRole
-
-
-class SurveyQuestionCreate(BaseModel):
-    text: str = Field(min_length=1, max_length=500)
-    category: SurveyCategory
-    order_index: int = 0
-    reverse_scored: bool = False
-
-
-class SurveyQuestionUpdate(BaseModel):
-    text: str | None = Field(default=None, min_length=1, max_length=500)
-    category: SurveyCategory | None = None
-    order_index: int | None = None
-    is_active: bool | None = None
-    reverse_scored: bool | None = None
-
-
-class SurveyQuestionResponse(BaseModel):
-    id: str
-    text: str
-    category: str
-    order_index: int
-    is_active: bool
-    reverse_scored: bool
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class SurveyResponseCreate(BaseModel):
-    question_id: str
-    score: int = Field(ge=1, le=5)
-    week_of: datetime
-
-
-class SurveyResponseItem(BaseModel):
-    question_id: str
-    score: int = Field(ge=1, le=5)
-
-
-class SurveyResponseBatchCreate(BaseModel):
-    responses: list[SurveyResponseItem] = Field(min_length=1, max_length=100)
-
-
-class SurveyWeekResult(BaseModel):
-    week_of: datetime
-    avg_score: float
-    response_count: int
-
-
-class SurveyQuestionResult(BaseModel):
-    question_id: str
-    question_text: str
-    category: str
-    weeks: list[SurveyWeekResult]
-
-
-class SurveyResultsResponse(BaseModel):
-    current_week_of: datetime
-    minimum_cohort_size: int
-    current_cohort_size: int | None
-    questions: list[SurveyQuestionResult]
 
 
 class ActionItemCreate(BaseModel):

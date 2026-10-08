@@ -174,17 +174,6 @@ class SeedContentTests(unittest.TestCase):
         self.assertEqual(statuses, {"pending", "in_progress", "review", "done"})
         self.assertIn(seed.SPA_TICKET, {t[0] for t in seed.TICKETS})
 
-    def test_survey_patterns_cover_six_weeks_on_the_1_to_5_scale(self) -> None:
-        for patterns in seed.SURVEY_PATTERNS.values():
-            for scores in patterns.values():
-                self.assertEqual(len(scores), 6)
-                self.assertTrue(all(1 <= s <= 5 for s in scores))
-
-    def test_three_respondents_meet_minimum_cohort(self) -> None:
-        from app.services.survey_service import MINIMUM_COHORT_SIZE
-
-        self.assertGreaterEqual(len(seed.SURVEY_PATTERNS), MINIMUM_COHORT_SIZE)
-
 
 if __name__ == "__main__":
     unittest.main()
