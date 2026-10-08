@@ -613,9 +613,8 @@ function KBEntryCard({ entry }: { entry: KnowledgeBankEntry }) {
 type BirdieMsg = { id: string; role: 'user' | 'assistant'; body: string }
 
 const STARTERS = [
-  'Show my Workboard progress for this matter.',
-  'How do I raise a workload concern with my supervisor?',
-  'What does reasonable endeavours actually require?',
+  'What should I prioritise tonight across all my matters?',
+  'Where are we on this matter?',
   'How can I handle feedback I disagree with?',
   "What's the right way to ask for guidance without looking junior?",
 ]
