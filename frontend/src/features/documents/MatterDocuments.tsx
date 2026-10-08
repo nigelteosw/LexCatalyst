@@ -29,10 +29,30 @@ import {
   moveDocumentToFolder,
   renameDocument,
   renameDocumentFolder,
+  searchDocumentMetadata,
   uploadDocument,
 } from '../../shared/api/api'
 import type { DocumentFolder, WorkspaceDocument } from '../../shared/types/workspace'
 import { useWorkspaceNavigation } from '../../app/routes'
+
+const MAX_ROW_TAGS = 3
+
+/** Up to three tag chips for a document row, with the rest summarised as +N. */
+function TagChips({ tags }: { tags: string[] }) {
+  if (tags.length === 0) return null
+  const shown = tags.slice(0, MAX_ROW_TAGS)
+  const extra = tags.length - shown.length
+  return (
+    <ul aria-label="Tags" className="mt-2 flex flex-wrap items-center gap-1.5">
+      {shown.map((tag) => (
+        <li className="rounded-md bg-neutral-100 px-2 py-0.5 text-meta text-ink-secondary" key={tag}>
+          {tag}
+        </li>
+      ))}
+      {extra > 0 && <li className="text-meta text-ink-tertiary">+{extra}</li>}
+    </ul>
+  )
+}
 
 const ACCEPTED = [
   'application/pdf',
@@ -110,6 +130,18 @@ export function MatterDocuments({
     queryFn: () => listKnowledgeBankEntries(),
   })
 
+  // Tags for the rows and the search box. Capped at 50 documents by the endpoint; rows beyond
+  // that simply show no chips. Read by document id, so other matters' rows are never displayed.
+  const metadataQuery = useQuery({
+    queryKey: ['documentMetadataList', matterId ?? 'general'],
+    queryFn: () => searchDocumentMetadata({ matterId, limit: 50 }),
+    staleTime: 30_000,
+  })
+  const tagsByDocument = useMemo(
+    () => new Map((metadataQuery.data ?? []).map((m) => [m.documentId, m.tags] as const)),
+    [metadataQuery.data],
+  )
+
   const folders = useMemo(() => foldersQuery.data ?? [], [foldersQuery.data])
   const knowledgeEntries = useMemo(
     () => knowledgeEntriesQuery.data ?? [],
@@ -129,7 +161,9 @@ export function MatterDocuments({
   const visibleDocuments = matterDocuments.filter(
     (d) =>
       (d.folderId ?? null) === (activeFolder?.id ?? null) &&
-      (!needle || d.filename.toLowerCase().includes(needle)),
+      (!needle ||
+        d.filename.toLowerCase().includes(needle) ||
+        (tagsByDocument.get(d.id) ?? []).some((tag) => tag.includes(needle))),
   )
   const visibleFolders = folders.filter((f) => !needle || f.name.toLowerCase().includes(needle))
   const folderCounts = useMemo(() => {
@@ -521,6 +555,7 @@ export function MatterDocuments({
                     <p className="mt-1 text-sm text-neutral-500">
                       {document.contentType.includes('pdf') ? 'PDF' : 'DOCX'} · Uploaded {formatDateTime(document.createdAt)}
                     </p>
+                    <TagChips tags={tagsByDocument.get(document.id) ?? []} />
                     {knowledgeEntry && (
                       <p className="mt-1 text-sm text-neutral-500">
                         Knowledge Bank: {knowledgeEntry.title} ({knowledgeEntry.scope.replace('_', ' ')})

@@ -136,6 +136,10 @@ app/services/
   case_law_service.py     # Shared audited judgment/excerpt lookup for LexChat and Birdie
   action_service.py       # Action board items
   birdie_service.py       # Birdie AI mentor
+  catalogue_service.py     # LLM extraction of document catalogue fields, tags and summaries; apply_catalogue keeps edited fields
+  document_catalogue_service.py # Document metadata: get/edit, search by tags, backfill (access follows the document)
+  entry_metadata_service.py # Tags and summary for manual KB notes (skips PII-flagged notes)
+  birdie_document_service.py # Birdie find_documents / read_document tools
   birdie_review_service.py # Draft review: anchored replace/insert/comment suggestions (extension)
   llm_service.py          # Per-user OpenRouter key + High/Mid tier model resolution; FEATURES list
   lesson_service.py       # Reviewer feedback → Birdie lessons (submitter-only)

@@ -118,6 +118,8 @@ import { EntryFormDialog } from './components/EntryFormDialog'
 import { MatterFormDialog } from './components/MatterFormDialog'
 import { entryTypes, scopeDescriptions, scopeLabels } from './config'
 import { getErrorMessage } from '../../shared/lib/errors'
+import { useMetadataEditor } from '../documents/DocumentMetadataCard'
+import { DocumentDetailsTab, EntrySummarySidebar } from './components/EntryMetadataPanels'
 
 type KnowledgeBankPanelProps = {
   matters: Matter[]
@@ -646,6 +648,8 @@ function KnowledgeBankReader({
   const [docPreviewOpen, setDocPreviewOpen] = useState(false)
   const [docPreviewLoading, setDocPreviewLoading] = useState(false)
   const [docPreviewError, setDocPreviewError] = useState<string | null>(null)
+  const editor = useMetadataEditor({ documentId: entry.sourceDocumentId, entryId: entry.id, canEdit })
+  const [tab, setTab] = useState<'content' | 'details'>('content')
 
   useEffect(() => {
     return () => {
@@ -743,9 +747,6 @@ function KnowledgeBankReader({
             ) : (
               <span>{entry.entryType.replaceAll('_', ' ')}</span>
             )}
-            <span>Author role: {entry.createdByRole.replaceAll('_', ' ')}</span>
-            <span>Added {formatDateTime(entry.createdAt)}</span>
-            <span>Latest edit {formatDateTime(entry.updatedAt)}</span>
           </div>
           {canChangeScope && (
             <div className="mt-4">
@@ -826,7 +827,32 @@ function KnowledgeBankReader({
             </div>
           )}
 
-          <div className="mt-8 rounded-xl border border-neutral-200 bg-white px-6 py-7 sm:px-8 sm:py-9 lg:px-10">
+          <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="min-w-0">
+          {entry.sourceDocumentId && (
+            <div className="mb-4 flex gap-1 border-b border-neutral-200" role="tablist">
+              {(['content', 'details'] as const).map((id) => (
+                <button
+                  aria-selected={tab === id}
+                  className={`-mb-px border-b-2 px-3 py-2 text-body transition-colors ${
+                    tab === id
+                      ? 'border-accent font-medium text-ink'
+                      : 'border-transparent text-ink-tertiary hover:text-ink'
+                  }`}
+                  key={id}
+                  onClick={() => setTab(id)}
+                  role="tab"
+                  type="button"
+                >
+                  {id === 'content' ? 'Content' : 'Details'}
+                </button>
+              ))}
+            </div>
+          )}
+          {entry.sourceDocumentId && tab === 'details' ? (
+            <DocumentDetailsTab editor={editor} entry={entry} />
+          ) : (
+          <div className="rounded-xl border border-neutral-200 bg-white px-6 py-7 sm:px-8 sm:py-9">
             {entry.status === 'processing' ? (
               <div className="flex items-center gap-3 text-sm text-[#666660]">
                 <span className="flex gap-1">
@@ -859,6 +885,10 @@ function KnowledgeBankReader({
             ) : (
               <MarkdownContent markdown={entry.bodyMarkdown} className="text-base leading-8 text-[#292925]" />
             )}
+          </div>
+          )}
+          </div>
+          <EntrySummarySidebar editor={editor} entry={entry} />
           </div>
         </article>
       </main>
@@ -1064,17 +1094,6 @@ function EntryCard({
       <span className="hidden text-right text-sm text-neutral-500 sm:block">{listDate(entry.createdAt)}</span>
     </button>
   )
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'recently'
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
 }
 
 function AuditLogView({

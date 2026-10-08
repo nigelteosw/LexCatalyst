@@ -14,6 +14,7 @@ from app.dependencies import (
     require_partner_or_admin,
 )
 from app.models import Document, User
+from app.services.entry_metadata_service import note_metadata_dict
 from app.schemas import (
     KnowledgeBankAccessLogResponse,
     KnowledgeBankBackfillResponse,
@@ -22,8 +23,10 @@ from app.schemas import (
     KnowledgeBankEntryResponse,
     KnowledgeBankEntryStatusResponse,
     KnowledgeBankEntrySummaryResponse,
+    DocumentMetadataResponse,
     KnowledgeBankEntryUpdate,
     KnowledgeBankPromoteRequest,
+    NoteMetadataUpdate,
     RedactionApprovalRequest,
     RedactionProposalResponse,
 )
@@ -42,6 +45,8 @@ from app.services.knowledge_bank_service import (
     list_kb_entries,
     promote_kb_entry,
     update_kb_entry,
+    backfill_note_metadata,
+    update_note_metadata,
 )
 
 router = APIRouter(tags=["knowledge-bank"])
@@ -352,3 +357,60 @@ def audit_log(
         ]
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Audit log is unavailable") from exc
+
+
+def _note_for_metadata(db: Session, user: User, entry_id: str, *, write: bool):
+    entry = get_kb_entry(db, entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
+    if entry.source_document_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Document entries are edited at /documents/{id}/metadata",
+        )
+    (require_kb_write if write else require_kb_read)(db, user, entry)
+    return entry
+
+
+@router.get("/kb/entries/{entry_id}/metadata", response_model=DocumentMetadataResponse)
+def note_metadata_detail(
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    entry = _note_for_metadata(db, current_user, entry_id, write=False)
+    return note_metadata_dict(entry, entry.matter.title if entry.matter else None)
+
+
+@router.patch("/kb/entries/{entry_id}/metadata", response_model=DocumentMetadataResponse)
+async def note_metadata_update(
+    entry_id: str,
+    schema: NoteMetadataUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    entry = _note_for_metadata(db, current_user, entry_id, write=True)
+    updates = schema.model_dump(exclude_unset=True)
+    try:
+        saved = await update_note_metadata(
+            db,
+            user=current_user,
+            entry=entry,
+            tags=updates.get("tags"),
+            summary=updates.get("summary"),
+            summary_set="summary" in updates,
+        )
+    except KnowledgeBankError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return note_metadata_dict(saved, saved.matter.title if saved.matter else None)
+
+
+@router.post("/kb/backfill-note-metadata")
+async def note_metadata_backfill(
+    limit: int = Query(default=10, ge=1, le=25),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, int]:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return await backfill_note_metadata(db, limit=limit)

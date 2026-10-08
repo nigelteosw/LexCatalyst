@@ -16,6 +16,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - **Auditable memory consolidation**: Dream applies conservative memory additions, merges, updates, and drops without a manual approval step. Automated memories retain the agent's justification.
 - **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
 - **Drag-and-drop uploads**: Upload PDF/DOCX from a matter’s documents section or attach a document in LexChat. OCR fallback via Tesseract for scanned PDFs.
+- **Document and note metadata**: every uploaded document and every manual Knowledge Bank note gets LLM-generated tags and a short summary (documents also get a type, status and execution date). People can edit all of it, and edited fields are kept when metadata is regenerated. The metadata is searchable, shown on matter document rows, and lets Birdie find documents. Notes flagged for PII are never sent for tagging. Existing documents and notes are tagged with `POST /kb/backfill-document-metadata` and `POST /kb/backfill-note-metadata` (admin, batches of up to 25; repeat until `remaining` stops falling).
 - **Semantic search**: pgvector cosine similarity over document chunks AND KB entries. Embeddings fingerprinted by content hash so they auto-refresh when content changes.
 - **Source citations**: LexChat shows numbered citations with a source panel for the supporting passage and a link to the document, Knowledge Bank entry, or public judgment.
 
@@ -37,7 +38,8 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - Uses a dedicated `/birdie/stream` endpoint with a mentor-specific system prompt — separate agent from the main legal chat. Runs on the user's own **OpenRouter** key and the tier (High or Mid) chosen in the composer or Settings → Models.
 - Pulls firm KB context (RBAC-respecting), recent reviewer feedback, and the current matter’s own assigned tickets for grounded answers.
 - **Workboard tools, web and extension:** create self-assigned tickets; read, edit title/description, move status, reassign, or delete tickets currently assigned to you; report live completed/outstanding/overdue counts. Even admins cannot manage other people’s tickets through Birdie. Reassignment ends access. Linked reviews protect status, assignment and deletion; use the review workflow.
-- **Privacy:** Birdie prompts (document excerpts, KB entries, reviewer feedback, Workboard ticket data) go to OpenRouter and the chosen model provider.
+- **Documents:** Birdie can look up the firm's uploaded documents by their tags, summary and type (`find_documents`) and read one by id (`read_document`). It searches the current matter unless the user explicitly asks for all matters, and every read re-checks access to the document.
+- **Privacy:** Birdie prompts (document excerpts, KB entries, reviewer feedback, Workboard ticket data) go to OpenRouter and the chosen model provider. Document metadata generation sends the document or note text to the uploader's or author's OpenRouter model.
 
 ### Workboard — Task Delegation
 - Board and list views share a five-stage flow: To do → Drafting → Internal review → With client / counterparty → Done. Existing drafting and review tickets keep their stages; `with_client` is accepted by the authenticated action update endpoint.
@@ -360,6 +362,8 @@ Optimized KB read routes, all requiring Bearer authentication:
 - `GET /kb/entries?limit=30&offset=0` returns paginated summaries without vectors or full Markdown bodies.
 - `GET /kb/entries/status?ids=...` returns polling state only and does not write audit rows.
 - `GET /kb/entries/{id}` returns one full entry without creating an audit event.
+- `GET|PATCH /kb/entries/{id}/metadata` reads or edits a manual note's tags and summary (`{tags?, summary?}`). Read and write follow the entry's Knowledge Bank access; document-backed entries return `409` and use the document route below.
+- `POST /kb/backfill-note-metadata?limit=10` and `POST /kb/backfill-document-metadata?limit=10` tag existing notes and documents that have none (admin only; `403` otherwise).
 - `GET /resources/metadata` returns cross-resource metadata using the same owner/team/matter/firm-wide visibility rules.
 
 ---
@@ -436,6 +440,7 @@ LexChat (`POST /chat/stream`, JWT required with matter-access checks) exposes `s
 - `birdie_workboard_service.py` exposes the same validated backend tool surface to the web panel and Chrome extension through `POST /birdie/stream`: `list_workboard_tickets`, `get_workboard_ticket`, `get_workboard_progress`, `create_workboard_ticket`, `update_workboard_ticket`, `delete_workboard_ticket`, and `find_workboard_assignees`. No client-supplied acting user is accepted.
 - New tickets are assigned to the caller, including associates. Existing tickets require current assignment and matter access on each call, with no assigner/admin ownership bypass. Updates/deletes acquire a ticket row lock. Reassignment validates the colleague and their matter access, then revokes the caller’s ownership. Board HTTP permissions are unchanged.
 - Lists/progress default to the current matter; no matter means General. An explicit across-matters request uses `scope=all`, still filtered by ownership and matter access. The extension has no selected matter by default. Lists return at most 50 tickets with `total`/`truncated`; progress counts cover all matching rows, including completed tickets. Progress reflects recorded status, not inferred completion.
+- `birdie_document_service.py` adds `find_documents` (metadata search, current matter by default) and `read_document` (relevant passages, or the start of the document, capped at about 6,000 characters). Both use the caller's own access; a missing and an inaccessible document give the same answer. Document text is treated as untrusted content.
 - The direct tool loop allows four rounds plus a final answer, at most eight executions per round, and caches identical mutations within a turn to prevent duplicate changes. The selected OpenRouter model must support tool calling. Workboard data sent to the model uses the caller’s own key.
 - The stream retains `token`/`done`/`error` and adds `tool_call` (step ID/tool), `tool_result` (success/changed/summary), and `workboard_changed` (tool/ticket ID) events. Mutation events are emitted immediately after commit, before the final answer. The web panel refreshes Workboard queries; extension clients can use the optional `onWorkboardChange` callback. A later stream error does not undo changes already committed.
 - The LLM is chosen per user by `llm_service.get_llm`: their OpenRouter key, else `DEMO_OPENROUTER_KEY` when `DEMO_MODE=true`, else `409 Add your OpenRouter key in Settings`. A rejected key surfaces an error pointing to Settings. `POST /birdie/stream` and `POST /chat[/stream]` accept optional `tier` (`high`|`mid`) and `model` (any OpenRouter id).
@@ -521,6 +526,8 @@ Authenticated document review routes:
 - `PATCH /chat/threads/{id}` renames and/or moves a thread (`{title?, matter_id?}`; `matter_id: null` moves it to General); owner only.
 - `GET /documents/{id}/file` serves the original file inline. It accepts the normal Bearer header or the JWT `token` query parameter used by the PDF iframe.
 - `GET|POST /documents/{id}/comments` lists or creates comments for the uploader or a member of the document's matter.
+- `GET|PATCH /documents/{id}/metadata` reads or edits a document's tags, summary, type, status and execution date. Allowed for the uploader or a member of the document's matter; anyone else gets `404`. `PATCH` returns `422` for an unknown type or status.
+- `GET /documents/metadata/search?q=&tags=&document_type=&matter_id=&limit=` finds documents by metadata (tags are an AND filter; `q` ranks by embedding similarity). `GET /documents/metadata/tags?matter_id=` lists tags in use. Both only return documents the caller can access.
 - `DELETE /documents/comments/{comment_id}` is restricted to the author or a partner/admin who can access the matter document.
 
 Authenticated Workboard and review-handoff routes:

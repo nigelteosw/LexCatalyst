@@ -41,6 +41,9 @@ COMMON_SINGLE_FIELDS = (
 
 MAX_ITEMS = 50
 MAX_TEXT = 500
+MAX_TAGS = 12
+MAX_TAG_LEN = 40
+MAX_SUMMARY = 800
 
 
 _SYSTEM_PROMPT = """\
@@ -58,6 +61,8 @@ Return ONLY valid JSON with this shape (no markdown fences, no commentary):
   "document_type": one of {document_types},
   "document_status": one of {document_statuses},
   "execution_date": "YYYY-MM-DD" or null,
+  "summary": "2-3 plain sentences on what the document is and does",
+  "tags": ["5-12 short lowercase topic tags, e.g. property, place, deal type, subject matter"],
   "parties": [{{"name": "...", "role": "...", "locator": "...", "quote": "..."}}],
   "key_dates": [{{"label": "...", "date": "YYYY-MM-DD or as written", "locator": "...", "quote": "..."}}],
   "amounts": [{{"label": "...", "value": "...", "currency": "...", "locator": "...", "quote": "..."}}],
@@ -158,6 +163,22 @@ def _items(value: Any, keys: tuple[str, ...], required: str) -> list[dict[str, s
     return out
 
 
+def normalise_tags(value: Any) -> list[str]:
+    """Lowercase, trim, de-duplicate and cap tags. Non-string items are dropped."""
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for raw in value:
+        if not isinstance(raw, str):
+            continue
+        tag = " ".join(raw.strip().lower().split())[:MAX_TAG_LEN].strip()
+        if tag and tag not in out:
+            out.append(tag)
+        if len(out) >= MAX_TAGS:
+            break
+    return out
+
+
 def _parse_date(value: Any) -> date | None:
     text = _text(value)
     if not text:
@@ -203,6 +224,8 @@ def parse_catalogue_response(content: str) -> dict[str, Any]:
         "document_type": document_type,
         "document_status": document_status,
         "execution_date": _parse_date(data.get("execution_date")),
+        "summary": (str(data["summary"]).strip()[:MAX_SUMMARY] or None) if data.get("summary") else None,
+        "tags": normalise_tags(data.get("tags")),
         "fields": fields,
         "parties": _items(data.get("parties"), ("name", "role"), required="name"),
         "key_dates": _items(data.get("key_dates"), ("label", "date"), required="date"),
@@ -228,4 +251,82 @@ async def extract_catalogue(provider, *, filename: str, raw_text: str, max_chars
         return parse_catalogue_response(content)
     except Exception as exc:  # noqa: BLE001 - extraction must never fail the entry
         logger.warning("Catalogue extraction skipped for %s: %s", filename, exc)
+        return None
+
+
+# Fields a person can edit. Once edited, a field's name is kept in
+# catalogue_fields["edited_fields"] and later extractions leave it alone.
+EDITABLE_FIELDS = ("tags", "summary", "document_type", "document_status", "execution_date")
+
+
+def apply_catalogue(entry, catalogue: dict[str, Any]) -> None:
+    """Write a fresh extraction onto a KB entry, keeping fields a person edited."""
+    previous = entry.catalogue_fields if isinstance(entry.catalogue_fields, dict) else {}
+    edited = sorted(name for name in previous.get("edited_fields", []) if name in EDITABLE_FIELDS)
+    fields = catalogue_to_json(catalogue)
+    for name in ("summary", "execution_date"):
+        if name in edited:
+            fields[name] = previous.get(name)
+    fields["edited_fields"] = sorted(edited)
+    entry.catalogue_fields = fields
+    if "document_type" not in edited:
+        entry.document_type = catalogue["document_type"]
+    if "document_status" not in edited:
+        entry.document_status = catalogue["document_status"]
+    if "execution_date" not in edited:
+        entry.execution_date = catalogue["execution_date"]
+    if "tags" not in edited:
+        entry.tags = catalogue["tags"]
+
+
+_ENTRY_SYSTEM_PROMPT = """\
+You tag notes in a legal knowledge base. You read one note and return a short \
+summary and topic tags as JSON. Only use what the note says."""
+
+_ENTRY_USER_PROMPT = """\
+Tag the note below.
+
+Return ONLY valid JSON (no markdown fences, no commentary):
+{{"summary": "2-3 plain sentences on what the note covers", "tags": ["5-12 short lowercase topic tags"]}}
+
+Title: {title}
+
+Note ({char_count} chars):
+{body}\
+"""
+
+
+def build_entry_metadata_prompt(*, title: str, body: str, max_chars: int) -> list[dict[str, str]]:
+    truncated = body[:max_chars]
+    return [
+        {"role": "system", "content": _ENTRY_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": _ENTRY_USER_PROMPT.format(title=title, char_count=len(truncated), body=truncated),
+        },
+    ]
+
+
+def parse_entry_metadata_response(content: str) -> dict[str, Any]:
+    """Return {"summary": str | None, "tags": list[str]} from the model's JSON."""
+    try:
+        data = json.loads(_strip_fences(content))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Note metadata returned invalid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("Note metadata JSON was not an object.")
+    summary = str(data["summary"]).strip()[:MAX_SUMMARY] if data.get("summary") else None
+    return {"summary": summary or None, "tags": normalise_tags(data.get("tags"))}
+
+
+async def extract_entry_metadata(provider, *, title: str, body: str, max_chars: int, timeout: float) -> dict[str, Any] | None:
+    """Tags and summary for a manual note. Returns None on any failure; never raises."""
+    try:
+        content, _ = await asyncio.wait_for(
+            provider.chat(build_entry_metadata_prompt(title=title, body=body, max_chars=max_chars)),
+            timeout=timeout,
+        )
+        return parse_entry_metadata_response(content)
+    except Exception as exc:  # noqa: BLE001 - metadata must never block saving a note
+        logger.warning("Note metadata skipped for %r: %s", title, exc)
         return None

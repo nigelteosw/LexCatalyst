@@ -25,6 +25,7 @@ async def search_documents(
     query: str,
     user_id: str,
     matter_id: str | None = None,
+    document_id: str | None = None,
     limit: int = 6,
 ) -> list[DocumentSearchResult]:
     if not query.strip():
@@ -39,6 +40,8 @@ async def search_documents(
     )
     if matter_id:
         stmt = stmt.where(Document.matter_id == matter_id)
+    if document_id:
+        stmt = stmt.where(Document.id == document_id)
     stmt = stmt.order_by(distance).limit(limit)
 
     results: list[DocumentSearchResult] = []

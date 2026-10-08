@@ -818,3 +818,34 @@ class BirdieSuggestionDecision(BaseModel):
 
 class BirdieSuggestionReplyCreate(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
+
+
+class DocumentMetadataResponse(BaseModel):
+    document_id: str | None = None
+    entry_id: str
+    filename: str  # the document's filename, or the note's title for manual notes
+    matter_id: str | None = None
+    matter_name: str | None = None
+    status: str
+    tags: list[str]
+    summary: str | None = None
+    document_type: str | None = None
+    document_status: str | None = None
+    execution_date: date | None = None
+    parties: list[dict] = []
+    key_dates: list[dict] = []
+    edited_fields: list[str] = []
+    updated_at: datetime
+
+
+class DocumentMetadataUpdate(BaseModel):
+    tags: list[str] | None = Field(default=None, max_length=30)
+    summary: str | None = Field(default=None, max_length=800)
+    document_type: str | None = None
+    document_status: str | None = None
+    execution_date: date | None = None
+
+
+class NoteMetadataUpdate(BaseModel):
+    tags: list[str] | None = Field(default=None, max_length=30)
+    summary: str | None = Field(default=None, max_length=800)

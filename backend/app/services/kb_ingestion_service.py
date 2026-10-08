@@ -22,12 +22,13 @@ from sqlalchemy.orm import Session, defer
 from app.database import SessionLocal
 from app.models import Document, DocumentChunk, KnowledgeBankEntry, User
 from app.providers.openrouter import OpenRouterError
-from app.services.catalogue_service import catalogue_to_json, extract_catalogue
+from app.services.catalogue_service import apply_catalogue, extract_catalogue
 from app.services.llm_service import get_llm
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.knowledge_bank_service import (
     build_entry_embedding_hash,
     build_entry_embedding_text,
+    _entry_embedding_hash,
     log_kb_access,
 )
 from app.services.resource_metadata_service import sync_kb_metadata, sync_metadata_safe
@@ -263,11 +264,17 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         timeout=FORMAT_TIMEOUT_SECONDS,
     )
 
+    tags = catalogue["tags"] if catalogue else []
+    summary = catalogue["summary"] if catalogue else None
     try:
         embedding = (
-            await embed_texts([build_entry_embedding_text(title, body_markdown)])
+            await embed_texts(
+                [build_entry_embedding_text(title, body_markdown, tags=tags, summary=summary)]
+            )
         )[0]
-        embedding_content_hash = build_entry_embedding_hash(title, body_markdown)
+        embedding_content_hash = build_entry_embedding_hash(
+            title, body_markdown, tags=tags, summary=summary
+        )
     except EmbeddingError as exc:
         _mark_failed(claim, f"Embedding failed: {exc}")
         return
@@ -297,10 +304,11 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         entry.processing_started_at = None
         entry.version += 1
         if catalogue:
-            entry.document_type = catalogue["document_type"]
-            entry.document_status = catalogue["document_status"]
-            entry.execution_date = catalogue["execution_date"]
-            entry.catalogue_fields = catalogue_to_json(catalogue)
+            apply_catalogue(entry, catalogue)
+            if _entry_embedding_hash(entry) != embedding_content_hash:
+                # A person's edits were kept over the fresh extraction, so the
+                # embedding is re-done by the regular stale-embedding path.
+                entry.embedding_content_hash = None
         db.commit()
         sync_metadata_safe(db, sync_kb_metadata, entry)
     except Exception as exc:  # noqa: BLE001

@@ -29,6 +29,7 @@ import type {
   ReviewHandoffStatus,
   SessionUser,
   Team,
+  DocumentMetadata,
   WorkspaceDocument,
   BirdiePageContext,
   LlmSettings,
@@ -322,6 +323,44 @@ function mapMessage(message: BackendMessage): Message {
   }
 }
 
+type BackendDocumentMetadata = {
+  document_id: string
+  entry_id: string
+  filename: string
+  matter_id: string | null
+  matter_name: string | null
+  status: string
+  tags: string[]
+  summary: string | null
+  document_type: string | null
+  document_status: string | null
+  execution_date: string | null
+  parties: DocumentMetadata['parties']
+  key_dates: DocumentMetadata['keyDates']
+  edited_fields: string[]
+  updated_at: string
+}
+
+function mapDocumentMetadata(metadata: BackendDocumentMetadata): DocumentMetadata {
+  return {
+    documentId: metadata.document_id,
+    entryId: metadata.entry_id,
+    filename: metadata.filename,
+    matterId: metadata.matter_id,
+    matterName: metadata.matter_name,
+    status: metadata.status,
+    tags: metadata.tags,
+    summary: metadata.summary,
+    documentType: metadata.document_type,
+    documentStatus: metadata.document_status,
+    executionDate: metadata.execution_date,
+    parties: metadata.parties,
+    keyDates: metadata.key_dates,
+    editedFields: metadata.edited_fields,
+    updatedAt: metadata.updated_at,
+  }
+}
+
 function mapDocument(document: BackendDocument): WorkspaceDocument {
   return {
     id: document.id,
@@ -609,6 +648,78 @@ export async function renameDocument(id: string, filename: string): Promise<Work
       body: JSON.stringify({ filename }),
     }),
   )
+}
+
+export type DocumentMetadataUpdate = {
+  tags?: string[]
+  summary?: string | null
+  documentType?: string
+  documentStatus?: string
+  executionDate?: string | null
+}
+
+export async function getDocumentMetadata(documentId: string): Promise<DocumentMetadata> {
+  return mapDocumentMetadata(await request<BackendDocumentMetadata>(`/documents/${documentId}/metadata`))
+}
+
+export async function updateDocumentMetadata(
+  documentId: string,
+  updates: DocumentMetadataUpdate,
+): Promise<DocumentMetadata> {
+  const body: Record<string, unknown> = {}
+  if (updates.tags !== undefined) body.tags = updates.tags
+  if (updates.summary !== undefined) body.summary = updates.summary
+  if (updates.documentType !== undefined) body.document_type = updates.documentType
+  if (updates.documentStatus !== undefined) body.document_status = updates.documentStatus
+  if (updates.executionDate !== undefined) body.execution_date = updates.executionDate
+  return mapDocumentMetadata(
+    await request<BackendDocumentMetadata>(`/documents/${documentId}/metadata`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function searchDocumentMetadata(options: {
+  query?: string
+  tags?: string[]
+  documentType?: string
+  matterId?: string | null
+  limit?: number
+}): Promise<DocumentMetadata[]> {
+  const params = new URLSearchParams()
+  if (options.query) params.set('q', options.query)
+  for (const tag of options.tags ?? []) params.append('tags', tag)
+  if (options.documentType) params.set('document_type', options.documentType)
+  if (options.matterId) params.set('matter_id', options.matterId)
+  params.set('limit', String(options.limit ?? 50))
+  const rows = await request<BackendDocumentMetadata[]>(`/documents/metadata/search?${params.toString()}`)
+  return rows.map(mapDocumentMetadata)
+}
+
+export async function getEntryMetadata(entryId: string): Promise<DocumentMetadata> {
+  return mapDocumentMetadata(await request<BackendDocumentMetadata>(`/kb/entries/${entryId}/metadata`))
+}
+
+// Manual notes take tags and a summary only; document-only fields are not sent.
+export async function updateEntryMetadata(
+  entryId: string,
+  updates: Pick<DocumentMetadataUpdate, 'tags' | 'summary'>,
+): Promise<DocumentMetadata> {
+  const body: Record<string, unknown> = {}
+  if (updates.tags !== undefined) body.tags = updates.tags
+  if (updates.summary !== undefined) body.summary = updates.summary
+  return mapDocumentMetadata(
+    await request<BackendDocumentMetadata>(`/kb/entries/${entryId}/metadata`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function listDocumentTags(matterId?: string | null): Promise<string[]> {
+  const query = matterId ? `?matter_id=${encodeURIComponent(matterId)}` : ''
+  return request<string[]>(`/documents/metadata/tags${query}`)
 }
 
 export async function moveDocument(id: string, matterId: string | null): Promise<WorkspaceDocument> {

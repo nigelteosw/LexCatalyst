@@ -11,6 +11,7 @@ import {
 } from '../../shared/api/api'
 import { getErrorMessage } from '../../shared/lib/errors'
 import type { CurrentUser, DocumentComment, WorkspaceDocument } from '../../shared/types/workspace'
+import { DocumentMetadataCard } from './DocumentMetadataCard'
 import { Button } from '../../shared/ui/Button'
 import { MatterSelect } from '../../shared/ui/MatterSelect'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
@@ -257,6 +258,12 @@ export function DocumentDrawer({ currentUser, document, onClose }: DocumentDrawe
         </div>
 
         <section className="flex min-h-80 shrink-0 flex-col border-t border-neutral-200 bg-white lg:h-full lg:w-[340px] lg:min-h-0 lg:border-l lg:border-t-0 xl:w-[390px]">
+          {document.status === 'ready' && (
+            <div className="app-scroll-region max-h-80 shrink-0 overflow-y-auto border-b border-neutral-100 px-4 pb-4 sm:px-5">
+              <h3 className="pb-4 pt-4 text-sm font-semibold text-neutral-900">Details</h3>
+              <DocumentMetadataCard canEdit={document.canManage} documentId={document.id} />
+            </div>
+          )}
           <div className="shrink-0 border-b border-neutral-100 px-4 py-3 sm:px-5">
             <h3 className="text-sm font-semibold text-neutral-900">Matter comments</h3>
             <p className="mt-0.5 text-meta text-neutral-500">

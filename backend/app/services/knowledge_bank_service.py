@@ -16,6 +16,13 @@ from app.models import (
     TeamMember,
     User,
 )
+from app.services.catalogue_service import MAX_SUMMARY, normalise_tags
+from app.services.entry_metadata_service import (
+    entry_summary,
+    generate_note_metadata,
+    mark_note_fields_edited,
+    set_note_summary,
+)
 from app.services.llm_service import get_llm
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.schemas import (
@@ -85,21 +92,51 @@ def _resolve_scope_targets(
     raise KnowledgeBankScopeError("Invalid Knowledge Bank scope")
 
 
-def build_entry_embedding_text(title: str, body_markdown: str) -> str:
-    return f"{title}\n\n{body_markdown}".strip()[:MAX_EMBEDDING_TEXT_CHARS]
+def build_entry_embedding_text(
+    title: str,
+    body_markdown: str,
+    *,
+    tags: list[str] | None = None,
+    summary: str | None = None,
+) -> str:
+    # Tags and summary lead so they survive truncation of long bodies. Entries
+    # without them embed exactly as before, so their hashes stay valid.
+    parts = [title]
+    if tags:
+        parts.append("Tags: " + ", ".join(tags))
+    if summary:
+        parts.append(summary)
+    parts.append(body_markdown)
+    return "\n\n".join(parts).strip()[:MAX_EMBEDDING_TEXT_CHARS]
 
 
-def build_entry_embedding_hash(title: str, body_markdown: str) -> str:
-    text = build_entry_embedding_text(title, body_markdown)
+def build_entry_embedding_hash(
+    title: str,
+    body_markdown: str,
+    *,
+    tags: list[str] | None = None,
+    summary: str | None = None,
+) -> str:
+    text = build_entry_embedding_text(title, body_markdown, tags=tags, summary=summary)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _entry_summary(entry: KnowledgeBankEntry) -> str | None:
+    fields = entry.catalogue_fields if isinstance(entry.catalogue_fields, dict) else {}
+    summary = fields.get("summary")
+    return summary if isinstance(summary, str) and summary else None
+
+
 def _entry_embedding_text(entry: KnowledgeBankEntry) -> str:
-    return build_entry_embedding_text(entry.title, entry.body_markdown)
+    return build_entry_embedding_text(
+        entry.title, entry.body_markdown, tags=entry.tags, summary=_entry_summary(entry)
+    )
 
 
 def _entry_embedding_hash(entry: KnowledgeBankEntry) -> str:
-    return build_entry_embedding_hash(entry.title, entry.body_markdown)
+    return build_entry_embedding_hash(
+        entry.title, entry.body_markdown, tags=entry.tags, summary=_entry_summary(entry)
+    )
 
 
 def _embedding_is_stale(entry: KnowledgeBankEntry) -> bool:
@@ -371,9 +408,12 @@ async def create_kb_entry(
         created_by=user.id,
         created_by_role=user.firm_role,
     )
+    if schema.tags:
+        mark_note_fields_edited(entry, {"tags"})
     try:
         db.add(entry)
         db.flush()
+        await generate_note_metadata(db, entry)
         await _embed_entry(entry)
         log_kb_access(
             db,
@@ -427,7 +467,12 @@ async def update_kb_entry(
     try:
         for field, value in updates.items():
             setattr(entry, field, value)
+        if "tags" in updates:
+            mark_note_fields_edited(entry, {"tags"})
         entry.version += 1
+        if content_changed:
+            # Re-tag from the new text; tags a person set are kept.
+            await generate_note_metadata(db, entry)
         if content_changed or _embedding_is_stale(entry):
             await _embed_entry(entry)
         log_kb_access(
@@ -443,6 +488,37 @@ async def update_kb_entry(
         raise
     sync_metadata_safe(db, sync_kb_metadata, entry)
     return get_kb_entry(db, entry.id)
+
+
+async def update_note_metadata(
+    db: Session,
+    *,
+    user: User,
+    entry: KnowledgeBankEntry,
+    tags: list[str] | None = None,
+    summary: str | None = None,
+    summary_set: bool = False,
+) -> KnowledgeBankEntry:
+    """Save a person's edits to a manual note's tags or summary. Caller checks access."""
+    edited: set[str] = set()
+    if tags is not None:
+        entry.tags = normalise_tags(tags)
+        edited.add("tags")
+    if summary_set:
+        set_note_summary(entry, (summary or "").strip()[:MAX_SUMMARY] or None)
+        edited.add("summary")
+    mark_note_fields_edited(entry, edited)
+    entry.version += 1
+    try:
+        if _embedding_is_stale(entry):
+            await _embed_entry(entry)
+        log_kb_access(db, user_id=user.id, entry_id=entry.id, matter_id=entry.matter_id, commit=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    sync_metadata_safe(db, sync_kb_metadata, entry)
+    return get_kb_entry(db, entry.id) or entry
 
 
 def delete_kb_entry(db: Session, *, user: User, entry_id: str) -> bool:
@@ -758,3 +834,43 @@ def format_kb_context(entries: list[KnowledgeBankEntry]) -> str:
         f"{entry.title} ({entry.entry_type}, {entry.scope})\n{entry.body_markdown}"
         for entry in entries
     )
+
+
+async def backfill_note_metadata(db: Session, *, limit: int = 10) -> dict[str, int]:
+    """Tag manual notes that have no tags or summary yet. Caller checks admin.
+
+    Uses each note creator's own key. Notes that cannot be tagged (no key, flagged
+    for PII, empty) stay in `remaining`, so callers should stop when a batch makes
+    no progress.
+    """
+    base_filter = (
+        KnowledgeBankEntry.source_document_id.is_(None),
+        KnowledgeBankEntry.status == "ready",
+        KnowledgeBankEntry.pii_status != "flagged",
+        func.coalesce(func.json_array_length(KnowledgeBankEntry.tags), 0) == 0,
+        func.coalesce(KnowledgeBankEntry.catalogue_fields["summary"].as_string(), "") == "",
+    )
+    pending = list(
+        db.scalars(
+            select(KnowledgeBankEntry)
+            .where(*base_filter)
+            .order_by(KnowledgeBankEntry.created_at)
+            .limit(limit)
+        )
+    )
+    updated = 0
+    for entry in pending:
+        await generate_note_metadata(db, entry)
+        if not entry.tags and not entry_summary(entry):
+            continue
+        entry.version += 1
+        try:
+            await _embed_entry(entry)
+            db.commit()
+        except KnowledgeBankError:
+            db.rollback()
+            continue
+        sync_metadata_safe(db, sync_kb_metadata, entry)
+        updated += 1
+    remaining = db.scalar(select(func.count()).select_from(KnowledgeBankEntry).where(*base_filter)) or 0
+    return {"updated": updated, "skipped": len(pending) - updated, "remaining": remaining}
