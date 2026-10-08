@@ -390,6 +390,10 @@ function App() {
               }
             : stream)
         },
+        onWorkboardChange: () => {
+          void queryClient.invalidateQueries({ queryKey: ['actions'] })
+          void queryClient.invalidateQueries({ queryKey: ['resourceMetadata'] })
+        },
         onToken: (content) => {
           setActiveStream((stream) => stream
             ? {

@@ -150,6 +150,8 @@ type StreamChatOptions = {
   onToolCall: (stepId: string, tool: string, args: Record<string, unknown>) => void
   onToolResult: (stepId: string, tool: string, summary: string) => void
   onSources?: (sources: MessageSource[]) => void
+  // A tool changed the Workboard (create, update or delete), so views of it are stale.
+  onWorkboardChange?: () => void
   onToken: (content: string) => void
   onDone: (payload: { threadId: string; message: Message; model: string }) => void
 }
@@ -804,6 +806,7 @@ export async function streamChatMessage({
   onToolCall,
   onToolResult,
   onSources,
+  onWorkboardChange,
   onToken,
   onDone,
 }: StreamChatOptions) {
@@ -851,14 +854,14 @@ export async function streamChatMessage({
 
     for (const rawEvent of events) {
       completed =
-        handleStreamEvent(rawEvent, { onThread, onToolCall, onToolResult, onSources, onToken, onDone }) ===
+        handleStreamEvent(rawEvent, { onThread, onToolCall, onToolResult, onSources, onWorkboardChange, onToken, onDone }) ===
           'done' || completed
     }
   }
 
   if (buffer.trim()) {
     completed =
-      handleStreamEvent(buffer, { onThread, onToolCall, onToolResult, onSources, onToken, onDone }) ===
+      handleStreamEvent(buffer, { onThread, onToolCall, onToolResult, onSources, onWorkboardChange, onToken, onDone }) ===
         'done' || completed
   }
   if (!completed) throw new Error('The response stream ended before completion. Please try again.')
@@ -1103,7 +1106,10 @@ export async function listKnowledgeBankAuditLog(): Promise<KnowledgeBankAccessLo
 
 function handleStreamEvent(
   rawEvent: string,
-  callbacks: Pick<StreamChatOptions, 'onThread' | 'onToolCall' | 'onToolResult' | 'onSources' | 'onToken' | 'onDone'>,
+  callbacks: Pick<
+    StreamChatOptions,
+    'onThread' | 'onToolCall' | 'onToolResult' | 'onSources' | 'onWorkboardChange' | 'onToken' | 'onDone'
+  >,
 ): string | null {
   const eventName = rawEvent
     .split('\n')
@@ -1148,6 +1154,11 @@ function handleStreamEvent(
 
   if (eventName === 'sources') {
     callbacks.onSources?.(mapMessageSources((payload as { sources: BackendMessageSource[] }).sources) ?? [])
+    return eventName
+  }
+
+  if (eventName === 'workboard_changed') {
+    callbacks.onWorkboardChange?.()
     return eventName
   }
 

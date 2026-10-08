@@ -7,7 +7,14 @@ from sqlalchemy.orm import Session
 from app.dependencies import check_kb_read
 from app.models import Document, User
 from app.services.llm_service import get_llm
-from app.services.document_service import get_document_full_text
+from app.services.agent_tools import (
+    MUTATION_TOOL_NAMES,
+    SHARED_TOOL_NAMES,
+    TOOLS,
+    execute_shared_tool,
+    summarise_result,
+    tool_message,
+)
 from app.services.knowledge_bank_service import (
     get_kb_entry,
     search_kb_for_chat,
@@ -63,118 +70,10 @@ MAX_TOOL_ROUNDS = 4
 MAX_MEMORY_RESULTS = 6
 MAX_KB_BODY_PREVIEW = 2000
 MAX_EXCERPT_CHARS = 1500
+# LexChat reads further into a document than Birdie's side panel does.
+MAX_READ_CHARS = 30_000
 
-TOOLS: list[dict] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_elitigation",
-            "description": (
-                "Search public Singapore court judgments on eLitigation. Use for case-law "
-                "research and whenever the user asks for eLitigation cases. For recent/latest "
-                "cases set newest_first=true; use year only for a specific requested year. "
-                "Send a short legal-topic search phrase, never client names, confidential "
-                "facts or document excerpts. Returns verified citations, dates, URLs and excerpts."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Short public legal-topic keywords or boolean phrase (max 200 characters)"},
-                    "newest_first": {"type": "boolean", "description": "True for recent/latest judgments; defaults to false (relevance)."},
-                    "year": {"type": "integer", "description": "Optional decision year; omit to search all years."},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_documents",
-            "description": (
-                "Search uploaded legal documents for relevant clauses, facts, or analysis. "
-                "Use when the question requires specific text from uploaded files."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Natural-language search query"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_knowledge_bank",
-            "description": (
-                "Search the firm's knowledge bank for playbooks, precedents, style guides, "
-                "and soft-skill advice the user has access to."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Natural-language search query"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_memories",
-            "description": (
-                "Keyword-search the user's memory bank for personal context, working style "
-                "preferences, and past matter facts."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Keyword(s) to match against memories"},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_kb_entry",
-            "description": (
-                "Fetch the full content of a specific knowledge bank entry by its ID. "
-                "Use after search_knowledge_bank when you want to read an entry in full."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "entry_id": {"type": "string", "description": "The knowledge bank entry ID"},
-                },
-                "required": ["entry_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_document",
-            "description": (
-                "Read the full extracted text of an uploaded document by its ID. "
-                "Use this when the KB summary is not detailed enough and you need to "
-                "quote or analyse the original document. The document_id can be found "
-                "on a KB entry as 'source_document_id', or surfaced by search_documents."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "document_id": {"type": "string", "description": "The document ID"},
-                },
-                "required": ["document_id"],
-            },
-        },
-    },
-]
+# The tool list lives in agent_tools so Birdie offers exactly the same tools.
 
 # --- Tool execution -------------------------------------------------------
 
@@ -327,32 +226,28 @@ async def _execute_tool(
         return body, summary
 
     if name == "read_document":
-        document_id = str(args.get("document_id", "")).strip()
-        if not document_id:
-            return "No document ID provided.", "no id"
-        result = get_document_full_text(
-            db, user_id=user.id, document_id=document_id,
+        result = await execute_shared_tool(
+            name, args, db=db, user=user, matter_id=matter_id, max_read_chars=MAX_READ_CHARS,
         )
-        if result is None:
-            return f"Document '{document_id}' not found.", "not found"
-        document, full_text = result
-        if not full_text:
-            return (
-                f"Document '{document.filename}' has no extracted text yet.",
-                "no text",
-            )
-        summary = (
-            f"read: {document.filename} ({len(full_text):,} chars)"
-        )
+        if "error" in result:
+            return str(result["error"]), "not found"
+        if "text" not in result:  # a query that matched nothing in the document
+            return str(result.get("results", "No passages matched.")), "no results"
+        document = db.get(Document, result["document_id"])
         number = registry.add(
             kind="document",
-            id=document.id,
-            title=document.filename,
-            matter_id=document.matter_id,
-            scope="matter" if document.matter_id else "private",
+            id=result["document_id"],
+            title=result["filename"],
+            matter_id=document.matter_id if document else None,
+            scope="matter" if document and document.matter_id else "private",
         )
-        body = f"[{number}] # {document.filename}\n\n{full_text}"
-        return body, summary
+        body = f"[{number}] # {result['filename']}\n\n{result['text']}"
+        return body, f"read: {result['filename']} ({len(result['text']):,} chars)"
+
+    if name in SHARED_TOOL_NAMES:
+        # Workboard, find_documents and list_matters: plain data, nothing to cite.
+        result = await execute_shared_tool(name, args, db=db, user=user, matter_id=matter_id)
+        return tool_message(result), summarise_result(name, result)
 
     return f"Unknown tool: {name}", "unknown tool"
 
@@ -383,7 +278,8 @@ async def run_agent_loop(
     Yields:
       ("token",       {"content": str})
       ("tool_call",   {"step_id": str, "tool": str, "args": dict})
-      ("tool_result", {"step_id": str, "tool": str, "summary": str})
+      ("tool_result", {"step_id": str, "tool": str, "summary": str, "changed": bool})
+      ("workboard_changed", {"tool": str})
       ("sources",     {"sources": [{"n", "kind", "id", "title", "locator", "matter_id", "scope", "excerpt"}]})
 
     Loop design:
@@ -398,6 +294,9 @@ async def run_agent_loop(
     current_messages = list(messages)
     previous_fingerprints: set[str] = set()
     registry = SourceRegistry()
+    # A repeated Workboard change within one turn replays its first result, so a model that
+    # calls create/update/delete twice cannot make a duplicate ticket or repeat a deletion.
+    mutation_results: dict[str, dict] = {}
 
     for round_num in range(MAX_TOOL_ROUNDS + 1):
         is_final_round = round_num == MAX_TOOL_ROUNDS
@@ -470,14 +369,29 @@ async def run_agent_loop(
             yield ("tool_call", {"step_id": step_id, "tool": name, "args": args})
 
             known_sources = len(registry.sources)
-            result_text, summary = await _execute_tool(
-                name, args, db=db, user=user, matter_id=matter_id, registry=registry,
-            )
+            changed = False
+            if name in MUTATION_TOOL_NAMES:
+                fingerprint = _call_fingerprint(tool_call)
+                if fingerprint in mutation_results:
+                    result = mutation_results[fingerprint]
+                else:
+                    result = await execute_shared_tool(
+                        name, args, db=db, user=user, matter_id=matter_id,
+                    )
+                    mutation_results[fingerprint] = result
+                    changed = result.get("changed") is True
+                result_text, summary = tool_message(result), summarise_result(name, result)
+            else:
+                result_text, summary = await _execute_tool(
+                    name, args, db=db, user=user, matter_id=matter_id, registry=registry,
+                )
 
             yield (
                 "tool_result",
-                {"step_id": step_id, "tool": name, "summary": summary},
+                {"step_id": step_id, "tool": name, "summary": summary, "changed": changed},
             )
+            if changed:
+                yield ("workboard_changed", {"tool": name})
             if len(registry.sources) != known_sources:
                 yield ("sources", {"sources": list(registry.sources)})
 

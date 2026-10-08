@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { AlertCircle, ArrowDown, BookMarked, Brain, Check, ChevronDown, Copy, FileText, LoaderCircle, MessageSquare, Paperclip, Sparkles, Square, Trash2 } from 'lucide-react'
+import { AlertCircle, ArrowDown, BookMarked, Brain, Check, ChevronDown, Copy, FileText, ListChecks, LoaderCircle, MessageSquare, Paperclip, Sparkles, Square, Trash2 } from 'lucide-react'
 import { Button } from '../../shared/ui/Button'
 import { MarkdownContent } from '../../shared/ui/MarkdownContent'
 import { FeatureHelp } from '../../shared/ui/FeatureHelp'
@@ -545,6 +545,16 @@ const TOOL_LABELS: Record<string, string> = {
   search_knowledge_bank: 'Searching knowledge bank',
   search_memories: 'Searching memories',
   get_kb_entry: 'Reading KB entry',
+  find_documents: 'Finding documents',
+  read_document: 'Reading document',
+  list_matters: 'Checking matters',
+  list_workboard_tickets: 'Checking the Workboard',
+  get_workboard_progress: 'Checking Workboard progress',
+  get_workboard_ticket: 'Reading ticket',
+  create_workboard_ticket: 'Creating ticket',
+  update_workboard_ticket: 'Updating ticket',
+  delete_workboard_ticket: 'Deleting ticket',
+  find_workboard_assignees: 'Finding colleagues',
 }
 
 function ToolStepRow({ step }: { step: ToolStep }) {
@@ -553,6 +563,15 @@ function ToolStepRow({ step }: { step: ToolStep }) {
     search_knowledge_bank: <BookMarked size={12} />,
     search_memories: <Brain size={12} />,
     get_kb_entry: <BookMarked size={12} />,
+    find_documents: <FileText size={12} />,
+    read_document: <FileText size={12} />,
+    list_matters: <ListChecks size={12} />,
+    list_workboard_tickets: <ListChecks size={12} />,
+    get_workboard_progress: <ListChecks size={12} />,
+    get_workboard_ticket: <ListChecks size={12} />,
+    create_workboard_ticket: <ListChecks size={12} />,
+    update_workboard_ticket: <ListChecks size={12} />,
+    delete_workboard_ticket: <ListChecks size={12} />,
   }
   const labels = TOOL_LABELS
   const input = formatToolInput(step)

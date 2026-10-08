@@ -99,7 +99,7 @@ async def _find(db: Session, user: User, args: dict, matter_id: str | None) -> d
     }
 
 
-async def _read(db: Session, user: User, args: dict) -> dict:
+async def _read(db: Session, user: User, args: dict, limit: int = READ_CHAR_LIMIT) -> dict:
     document_id = args.get("document_id")
     if not isinstance(document_id, str) or not document_id:
         return {"error": "document_id is required."}
@@ -117,16 +117,24 @@ async def _read(db: Session, user: User, args: dict) -> dict:
             return {"results": f"No passages in {document.filename} matched."}
         text = "\n\n".join(f"[{r.citation_label}]\n{r.text}" for r in results)
     else:
-        loaded = get_document_full_text(db, user_id=user.id, document_id=document.id, max_chars=READ_CHAR_LIMIT)
+        loaded = get_document_full_text(db, user_id=user.id, document_id=document.id, max_chars=limit)
         if not loaded:
             return {"error": "Document has no extracted text."}
         _, text = loaded
-    return {"filename": document.filename, "text": text[:READ_CHAR_LIMIT]}
+    return {"filename": document.filename, "document_id": document.id, "text": text[:limit]}
 
 
-async def execute_document_tool(name: str, args: dict, *, db: Session, user: User, matter_id: str | None) -> dict:
+async def execute_document_tool(
+    name: str,
+    args: dict,
+    *,
+    db: Session,
+    user: User,
+    matter_id: str | None,
+    max_read_chars: int | None = None,
+) -> dict:
     if name == "find_documents":
         return await _find(db, user, args, matter_id)
     if name == "read_document":
-        return await _read(db, user, args)
+        return await _read(db, user, args, max_read_chars or READ_CHAR_LIMIT)
     return {"error": f"Unknown document tool {name}"}

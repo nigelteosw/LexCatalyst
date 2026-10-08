@@ -19,6 +19,7 @@ from app.services.rag_service import (
     search_documents,
 )
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
+from app.services.agent_tools import TASK_AWARENESS_GUIDANCE, WORKBOARD_RULES, today_line
 
 SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Answer clearly and conservatively. If the question needs document evidence, say what evidence is missing.
@@ -345,7 +346,7 @@ async def create_chat_request(
 
 
 AGENT_SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
-Use your tools to search for relevant documents, knowledge bank entries, and memories before answering.
+Use your tools to search for relevant documents, knowledge bank entries, and memories before answering. You also have the same Workboard, matter and document tools as Birdie, so you can see what the user needs to do and which documents they have.
 For Singapore case-law research or any request for eLitigation judgments, use search_elitigation before answering. Internal document searches do not search eLitigation.
 For recent/latest cases, set newest_first=true and report actual decision dates; do not assume an outdated year range. Filter by year only when requested; for a range, search each requested year.
 Send only short public legal-topic keywords to eLitigation, never client names, confidential facts or document excerpts.
@@ -386,7 +387,7 @@ async def prepare_agent_context(
     db.commit()
     db.refresh(thread)
 
-    system_content = AGENT_SYSTEM_PROMPT
+    system_content = AGENT_SYSTEM_PROMPT + today_line() + WORKBOARD_RULES + TASK_AWARENESS_GUIDANCE
 
     if thread.summary:
         system_content += (

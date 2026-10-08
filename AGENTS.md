@@ -131,7 +131,8 @@ Routers are thin — one file per domain under `app/routers/`. Business logic li
 
 ```txt
 app/services/
-  agent_service.py        # Tool dispatch inside streamed chat (search, KB, memory)
+  agent_service.py        # LexChat's streamed tool loop; numbers sources as [n] citations
+  agent_tools.py          # ONE tool list + executor shared by LexChat and Birdie (Workboard, documents, matters, KB, memory)
   elitigation_service.py  # Public Singapore judgments search, decision-year filter and date sorting
   case_law_service.py     # Shared audited judgment/excerpt lookup for LexChat and Birdie
   action_service.py       # Action board items
@@ -289,7 +290,7 @@ If the LLM or embedding provider changes, update both `README.md` and this file.
 
 All AI features run through OpenRouter on the user's own key. Prompts (including document excerpts) leave for OpenRouter and the chosen model provider; keep that disclosure in the UI and README.
 
-LexChat's streamed tool loop includes `search_elitigation` for public Singapore judgments (short legal-topic query only; no client facts or document excerpts sent to eLitigation). Recent-case requests use newest-first decision-date sorting; an optional year filters the decision year. Numbered sources include judgment links, dates and available excerpts. Search errors must remain distinct from empty results. The non-streaming `/chat` route retains internal retrieval only.
+LexChat and Birdie offer the same tools, defined once in `agent_tools.py`: the Workboard tools (list/progress/get/create/update/delete tickets, find colleagues), `find_documents` and `read_document`, `list_matters` (open and overdue tickets and waiting review rounds per matter), `search_documents`, `search_knowledge_bank`, `get_kb_entry`, `search_memories` and `search_elitigation`. Add a tool there, not in either loop. Each loop keeps its own citation handling, but access checks live inside the tools. Workboard changes are replayed from a per-turn cache so a repeated call cannot duplicate a ticket, and the stream emits `workboard_changed` so the UI refreshes. Both prompts include today's date and the same Workboard rules (`WORKBOARD_RULES`). LexChat's streamed tool loop includes `search_elitigation` for public Singapore judgments (short legal-topic query only; no client facts or document excerpts sent to eLitigation). Recent-case requests use newest-first decision-date sorting; an optional year filters the decision year. Numbered sources include judgment links, dates and available excerpts. Search errors must remain distinct from empty results. The non-streaming `/chat` route retains internal retrieval only.
 
 The Chrome extension (`extension/`) runs its selection content script only on origins the user turns on, and sends user-shared webpage text to Birdie as `web_context` on `POST /birdie/stream` and highlighted clauses to `POST /precedent/search`; keep the side-panel disclosure in sync with the provider line above. Birdie cites case law only from eLitigation (`case_law_service.py`); only a search phrase is sent there.
 
