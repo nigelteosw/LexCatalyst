@@ -137,79 +137,6 @@ export type DreamJobStatus = {
   errorMessage: string | null
 }
 
-export type WikiPageStatus = 'draft' | 'published' | 'archived'
-
-export type WikiPageType =
-  | 'source_summary'
-  | 'issue'
-  | 'timeline'
-  | 'playbook'
-  | 'memory_note'
-  | 'entity'
-  | 'clause'
-  | 'authority'
-  | 'question_answer'
-
-export type WikiUser = {
-  id: string
-  fullName?: string | null
-  email?: string | null
-}
-
-export type WikiPage = {
-  id: string
-  ownerUserId: string
-  authorUserId: string
-  latestEditorUserId?: string | null
-  title: string
-  slug: string
-  bodyMarkdown: string
-  excerpt?: string | null
-  pageType: WikiPageType
-  status: WikiPageStatus
-  createdBy: 'user' | 'llm' | string
-  sourceDocumentId?: string | null
-  version: number
-  publishedAt?: string | null
-  createdAt: string
-  updatedAt: string
-  author?: WikiUser | null
-  latestEditor?: WikiUser | null
-}
-
-export type WikiPageSource = {
-  id: string
-  pageId: string
-  documentId?: string | null
-  chunkId?: string | null
-  memoryId?: string | null
-  chatMessageId?: string | null
-  citationLabel: string
-  relevanceNote?: string | null
-  snippet?: string | null
-  createdAt: string
-}
-
-export type WikiGraphNode = {
-  id: string
-  label: string
-  type: string
-  status?: WikiPageStatus | string | null
-}
-
-export type WikiGraphEdge = {
-  id: string
-  source: string
-  target: string
-  label: string
-  type: string
-}
-
-export type WikiGraph = {
-  nodes: WikiGraphNode[]
-  edges: WikiGraphEdge[]
-}
-
 export type Team = {
   id: string
   name: string
@@ -249,7 +176,7 @@ export type SessionUser = Pick<
 >
 
 export type KnowledgeBankScope = 'firm_wide' | 'team' | 'matter' | 'private'
-export type KnowledgeBankEntryType = 'knowledge_bank' | 'style_guide' | 'action'
+export type KnowledgeBankEntryType = 'knowledge_bank' | 'style_guide' | 'action' | 'document'
 export type PiiStatus = 'clean' | 'flagged' | 'pending_review' | 'redacted'
 
 export type ActionStatus = 'pending' | 'in_progress' | 'review' | 'with_client' | 'done'
@@ -376,6 +303,11 @@ export type KnowledgeBankEntry = {
   tags: string[]
   piiStatus: PiiStatus
   status: KbEntryStatus
+  // Catalogue fields, set on document entries once extraction has run.
+  documentType?: string | null
+  documentStatus?: string | null
+  executionDate?: string | null
+  catalogueFields?: Record<string, unknown> | null
   errorMessage?: string | null
   createdBy: string
   createdByRole: string
@@ -410,13 +342,11 @@ export type BirdiePageContext = {
   view: string
   threadTitle?: string | null
   documentName?: string | null
-  wikiPageTitle?: string | null
   kbEntryTitle?: string | null
   actionTitle?: string | null
   // IDs of the open resource; the backend resolves titles and text with access checks.
   threadId?: string | null
   documentId?: string | null
-  wikiPageId?: string | null
   kbEntryId?: string | null
   actionId?: string | null
 }

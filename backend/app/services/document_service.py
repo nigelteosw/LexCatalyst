@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import multiprocessing
 import time
 from datetime import UTC, datetime, timedelta
@@ -8,7 +9,7 @@ from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Document, DocumentChunk, DocumentFolder, MatterMember
+from app.models import Document, DocumentChunk, DocumentFolder, KnowledgeBankEntry, MatterMember, User
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
     IngestionError,
@@ -23,6 +24,7 @@ from app.services.resource_metadata_service import (
     RESOURCE_DOCUMENT,
     delete_resource_metadata,
     sync_document_metadata,
+    sync_kb_metadata,
     sync_metadata_safe,
 )
 from app.services.storage_service import (
@@ -32,6 +34,8 @@ from app.services.storage_service import (
     upload_document_file,
 )
 from app.worker_types import WorkerClaim
+
+_log = logging.getLogger(__name__)
 
 MAX_ERROR_LENGTH = 1000
 STALE_CLAIM_AFTER = timedelta(minutes=30)
@@ -350,6 +354,7 @@ async def process_document(claim: WorkerClaim) -> None:
         document.updated_at = datetime.now(UTC)
         db.commit()
         sync_metadata_safe(db, sync_document_metadata, document)
+        _catalogue_ready_document(db, document)
     except Exception as exc:  # noqa: BLE001 - persist worker failures
         db.rollback()
         _mark_document_failed(claim, f"Document persistence failed: {exc}")
@@ -535,8 +540,11 @@ def update_user_document(
                 raise ValueError("Folder not found")
         document.folder_id = folder_id
     document.updated_at = datetime.now(UTC)
+    catalogue_entries = _sync_catalogue_access(db, document)
     db.commit()
     db.refresh(document)
+    for entry in catalogue_entries:
+        sync_metadata_safe(db, sync_kb_metadata, entry)
     sync_metadata_safe(db, sync_document_metadata, document)
     return document
 
@@ -566,3 +574,41 @@ def delete_user_document(db: Session, user_id: str, document_id: str) -> bool:
         print(f"Document storage delete skipped: {exc}")
 
     return True
+
+
+def _catalogue_ready_document(db: Session, document: Document) -> None:
+    """Create the Knowledge Bank catalogue entry for a document that just became ready.
+
+    Best effort: a failure here must not undo the upload.
+    """
+    # Imported here because kb_ingestion_service depends on the services that import this module.
+    from app.services.kb_ingestion_service import create_pending_kb_entry
+
+    owner = db.get(User, document.user_id)
+    if owner is None:
+        return
+    try:
+        create_pending_kb_entry(db, user=owner, document=document)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        _log.warning("Catalogue entry skipped for document %s: %s", document.id, exc)
+
+
+def _sync_catalogue_access(db: Session, document: Document) -> list[KnowledgeBankEntry]:
+    """Move the document's catalogue entries to its current matter.
+
+    Matter and team always follow the document. Scope follows only while it still
+    mirrors the document (matter or private). Entries promoted to team or firm-wide
+    keep their scope. Caller commits.
+    """
+    entries = list(
+        db.scalars(
+            select(KnowledgeBankEntry).where(KnowledgeBankEntry.source_document_id == document.id)
+        )
+    )
+    for entry in entries:
+        entry.matter_id = document.matter_id
+        entry.team_id = document.team_id
+        if entry.scope in ("matter", "private"):
+            entry.scope = "matter" if document.matter_id else "private"
+    return entries

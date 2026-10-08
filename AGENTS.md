@@ -60,7 +60,6 @@ frontend/
       memories/       # Memories panel + async Dream consolidation
       navigation/     # Collapsible sidebar; chats grouped by matter (chat page only)
       settings/       # Settings panel
-      wiki/           # Wiki panel + graph canvas
     shared/
       api/api.ts      # All fetch calls; snake_case↔camelCase mapping here
       lib/            # errors.ts, async.ts
@@ -157,7 +156,6 @@ app/services/
   review_pdf_export_service.py  # Pure PDF overlay + notes appendix rendering
   storage_service.py      # Cloudflare R2 upload/download
   user_service.py
-  wiki_service.py
 ```
 
 Design service functions so they could become tools later:
@@ -203,7 +201,6 @@ The following items from the original plan are complete:
 - RAG search with vector similarity
 - Memory CRUD and retrieval
 - Knowledge Bank (scoped RBAC, PII redaction, audit log, promotion flow)
-- Wiki (markdown pages, graph view, document ingestion)
 - Action board (kanban)
 - Birdie AI mentor (streaming)
 - Dream memory consolidation (DB-backed async jobs, durable across restarts)

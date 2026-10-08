@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, Menu } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatPanel } from '../features/chat/ChatPanel'
 import { Button } from '../shared/ui/Button'
@@ -20,7 +20,6 @@ import {
   listChatThreads,
   listMatters,
   moveChatThread,
-  listMemories,
   listThreadMessages,
   streamChatMessage,
   subscribeToUnauthorized,
@@ -49,9 +48,6 @@ const DocumentsPanel = lazy(() =>
 )
 const MatterPage = lazy(() =>
   import('../features/knowledge-bank/MatterPage').then((module) => ({ default: module.MatterPage })),
-)
-const WikiPanel = lazy(() =>
-  import('../features/wiki/WikiPanel').then((module) => ({ default: module.WikiPanel })),
 )
 const KnowledgeBankPanel = lazy(() =>
   import('../features/knowledge-bank/KnowledgeBankPanel').then((module) => ({
@@ -116,7 +112,6 @@ function App() {
     isKnownRoute,
     selectHome,
     selectMatter,
-    selectMemories,
     selectSettings,
     selectThread,
     startNewChat,
@@ -679,8 +674,6 @@ function App() {
                 />
               ) : current.view === 'memories' ? (
                 <MemoriesPanel />
-              ) : current.view === 'wiki' ? (
-                <WikiPanel currentUser={currentUser} />
               ) : current.view === 'documents' ? (
                 <DocumentsPanel currentUser={currentUser} />
               ) : current.view === 'matter' ? (
@@ -699,20 +692,6 @@ function App() {
               ) : (
                 <>
               <ChatHeader
-                actions={
-                  <Button
-                    aria-label="Memories"
-                    aria-pressed={false}
-                    onClick={() => selectMemories()}
-                    onMouseEnter={() => queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: () => listMemories() })}
-                    onFocus={() => queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: () => listMemories() })}
-                    size="icon"
-                    title="Memories"
-                    variant="ghost"
-                  >
-                    <Brain size={18} />
-                  </Button>
-                }
                 leading={
                   <Button
                     aria-label="Open menu"
@@ -779,7 +758,6 @@ function buildBirdiePageContext(current: import('./routes').AppView): BirdiePage
   const base: BirdiePageContext = { view: current.view }
   if (current.view === 'chat') return { ...base, threadId: current.threadId }
   if (current.view === 'documents') return { ...base, documentId: current.documentId }
-  if (current.view === 'wiki') return { ...base, wikiPageId: current.pageId }
   if (current.view === 'knowledge_bank') return { ...base, kbEntryId: current.entryId }
   if (current.view === 'actions') return { ...base, actionId: current.actionId }
   if (current.view === 'handoff_review') return { ...base, actionId: current.actionId }
@@ -796,7 +774,6 @@ function mobileViewTitle(view: import('./routes').AppView['view']) {
     knowledge_bank: 'Knowledge Bank',
     memories: 'Memories',
     settings: 'Settings',
-    wiki: 'Lex-Wiki',
   }
   return labels[view] ?? 'LexCatalyst'
 }

@@ -17,6 +17,7 @@ import {
   deleteChatThread,
   listKnowledgeBankEntryPage,
   listActionItems,
+  listMemories,
   moveChatThread,
   renameChatThread,
 } from '../../shared/api/api'
@@ -83,6 +84,7 @@ export function Sidebar({
     selectThread,
     selectKnowledgeBank,
     selectActions,
+    selectMemories,
     selectSettings,
   } = useWorkspaceNavigation()
 
@@ -338,6 +340,15 @@ export function Sidebar({
               >
                 <div className="px-1.5">
                   <UserMenuItem
+                    label="Memories"
+                    onClick={() => {
+                      setUserMenuOpen(false)
+                      selectMemories()
+                      closeMobile()
+                    }}
+                    onPrefetch={() => queryClient.prefetchQuery({ queryKey: ['memories'], queryFn: () => listMemories() })}
+                  />
+                  <UserMenuItem
                     label="Profile settings"
                     onClick={() => {
                       setUserMenuOpen(false)
@@ -411,15 +422,19 @@ function UserMenuItem({
   label,
   hint,
   onClick,
+  onPrefetch,
 }: {
   label: string
   hint?: ReactNode
   onClick: () => void
+  onPrefetch?: () => void
 }) {
   return (
     <button
       className="t-body flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-ink-secondary transition-colors hover:bg-fill hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       onClick={onClick}
+      onFocus={onPrefetch}
+      onMouseEnter={onPrefetch}
       role="menuitem"
       type="button"
     >

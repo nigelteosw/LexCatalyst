@@ -27,7 +27,6 @@ from app.services.knowledge_bank_service import format_kb_context, search_kb_for
 from app.services.memory_service import format_memory_context, list_memories
 from app.services.organization_service import list_matters
 from app.services.document_service import get_document_full_text
-from app.services.wiki_service import get_wiki_page
 from app.services.action_service import get_action_item
 from app.services.knowledge_bank_service import get_kb_entry
 
@@ -120,7 +119,6 @@ _VIEW_LABELS = {
     "home": "the Home page",
     "chat": "the Chat page",
     "documents": "the Documents page",
-    "wiki": "the Lex-Wiki",
     "knowledge_bank": "the Knowledge Bank",
     "actions": "the Workboard",
     "memories": "the Memories page",
@@ -208,7 +206,7 @@ def resolve_page_context(db: Session, user: User, ctx: PageContext | None) -> Re
     """Describe the resource the user has open, loaded server-side with the user's own access.
 
     Client-sent titles are ignored: an ID the user cannot read resolves to nothing. The text of the
-    open document, wiki page, KB entry or ticket goes to the user's OpenRouter model like other context.
+    open document, KB entry or ticket goes to the user's OpenRouter model like other context.
     """
     if not ctx or not ctx.view:
         return ResolvedPage()
@@ -217,8 +215,6 @@ def resolve_page_context(db: Session, user: User, ctx: PageContext | None) -> Re
     if ctx.document_id and (found := get_document_full_text(db, user_id=user.id, document_id=ctx.document_id, max_chars=_PAGE_TEXT_CHARS)):
         document, body = found
         kind, title, matter_id = "document", document.filename, document.matter_id
-    elif ctx.wiki_page_id and (page := get_wiki_page(db, user_id=user.id, page_id=ctx.wiki_page_id)):
-        kind, title, matter_id, body = "wiki page", page.title, page.matter_id, page.body_markdown
     elif ctx.kb_entry_id and (entry := get_kb_entry(db, ctx.kb_entry_id)) and check_kb_read(db, user, entry):
         kind, title, matter_id, body = "Knowledge Bank entry", entry.title, entry.matter_id, entry.body_markdown
     elif ctx.action_id and (item := get_action_item(db, ctx.action_id)) and user.id in (item.assignee_id, item.assigner_id):

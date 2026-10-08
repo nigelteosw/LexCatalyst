@@ -6,7 +6,6 @@ const user = { id: 'u1', email: 'demo@example.test', full_name: 'Demo Partner', 
 const action = { id: 'a1', title: 'Review synthetic agreement with a long task title', description: 'Demo draft', status: 'review', priority: 'high', matter_id: null, assigner_id: 'u1', assignee_id: null, due_date: '2026-10-10', tags: [], active_handoff_id: null, created_at: '2026-01-01', updated_at: '2026-01-01' }
 const matter = { id: 'm1', title: 'Synthetic commercial agreement with a long matter name', case_number: 'DEMO-2026-001', status: 'active', team_id: null, client_name: 'Synthetic Client', created_at: '2026-01-01', updated_at: '2026-01-01' }
 const entry = { id: 'k1', title: 'Synthetic contract drafting precedent', body_markdown: '# Guidance\nReview the agreement carefully.', body_preview: 'Review the agreement carefully.', scope: 'firm', entry_type: 'knowledge_bank', tags: ['contract'], pii_status: 'clean', status: 'ready', created_by: 'u1', created_by_role: 'partner', version: 1, created_at: '2026-01-01', updated_at: '2026-01-01', matter_id: null }
-const wiki = { id: 'w1', title: 'Synthetic drafting guidance', body_markdown: '# Guidance\nReview the agreement carefully.', excerpt: 'Drafting guidance', page_type: 'document', status: 'published', author_user_id: 'u1', version: 1, created_at: '2026-01-01', updated_at: '2026-01-01' }
 const handoff = { id: 'h1', action_id: 'a1', document_id: 'd1', document_filename: 'Synthetic review.pdf', can_review: true, can_annotate: true, can_remove: true, submitted_by: 'u1', submitted_at: '2026-01-01', status: 'ready_for_review', created_at: '2026-01-01', updated_at: '2026-01-01', annotations: [] }
 const document = { id: 'd1', filename: 'Synthetic agreement.docx', content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', status: 'ready', matter_id: null, team_id: null, created_at: '2026-01-01', updated_at: '2026-01-01', chunk_count: 1, can_manage: true }
 
@@ -26,9 +25,6 @@ async function workspace(page: Page) {
     else if (path === '/chat/threads/t1/messages') data = [{ id: 'msg1', role: 'assistant', content: 'The agreement requires review.[1]', created_at: '2026-01-01', sources: [{ n: 1, kind: 'document', id: 'd1', title: 'Synthetic agreement', locator: 'Page 1', matter_id: null, excerpt: 'Synthetic source text.' }] }]
     else if (path === '/matters') data = [matter]
     else if (path === '/users') data = [user]
-    else if (path === '/wiki/pages') data = [wiki]
-    else if (path === '/wiki/pages/w1') data = wiki
-    else if (path === '/wiki/graph') data = { nodes: [], edges: [] }
     else if (path === '/memories') data = [{ id: 'mem1', category: 'preference', content: 'Synthetic drafting preference', confidence: 0.9, created_at: '2026-01-01', updated_at: '2026-01-01' }]
     else if (path === '/handoffs') data = [handoff]
     else if (path === '/handoffs/h1') data = handoff
@@ -64,7 +60,7 @@ for (const width of [320, 390, 768, 1280]) {
     page.on('pageerror', (error) => errors.push(error.message))
     await page.setViewportSize({ width, height: 800 })
     await workspace(page)
-    for (const path of ['/home', '/chat', '/matters/general', '/matters/m1', '/knowledge', '/knowledge/k1', '/memories', '/wiki', '/wiki/w1', '/actions', '/actions/a1', '/actions/a1/review', '/settings', '/knowledge/documents/d1']) {
+    for (const path of ['/home', '/chat', '/matters/general', '/matters/m1', '/knowledge', '/knowledge/k1', '/memories', '/actions', '/actions/a1', '/actions/a1/review', '/settings', '/knowledge/documents/d1']) {
       await page.goto(path)
       await expect(page.locator('main').first()).toBeVisible()
       await expect(page.getByText('Loading workspace...')).toHaveCount(0)

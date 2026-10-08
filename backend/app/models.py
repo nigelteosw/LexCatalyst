@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
@@ -6,6 +6,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -58,11 +59,6 @@ class User(Base):
     documents: Mapped[list["Document"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
-    )
-    wiki_pages: Mapped[list["WikiPage"]] = relationship(
-        back_populates="owner",
-        cascade="all, delete-orphan",
-        foreign_keys="WikiPage.owner_user_id",
     )
 
 
@@ -330,176 +326,6 @@ class DocumentComment(Base):
     author: Mapped[User] = relationship()
 
 
-class WikiPage(Base):
-    __tablename__ = "wiki_pages"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    owner_user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    author_user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    latest_editor_user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    workspace_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
-    matter_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    slug: Mapped[str] = mapped_column(String(240), index=True, nullable=False)
-    body_markdown: Mapped[str] = mapped_column(Text, nullable=False)
-    excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    page_type: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
-    status: Mapped[str] = mapped_column(String(24), index=True, nullable=False, default="draft")
-    created_by: Mapped[str] = mapped_column(String(24), nullable=False, default="user")
-    source_document_id: Mapped[str | None] = mapped_column(
-        ForeignKey("documents.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
-
-    owner: Mapped[User] = relationship(
-        back_populates="wiki_pages",
-        foreign_keys=[owner_user_id],
-    )
-    author: Mapped[User] = relationship(foreign_keys=[author_user_id])
-    latest_editor: Mapped[User | None] = relationship(foreign_keys=[latest_editor_user_id])
-    source_document: Mapped[Document | None] = relationship()
-    revisions: Mapped[list["WikiPageRevision"]] = relationship(
-        back_populates="page",
-        cascade="all, delete-orphan",
-        order_by="WikiPageRevision.created_at",
-    )
-    sources: Mapped[list["WikiPageSource"]] = relationship(
-        back_populates="page",
-        cascade="all, delete-orphan",
-    )
-    outgoing_links: Mapped[list["WikiLink"]] = relationship(
-        back_populates="source_page",
-        cascade="all, delete-orphan",
-        foreign_keys="WikiLink.source_page_id",
-    )
-
-
-class WikiPageRevision(Base):
-    __tablename__ = "wiki_page_revisions"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    page_id: Mapped[str] = mapped_column(
-        ForeignKey("wiki_pages.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    body_markdown: Mapped[str] = mapped_column(Text, nullable=False)
-    edited_by_user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    edit_source: Mapped[str] = mapped_column(String(40), nullable=False)
-    change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    page: Mapped[WikiPage] = relationship(back_populates="revisions")
-    edited_by: Mapped[User | None] = relationship()
-
-
-class WikiPageSource(Base):
-    __tablename__ = "wiki_page_sources"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    page_id: Mapped[str] = mapped_column(
-        ForeignKey("wiki_pages.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    document_id: Mapped[str | None] = mapped_column(
-        ForeignKey("documents.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    chunk_id: Mapped[str | None] = mapped_column(
-        ForeignKey("document_chunks.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    memory_id: Mapped[str | None] = mapped_column(
-        ForeignKey("memories.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    chat_message_id: Mapped[str | None] = mapped_column(
-        ForeignKey("chat_messages.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    citation_label: Mapped[str] = mapped_column(String(512), nullable=False)
-    relevance_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    page: Mapped[WikiPage] = relationship(back_populates="sources")
-    document: Mapped[Document | None] = relationship()
-    chunk: Mapped[DocumentChunk | None] = relationship()
-    memory: Mapped[Memory | None] = relationship()
-    chat_message: Mapped[ChatMessage | None] = relationship()
-
-
-class WikiLink(Base):
-    __tablename__ = "wiki_links"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    source_page_id: Mapped[str] = mapped_column(
-        ForeignKey("wiki_pages.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    target_page_id: Mapped[str | None] = mapped_column(
-        ForeignKey("wiki_pages.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
-    link_text: Mapped[str] = mapped_column(String(255), nullable=False)
-    link_type: Mapped[str] = mapped_column(String(40), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    source_page: Mapped[WikiPage] = relationship(
-        back_populates="outgoing_links",
-        foreign_keys=[source_page_id],
-    )
-    target_page: Mapped[WikiPage | None] = relationship(foreign_keys=[target_page_id])
-
-
 class Team(Base):
     __tablename__ = "teams"
 
@@ -644,6 +470,12 @@ class KnowledgeBankEntry(Base):
         nullable=True,
     )
     processing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Catalogue fields for document-backed entries (entry_type "document"). The filter
+    # columns are real columns; everything else is in catalogue_fields.
+    document_type: Mapped[str | None] = mapped_column(String(40), index=True, nullable=True)
+    document_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    execution_date: Mapped[date | None] = mapped_column(Date, index=True, nullable=True)
+    catalogue_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_by: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,

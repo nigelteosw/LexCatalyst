@@ -643,7 +643,6 @@ function HandoffReviewPage({
 const RESOURCE_LABELS: Record<string, string> = {
   document: 'Docs',
   knowledge_bank_entry: 'KB',
-  wiki_page: 'Wiki',
   review_handoff: 'Handoffs',
   action_item: 'Tickets',
 }

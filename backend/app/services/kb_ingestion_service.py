@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, defer
 from app.database import SessionLocal
 from app.models import Document, DocumentChunk, KnowledgeBankEntry, User
 from app.providers.openrouter import OpenRouterError
+from app.services.catalogue_service import catalogue_to_json, extract_catalogue
 from app.services.llm_service import get_llm
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.knowledge_bank_service import (
@@ -86,7 +87,7 @@ def create_pending_kb_entry(
         matter_id=document.matter_id,
         source_document_id=document.id,
         scope="matter" if document.matter_id else "private",
-        entry_type="knowledge_bank",
+        entry_type="document",
         title=document.filename,
         body_markdown="",
         tags=["from document"],
@@ -252,6 +253,16 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         _mark_failed(claim, str(exc))
         return
 
+    # Second pass for structured fields. A failure here leaves the entry catalogued as
+    # text-only; it never fails the entry.
+    catalogue = await extract_catalogue(
+        provider,
+        filename=document_filename,
+        raw_text=raw_text,
+        max_chars=MAX_INGEST_CHARS,
+        timeout=FORMAT_TIMEOUT_SECONDS,
+    )
+
     try:
         embedding = (
             await embed_texts([build_entry_embedding_text(title, body_markdown)])
@@ -285,6 +296,11 @@ async def process_kb_summary(claim: WorkerClaim) -> None:
         entry.error_message = None
         entry.processing_started_at = None
         entry.version += 1
+        if catalogue:
+            entry.document_type = catalogue["document_type"]
+            entry.document_status = catalogue["document_status"]
+            entry.execution_date = catalogue["execution_date"]
+            entry.catalogue_fields = catalogue_to_json(catalogue)
         db.commit()
         sync_metadata_safe(db, sync_kb_metadata, entry)
     except Exception as exc:  # noqa: BLE001

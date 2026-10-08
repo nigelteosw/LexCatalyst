@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -11,27 +11,14 @@ KnowledgeBankScope = Literal["firm_wide", "team", "matter", "private"]
 ResourceMetadataType = Literal[
     "document",
     "knowledge_bank_entry",
-    "wiki_page",
     "action_item",
     "review_handoff",
 ]
-KnowledgeBankEntryType = Literal["knowledge_bank", "style_guide", "action"]
+KnowledgeBankEntryType = Literal["knowledge_bank", "style_guide", "action", "document"]
 PiiStatus = Literal["clean", "flagged", "pending_review", "redacted"]
 KbEntryStatus = Literal["processing", "ready", "failed"]
 ActionStatus = Literal["pending", "in_progress", "review", "with_client", "done"]
 ActionPriority = Literal["low", "medium", "high"]
-WikiPageStatus = Literal["draft", "published", "archived"]
-WikiPageType = Literal[
-    "source_summary",
-    "issue",
-    "timeline",
-    "playbook",
-    "memory_note",
-    "entity",
-    "clause",
-    "authority",
-    "question_answer",
-]
 
 
 class ChatRequest(BaseModel):
@@ -171,14 +158,12 @@ class PageContext(BaseModel):
     view: str | None = None
     thread_title: str | None = None
     document_name: str | None = None
-    wiki_page_title: str | None = None
     kb_entry_title: str | None = None
     action_title: str | None = None
     # IDs of the open resource. The backend resolves them with access checks; client-sent titles
     # above are never trusted over what the database says.
     thread_id: str | None = Field(default=None, max_length=36)
     document_id: str | None = Field(default=None, max_length=36)
-    wiki_page_id: str | None = Field(default=None, max_length=36)
     kb_entry_id: str | None = Field(default=None, max_length=36)
     action_id: str | None = Field(default=None, max_length=36)
 
@@ -191,90 +176,6 @@ class WebContext(BaseModel):
     text: str = Field(min_length=1, max_length=120_000)  # keep in sync with extension MAX_WEB_CONTEXT_CHARS
     source: Literal["selection", "page"]
     truncated: bool = False
-
-
-class WikiPageCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=200)
-    body_markdown: str = Field(min_length=1, max_length=80_000)
-    page_type: WikiPageType = "source_summary"
-    status: WikiPageStatus = "draft"
-    excerpt: str | None = Field(default=None, max_length=1000)
-    matter_id: str | None = None
-
-
-class WikiPageUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=200)
-    body_markdown: str | None = Field(default=None, min_length=1, max_length=80_000)
-    page_type: WikiPageType | None = None
-    status: Literal["draft", "published"] | None = None
-    excerpt: str | None = Field(default=None, max_length=1000)
-    change_summary: str | None = Field(default=None, max_length=1000)
-
-
-class WikiIngestRequest(BaseModel):
-    page_types: list[WikiPageType] = Field(default_factory=lambda: ["source_summary"])
-    tier: LlmTier | None = None
-    model: str | None = Field(default=None, max_length=200)
-
-
-class WikiUserResponse(BaseModel):
-    id: str
-    full_name: str | None = None
-    email: str | None = None
-
-
-class WikiPageResponse(BaseModel):
-    id: str
-    owner_user_id: str
-    author_user_id: str
-    latest_editor_user_id: str | None = None
-    title: str
-    slug: str
-    body_markdown: str
-    excerpt: str | None = None
-    page_type: str
-    status: str
-    created_by: str
-    source_document_id: str | None = None
-    version: int
-    published_at: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
-    author: WikiUserResponse | None = None
-    latest_editor: WikiUserResponse | None = None
-
-
-class WikiPageSourceResponse(BaseModel):
-    id: str
-    page_id: str
-    document_id: str | None = None
-    chunk_id: str | None = None
-    memory_id: str | None = None
-    chat_message_id: str | None = None
-    citation_label: str
-    relevance_note: str | None = None
-    snippet: str | None = None
-    created_at: datetime
-
-
-class WikiGraphNode(BaseModel):
-    id: str
-    label: str
-    type: str
-    status: str | None = None
-
-
-class WikiGraphEdge(BaseModel):
-    id: str
-    source: str
-    target: str
-    label: str
-    type: str
-
-
-class WikiGraphResponse(BaseModel):
-    nodes: list[WikiGraphNode]
-    edges: list[WikiGraphEdge]
 
 
 class MemoryCreate(BaseModel):
@@ -443,6 +344,10 @@ class KnowledgeBankEntryResponse(BaseModel):
     error_message: str | None = None
     created_by: str
     created_by_role: str
+    document_type: str | None = None
+    document_status: str | None = None
+    execution_date: date | None = None
+    catalogue_fields: dict | None = None
     version: int
     created_at: datetime
     updated_at: datetime
@@ -468,6 +373,9 @@ class KnowledgeBankEntrySummaryResponse(BaseModel):
     error_message: str | None = None
     created_by: str
     created_by_role: str
+    document_type: str | None = None
+    document_status: str | None = None
+    execution_date: date | None = None
     version: int
     created_at: datetime
     updated_at: datetime

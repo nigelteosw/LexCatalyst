@@ -26,7 +26,6 @@ class DeleteMatterTests(unittest.TestCase):
         self.assertTrue(delete_matter(db, "m-1"))
 
         joined = "\n".join(_sql(call.args[0]) for call in db.execute.call_args_list)
-        self.assertIn("UPDATE wiki_pages SET matter_id=NULL", joined)
         self.assertIn("UPDATE kb_entries SET scope='private'", joined)
         self.assertIn("UPDATE resource_metadata SET scope='private'", joined)
         db.delete.assert_called_once_with(matter)

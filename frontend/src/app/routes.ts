@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 
 type HomeView = { view: 'home' }
 type ChatView = { view: 'chat'; threadId: string | null }
-type WikiView = { view: 'wiki'; pageId: string | null }
 type DocumentsView = { view: 'documents'; documentId: string | null }
 type MemoriesView = { view: 'memories' }
 type KnowledgeBankView = { view: 'knowledge_bank'; entryId: string | null }
@@ -15,7 +14,6 @@ type MatterView = { view: 'matter'; matterId: string }
 export type AppView =
   | HomeView
   | ChatView
-  | WikiView
   | DocumentsView
   | MemoriesView
   | KnowledgeBankView
@@ -85,9 +83,6 @@ function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute:
   if (section === 'settings' && !id) {
     return { current: { view: 'settings' }, isKnownRoute: true }
   }
-  if (section === 'wiki') {
-    return { current: { view: 'wiki', pageId: id }, isKnownRoute: true }
-  }
   return { current: { view: 'home' }, isKnownRoute: false }
 }
 
@@ -134,11 +129,6 @@ export function useWorkspaceNavigation() {
     selectThread: useCallback(
       (threadId: string, options?: NavigationOptions) =>
         go(routeWithId('/chat', threadId), options),
-      [go],
-    ),
-    selectWiki: useCallback(
-      (pageId?: string | null, options?: NavigationOptions) =>
-        go(routeWithId('/wiki', pageId), options),
       [go],
     ),
     selectDocuments: useCallback(

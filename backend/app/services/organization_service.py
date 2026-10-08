@@ -10,7 +10,6 @@ from app.models import (
     Team,
     TeamMember,
     User,
-    WikiPage,
 )
 from app.schemas import MatterCreate, MatterMemberCreate, MatterUpdate
 
@@ -172,14 +171,12 @@ def delete_matter(db: Session, matter_id: str) -> bool:
     """Hard-delete a matter. Linked records fall back to General.
 
     FKs with ON DELETE SET NULL clear matter_id on chats, documents, KB
-    entries, actions and reviews. wiki_pages.matter_id has no FK, so it is
-    cleared here. Matter-scoped KB entries and resource metadata become
+    entries, actions and reviews. Matter-scoped KB entries and resource metadata become
     private so they are not exposed more widely than before.
     """
     matter = db.get(Matter, matter_id)
     if not matter:
         return False
-    db.execute(update(WikiPage).where(WikiPage.matter_id == matter_id).values(matter_id=None))
     db.execute(
         update(KnowledgeBankEntry)
         .where(KnowledgeBankEntry.matter_id == matter_id, KnowledgeBankEntry.scope == "matter")

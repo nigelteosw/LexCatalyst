@@ -8,7 +8,6 @@ from sqlalchemy import desc, exists, func, or_, select
 from sqlalchemy.orm import Session, defer, joinedload
 
 from app.models import (
-    Document,
     KnowledgeBankAccessLog,
     KnowledgeBankEntry,
     Matter,
@@ -16,7 +15,6 @@ from app.models import (
     PiiRedaction,
     TeamMember,
     User,
-    WikiPage,
 )
 from app.services.llm_service import get_llm
 from app.providers.embedding_provider import EmbeddingError, embed_texts
@@ -199,55 +197,6 @@ def _entry_query():
         joinedload(KnowledgeBankEntry.team),
         joinedload(KnowledgeBankEntry.matter).joinedload(Matter.team),
     )
-
-
-MAX_KB_GRAPH_NODES = 500
-
-
-def build_kb_graph(
-    db: Session,
-    *,
-    user: User,
-) -> dict[str, list[dict[str, str | None]]]:
-    stmt = select(
-        KnowledgeBankEntry.id,
-        KnowledgeBankEntry.title,
-        KnowledgeBankEntry.entry_type,
-        KnowledgeBankEntry.scope,
-        KnowledgeBankEntry.source_entry_id,
-    )
-    scope_filter = _user_kb_scope_filter(user)
-    if scope_filter is not None:
-        stmt = stmt.where(scope_filter)
-    entries = list(
-        db.execute(
-            stmt.order_by(desc(KnowledgeBankEntry.updated_at)).limit(MAX_KB_GRAPH_NODES)
-        ).mappings()
-    )
-    entry_ids = {entry["id"] for entry in entries}
-    nodes = [
-        {
-            "id": entry["id"],
-            "label": entry["title"],
-            "type": entry["entry_type"],
-            "status": entry["scope"],
-        }
-        for entry in entries
-    ]
-    edges: list[dict[str, str | None]] = []
-    for entry in entries:
-        source_entry_id = entry["source_entry_id"]
-        if source_entry_id and source_entry_id in entry_ids:
-            edges.append(
-                {
-                    "id": f"{source_entry_id}-{entry['id']}",
-                    "source": source_entry_id,
-                    "target": entry["id"],
-                    "label": "derived",
-                    "type": "derived",
-                }
-            )
-    return {"nodes": nodes, "edges": edges}
 
 
 def _user_kb_scope_filter(user: User):
@@ -439,117 +388,6 @@ async def create_kb_entry(
         raise
     sync_metadata_safe(db, sync_kb_metadata, entry)
     return get_kb_entry(db, entry.id) or entry
-
-
-async def add_document_to_kb(
-    db: Session,
-    *,
-    user: User,
-    page: WikiPage,
-) -> KnowledgeBankEntry:
-    document = db.scalar(
-        select(Document).where(
-            Document.id == page.source_document_id,
-            Document.user_id == user.id,
-        )
-    )
-    if not document:
-        raise KnowledgeBankError("Source document not found")
-
-    existing = db.scalar(
-        select(KnowledgeBankEntry).where(
-            or_(
-                KnowledgeBankEntry.id == page.id,
-                KnowledgeBankEntry.source_document_id == document.id,
-            ),
-            KnowledgeBankEntry.created_by == user.id,
-        )
-    )
-    if existing:
-        if (
-            existing.title != page.title
-            or existing.body_markdown != page.body_markdown
-            or _embedding_is_stale(existing)
-        ):
-            existing.title = page.title
-            existing.body_markdown = page.body_markdown
-            existing.version = max(existing.version + 1, page.version)
-            try:
-                await _embed_entry(existing)
-                log_kb_access(
-                    db,
-                    user_id=user.id,
-                    entry_id=existing.id,
-                    matter_id=existing.matter_id,
-                    commit=False,
-                )
-                db.commit()
-            except Exception:
-                db.rollback()
-                raise
-            sync_metadata_safe(db, sync_kb_metadata, existing)
-        return get_kb_entry(db, existing.id) or existing
-
-    entry = KnowledgeBankEntry(
-        id=page.id,
-        team_id=document.team_id or user.default_team_id,
-        matter_id=document.matter_id,
-        source_document_id=document.id,
-        scope="matter" if document.matter_id else "private",
-        entry_type="knowledge_bank",
-        title=page.title,
-        body_markdown=page.body_markdown,
-        tags=["source summary"],
-        pii_status="flagged",
-        created_by=user.id,
-        created_by_role=user.firm_role,
-        version=page.version,
-        created_at=page.created_at,
-        updated_at=page.updated_at,
-    )
-    try:
-        db.add(entry)
-        db.flush()
-        await _embed_entry(entry)
-        log_kb_access(
-            db,
-            user_id=user.id,
-            entry_id=entry.id,
-            matter_id=entry.matter_id,
-            commit=False,
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    sync_metadata_safe(db, sync_kb_metadata, entry)
-    return get_kb_entry(db, entry.id) or entry
-
-
-async def sync_linked_wiki_page_to_kb(
-    db: Session,
-    *,
-    user: User,
-    page: WikiPage,
-) -> KnowledgeBankEntry | None:
-    """Re-sync a KB entry from an updated wiki page.
-
-    Only entries created via the legacy wiki-ingestion path share an id
-    with their wiki page. Entries created via the async KB ingestion path
-    own their content (LLM summary) and must NOT be overwritten
-    by wiki edits — we'd silently clobber the Pro-generated summary.
-    """
-    if not page.source_document_id:
-        return None
-    linked_entry = db.scalar(
-        select(KnowledgeBankEntry.id).where(
-            KnowledgeBankEntry.id == page.id,
-            KnowledgeBankEntry.created_by == user.id,
-        )
-    )
-    if not linked_entry:
-        return None
-    return await add_document_to_kb(db, user=user, page=page)
 
 
 async def update_kb_entry(

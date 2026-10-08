@@ -14,7 +14,6 @@ from app.dependencies import (
     require_partner_or_admin,
 )
 from app.models import Document, User
-from app.routers.wiki import build_wiki_source_response
 from app.schemas import (
     KnowledgeBankAccessLogResponse,
     KnowledgeBankBackfillResponse,
@@ -27,10 +26,6 @@ from app.schemas import (
     KnowledgeBankPromoteRequest,
     RedactionApprovalRequest,
     RedactionProposalResponse,
-    WikiGraphEdge,
-    WikiGraphNode,
-    WikiGraphResponse,
-    WikiPageSourceResponse,
 )
 from app.services.kb_ingestion_service import create_pending_kb_entry
 from app.services.knowledge_bank_service import (
@@ -38,7 +33,6 @@ from app.services.knowledge_bank_service import (
     KnowledgeBankScopeError,
     approve_redaction,
     backfill_missing_kb_embeddings,
-    build_kb_graph,
     create_kb_entry,
     delete_kb_entry,
     get_kb_entry,
@@ -49,21 +43,8 @@ from app.services.knowledge_bank_service import (
     promote_kb_entry,
     update_kb_entry,
 )
-from app.services.wiki_service import list_wiki_page_sources
 
 router = APIRouter(tags=["knowledge-bank"])
-
-
-@router.get("/kb/graph", response_model=WikiGraphResponse)
-def kb_graph(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> WikiGraphResponse:
-    graph = build_kb_graph(db, user=current_user)
-    return WikiGraphResponse(
-        nodes=[WikiGraphNode(**node) for node in graph["nodes"]],
-        edges=[WikiGraphEdge(**edge) for edge in graph["edges"]],
-    )
 
 
 @router.get("/kb/entries", response_model=KnowledgeBankEntryPageResponse)
@@ -227,25 +208,6 @@ def kb_entry_detail(
         raise
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Knowledge Bank is unavailable") from exc
-
-
-@router.get(
-    "/kb/entries/{entry_id}/sources",
-    response_model=list[WikiPageSourceResponse],
-)
-def kb_entry_sources(
-    entry_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> list[WikiPageSourceResponse]:
-    entry = get_kb_entry(db, entry_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
-    require_kb_read(db, current_user, entry)
-    return [
-        build_wiki_source_response(source)
-        for source in list_wiki_page_sources(db, user_id=current_user.id, page_id=entry.id)
-    ]
 
 
 @router.patch("/kb/entries/{entry_id}", response_model=KnowledgeBankEntryResponse)

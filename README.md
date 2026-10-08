@@ -28,7 +28,7 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
   - `read_document` — fetch the **full extracted text** of a document (up to 100KB) for fine-grained passage lookup
 - **Streaming SSE** with token-by-token output and per-tool step visualisation.
 - **Audit trail**: Knowledge Bank edits are logged in `kb_access_log`; reads are not recorded.
-- **Resource metadata index**: documents, KB entries, wiki pages, workboard items, and review handoffs sync into `resource_metadata` for one authenticated access-aware lookup surface.
+- **Resource metadata index**: documents, KB entries, workboard items, and review handoffs sync into `resource_metadata` for one authenticated access-aware lookup surface.
 
 ### Birdie — Floating AI Mentor
 - A small **fixed circular button at the bottom right** opens Birdie across the signed-in workspace. Drag the panel header to move it and its bottom-right corner to resize it (arrow keys also resize). Close with the X or the Birdie button; conversation state survives closing. Text can be selected/copied and pasted into the composer.
@@ -84,7 +84,7 @@ Settings → Development & Testing → **Load property Workboard demo** adds 12 
 - **Google OAuth2** + **JWT** auth; field-level Fernet encryption for `client_name`
 
 ### AI & Search
-- **OpenRouter, bring your own key** for every LLM call (LexChat, Birdie, Dream, wiki, KB, memory, summaries). Each user saves their key and picks any model for two tiers, **High** and **Mid**, then chooses which tier each feature uses (Settings → Models). LexChat and Birdie also have a High/Mid pill in the composer.
+- **OpenRouter, bring your own key** for every LLM call (LexChat, Birdie, Dream, KB, memory, summaries). Each user saves their key and picks any model for two tiers, **High** and **Mid**, then chooses which tier each feature uses (Settings → Models). LexChat and Birdie also have a High/Mid pill in the composer.
 - **No firm LLM key.** `DEMO_OPENROUTER_KEY` is used only when `DEMO_MODE=true` and the user has no key of their own. Background jobs (KB formatting, Dream) run on the key of the user who started them.
 - **OpenAI `text-embedding-3-small`** (1536 dim) for both document chunks and KB entries
 - **Cloudflare R2** for original document storage
@@ -132,7 +132,6 @@ Editable high-level architecture diagrams:
 │   │       ├── memory_service.py              # Personal memory store
 │   │       ├── organization_service.py        # Teams + matters
 │   │       ├── rag_service.py                 # Vector search over docs
-│   │       ├── wiki_service.py                # Wiki page generation
 │   │       ├── storage_service.py             # R2 / local file storage
 │   │       └── field_encryption.py            # Fernet encryption
 │   ├── migrations/versions/                   # Alembic migrations
@@ -148,7 +147,6 @@ Editable high-level architecture diagrams:
 │   │   │   ├── documents/                     # Upload and ingestion status
 │   │   │   ├── actions/                       # Kanban task board
 │   │   │   ├── memories/                      # Memory CRUD and async Dream results
-│   │   │   ├── wiki/                          # Wiki editor and graph
 │   │   │   └── ...                            # Auth, Birdie, settings
 │   │   └── shared/
 │   │       ├── api/api.ts                     # API client and SSE handling
@@ -321,7 +319,7 @@ cd backend && source .venv/bin/activate
 make seed-demo PRESENTER=you@example.com   # or Settings → Development & Testing → Load demo data
 ```
 
-The seed creates a Corporate team, the *Meridian Capital — Share Purchase* matter, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), memories and wiki pages. Re-running resets previous demo data and never touches your own.
+The seed creates a Corporate team, the *Meridian Capital — Share Purchase* matter, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), and memories. Re-running resets previous demo data and never touches your own.
 
 With demo mode on, admins get a **Switch user** picker in the sidebar to act as Sarah Chen (senior associate), Jane Pereira (associate) or Marcus Webb without Google. Switching works only into seeded `dummy:` users, never real accounts, and a banner shows who you are acting as. See `docs/demo-script.md` for the full walkthrough.
 
@@ -362,7 +360,6 @@ Optimized KB read routes, all requiring Bearer authentication:
 - `GET /kb/entries?limit=30&offset=0` returns paginated summaries without vectors or full Markdown bodies.
 - `GET /kb/entries/status?ids=...` returns polling state only and does not write audit rows.
 - `GET /kb/entries/{id}` returns one full entry without creating an audit event.
-- `GET /kb/graph` returns a scope-filtered graph projection.
 - `GET /resources/metadata` returns cross-resource metadata using the same owner/team/matter/firm-wide visibility rules.
 
 ---
@@ -518,7 +515,7 @@ Authenticated document review routes:
 - `PATCH /documents/{id}` renames and/or moves an uploaded document (`{filename?, matter_id?}`; `matter_id: null` moves it to General); uploader only, and the target matter must be one the caller belongs to.
 - `GET /document-folders?matter_id=<id|general>` lists folders in a matter (members only) or the caller's own General folders. `POST /document-folders` (`{name, matter_id?}`), `PATCH /document-folders/{id}` (`{name}`) and `DELETE /document-folders/{id}` manage them; creator or partner/admin only. Deleting a folder moves its documents back to the matter root.
 - `POST /documents/upload` also accepts optional `matter_id` and `folder_id` form fields; `PATCH /documents/{id}` accepts `folder_id` (`null` = matter root).
-- `DELETE /matters/{id}` hard-deletes a matter (partner/admin). Its chats, documents and wiki pages move to General; matter-scoped Knowledge Bank entries become private.
+- `DELETE /matters/{id}` hard-deletes a matter (partner/admin). Its chats and documents move to General; matter-scoped Knowledge Bank entries become private.
 - `POST /chat/stream` also emits a `sources` event (numbered `{n, kind, id, title, locator, matter_id}`) as the agent consults documents and Knowledge Bank entries; the answer cites them as `[n]` and the list is stored on the assistant message (`sources`).
 - `GET /chat/threads?matter_id=<id|general>` lists the caller's threads for one matter (members only) or for General; omit it for all threads.
 - `PATCH /chat/threads/{id}` renames and/or moves a thread (`{title?, matter_id?}`; `matter_id: null` moves it to General); owner only.

@@ -28,7 +28,6 @@ FEATURES: dict[str, tuple[str, Tier]] = {
     "birdie_review": ("Birdie draft review (extension)", "high"),
     "lessons": ("Birdie lessons from review feedback", "mid"),
     "dream": ("Memory consolidation (Dream)", "high"),
-    "wiki": ("Wiki page generation", "mid"),
     "kb_summary": ("Knowledge Bank redaction scan", "mid"),
     "kb_format": ("Knowledge Bank document formatting", "mid"),
     "thread_summary": ("Chat thread summaries", "mid"),

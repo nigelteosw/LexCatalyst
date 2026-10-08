@@ -19,7 +19,6 @@ from app.services.rag_service import (
     search_documents,
 )
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
-from app.services.wiki_service import format_wiki_context, search_wiki_pages
 
 SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Answer clearly and conservatively. If the question needs document evidence, say what evidence is missing.
@@ -180,7 +179,6 @@ def build_provider_messages(
     user_message: str,
     memories: list | None = None,
     document_results: list[DocumentSearchResult] | None = None,
-    wiki_pages: list | None = None,
     kb_entries: list | None = None,
     thread_summary: str | None = None,
 ) -> list[dict[str, str]]:
@@ -192,15 +190,6 @@ def build_provider_messages(
             f"{thread_summary}\n\n"
             "The summary above covers the portion of the conversation not shown in the recent "
             "message history below. Use it to maintain context across a long session."
-        )
-
-    wiki_context = format_wiki_context(wiki_pages or [])
-    if wiki_context:
-        system_content += (
-            "\n\nLex-Wiki Context:\n"
-            f"{wiki_context}\n\n"
-            "Use Lex-Wiki pages as synthesized matter context. "
-            "When Lex-Wiki context and source document chunks disagree, rely on source chunks."
         )
 
     kb_context = format_kb_context(kb_entries or [])
@@ -251,14 +240,6 @@ async def safe_search_documents(
         return []
 
 
-def safe_search_wiki_pages(db: Session, *, user_id: str, query: str) -> list:
-    try:
-        return search_wiki_pages(db, user_id=user_id, query=query)
-    except Exception as exc:
-        print(f"Wiki search skipped: {exc}")
-        return []
-
-
 async def create_chat_response(
     db: Session,
     *,
@@ -278,7 +259,6 @@ async def create_chat_response(
     active_matter_id = matter_id if matter_id is not None else thread.matter_id
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id, limit=_MAX_MEMORIES_IN_PROMPT)
-    wiki_pages = safe_search_wiki_pages(db, user_id=user_id, query=user_message)
     kb_entries, document_results = await asyncio.gather(
         search_kb_for_chat(db, user_id=user_id, query=user_message, matter_id=active_matter_id),
         safe_search_documents(db, query=user_message, user_id=user_id, matter_id=active_matter_id),
@@ -295,7 +275,6 @@ async def create_chat_response(
             user_message,
             memories=memories,
             document_results=document_results,
-            wiki_pages=wiki_pages,
             kb_entries=kb_entries,
             thread_summary=thread.summary,
         ),
@@ -341,7 +320,6 @@ async def create_chat_request(
     active_matter_id = matter_id if matter_id is not None else thread.matter_id
     history = get_recent_messages(db, thread.id)
     memories = list_memories(db, user_id=user_id, limit=_MAX_MEMORIES_IN_PROMPT)
-    wiki_pages = safe_search_wiki_pages(db, user_id=user_id, query=user_message)
     kb_entries, document_results = await asyncio.gather(
         search_kb_for_chat(db, user_id=user_id, query=user_message, matter_id=active_matter_id),
         safe_search_documents(db, query=user_message, user_id=user_id, matter_id=active_matter_id),
@@ -359,7 +337,6 @@ async def create_chat_request(
             user_message,
             memories=memories,
             document_results=document_results,
-            wiki_pages=wiki_pages,
             kb_entries=kb_entries,
             thread_summary=thread.summary,
         ),

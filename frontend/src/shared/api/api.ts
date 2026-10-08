@@ -29,10 +29,6 @@ import type {
   ReviewHandoffStatus,
   SessionUser,
   Team,
-  WikiGraph,
-  WikiPage,
-  WikiPageSource,
-  WikiPageType,
   WorkspaceDocument,
   BirdiePageContext,
   LlmSettings,
@@ -127,46 +123,6 @@ type BackendDocumentComment = {
   }
 }
 
-type BackendWikiUser = {
-  id: string
-  full_name: string | null
-  email: string | null
-}
-
-type BackendWikiPage = {
-  id: string
-  owner_user_id: string
-  author_user_id: string
-  latest_editor_user_id: string | null
-  title: string
-  slug: string
-  body_markdown: string
-  excerpt: string | null
-  page_type: WikiPage['pageType']
-  status: WikiPage['status']
-  created_by: string
-  source_document_id: string | null
-  version: number
-  published_at: string | null
-  created_at: string
-  updated_at: string
-  author: BackendWikiUser | null
-  latest_editor: BackendWikiUser | null
-}
-
-type BackendWikiPageSource = {
-  id: string
-  page_id: string
-  document_id: string | null
-  chunk_id: string | null
-  memory_id: string | null
-  chat_message_id: string | null
-  citation_label: string
-  relevance_note: string | null
-  snippet: string | null
-  created_at: string
-}
-
 type StreamThreadPayload = {
   thread_id: string
   title: string
@@ -229,6 +185,10 @@ type BackendKnowledgeBankEntry = {
   pii_status: KnowledgeBankEntry['piiStatus']
   status: KnowledgeBankEntry['status']
   error_message: string | null
+  document_type: string | null
+  document_status: string | null
+  execution_date: string | null
+  catalogue_fields: Record<string, unknown> | null
   created_by: string
   created_by_role: string
   version: number
@@ -434,6 +394,10 @@ function mapKnowledgeBankEntry(entry: BackendKnowledgeBankEntry): KnowledgeBankE
     piiStatus: entry.pii_status,
     status: entry.status ?? 'ready',
     errorMessage: entry.error_message,
+    documentType: entry.document_type,
+    documentStatus: entry.document_status,
+    executionDate: entry.execution_date,
+    catalogueFields: entry.catalogue_fields,
     createdBy: entry.created_by,
     createdByRole: entry.created_by_role,
     version: entry.version,
@@ -461,6 +425,10 @@ function mapKnowledgeBankEntrySummary(
     piiStatus: entry.pii_status,
     status: entry.status ?? 'ready',
     errorMessage: entry.error_message,
+    documentType: entry.document_type,
+    documentStatus: entry.document_status,
+    executionDate: entry.execution_date,
+    catalogueFields: entry.catalogue_fields,
     createdBy: entry.created_by,
     createdByRole: entry.created_by_role,
     version: entry.version,
@@ -489,53 +457,6 @@ function mapMemory(memory: BackendMemory): Memory {
     confidence: memory.confidence,
     createdAt: memory.created_at,
     updatedAt: memory.updated_at,
-  }
-}
-
-function mapWikiUser(user: BackendWikiUser | null) {
-  if (!user) return null
-  return {
-    id: user.id,
-    fullName: user.full_name,
-    email: user.email,
-  }
-}
-
-function mapWikiPage(page: BackendWikiPage): WikiPage {
-  return {
-    id: page.id,
-    ownerUserId: page.owner_user_id,
-    authorUserId: page.author_user_id,
-    latestEditorUserId: page.latest_editor_user_id,
-    title: page.title,
-    slug: page.slug,
-    bodyMarkdown: page.body_markdown,
-    excerpt: page.excerpt,
-    pageType: page.page_type,
-    status: page.status,
-    createdBy: page.created_by,
-    sourceDocumentId: page.source_document_id,
-    version: page.version,
-    publishedAt: page.published_at,
-    createdAt: page.created_at,
-    updatedAt: page.updated_at,
-    author: mapWikiUser(page.author),
-    latestEditor: mapWikiUser(page.latest_editor),
-  }
-}
-
-function mapWikiPageSource(source: BackendWikiPageSource): WikiPageSource {
-  return {
-    id: source.id,
-    pageId: source.page_id,
-    documentId: source.document_id,
-    chunkId: source.chunk_id,
-    memoryId: source.memory_id,
-    chatMessageId: source.chat_message_id,
-    citationLabel: source.citation_label,
-    relevanceNote: source.relevance_note,
-    snippet: source.snippet,
-    createdAt: source.created_at,
   }
 }
 
@@ -742,98 +663,6 @@ export async function createDocumentComment(
 
 export async function deleteDocumentComment(commentId: string): Promise<void> {
   await request(`/documents/comments/${commentId}`, { method: 'DELETE' })
-}
-
-export async function listWikiPages(params?: {
-  status?: WikiPage['status']
-  pageType?: WikiPageType
-}): Promise<WikiPage[]> {
-  const search = new URLSearchParams()
-  if (params?.status) search.set('status', params.status)
-  if (params?.pageType) search.set('page_type', params.pageType)
-  const suffix = search.toString() ? `?${search}` : ''
-  const pages = await request<BackendWikiPage[]>(`/wiki/pages${suffix}`)
-  return pages.map(mapWikiPage)
-}
-
-export async function getWikiPage(id: string): Promise<WikiPage> {
-  return mapWikiPage(await request<BackendWikiPage>(`/wiki/pages/${id}`))
-}
-
-export async function createWikiPage(payload: {
-  title: string
-  bodyMarkdown: string
-  pageType: WikiPageType
-  status?: WikiPage['status']
-}): Promise<WikiPage> {
-  return mapWikiPage(await request<BackendWikiPage>('/wiki/pages', {
-    method: 'POST',
-    body: JSON.stringify({
-      title: payload.title,
-      body_markdown: payload.bodyMarkdown,
-      page_type: payload.pageType,
-      status: payload.status ?? 'draft',
-    }),
-  }))
-}
-
-export async function updateWikiPage(
-  id: string,
-  payload: {
-    title?: string
-    bodyMarkdown?: string
-    pageType?: WikiPageType
-    status?: WikiPage['status']
-    changeSummary?: string
-  },
-): Promise<WikiPage> {
-  return mapWikiPage(await request<BackendWikiPage>(`/wiki/pages/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      title: payload.title,
-      body_markdown: payload.bodyMarkdown,
-      page_type: payload.pageType,
-      status: payload.status,
-      change_summary: payload.changeSummary,
-    }),
-  }))
-}
-
-export async function deleteWikiPage(id: string): Promise<void> {
-  await request(`/wiki/pages/${id}`, { method: 'DELETE' })
-}
-
-export async function publishWikiPage(id: string): Promise<WikiPage> {
-  return mapWikiPage(await request<BackendWikiPage>(`/wiki/pages/${id}/publish`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }))
-}
-
-export async function ingestDocumentToWiki(
-  documentId: string,
-  model?: ModelChoice,
-): Promise<WikiPage> {
-  return mapWikiPage(await request<BackendWikiPage>(`/wiki/ingest/document/${documentId}`, {
-    method: 'POST',
-    body: JSON.stringify({
-      page_types: ['source_summary'],
-      ...(model ?? {}),
-    }),
-  }))
-}
-
-export async function listWikiPageSources(pageId: string): Promise<WikiPageSource[]> {
-  const sources = await request<BackendWikiPageSource[]>(`/wiki/pages/${pageId}/sources`)
-  return sources.map(mapWikiPageSource)
-}
-
-export async function getWikiGraph(): Promise<WikiGraph> {
-  return request<WikiGraph>('/wiki/graph')
-}
-
-export async function getKbGraph(): Promise<WikiGraph> {
-  return request<WikiGraph>('/kb/graph')
 }
 
 export async function sendChatMessage(message: string, threadId: string | null, model: ModelChoice) {
@@ -1077,15 +906,6 @@ export async function ingestDocumentToKnowledgeBank(
       method: 'POST',
     }),
   )
-}
-
-export async function listKnowledgeBankEntrySources(
-  entryId: string,
-): Promise<WikiPageSource[]> {
-  const sources = await request<BackendWikiPageSource[]>(
-    `/kb/entries/${entryId}/sources`,
-  )
-  return sources.map(mapWikiPageSource)
 }
 
 export async function updateKnowledgeBankEntry(
@@ -1492,7 +1312,6 @@ function toBackendPageContext(ctx: BirdiePageContext) {
     view: ctx.view,
     thread_id: ctx.threadId,
     document_id: ctx.documentId,
-    wiki_page_id: ctx.wikiPageId,
     kb_entry_id: ctx.kbEntryId,
     action_id: ctx.actionId,
   }

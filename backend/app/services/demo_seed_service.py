@@ -28,18 +28,15 @@ from app.models import (
     Team,
     TeamMember,
     User,
-    WikiLink,
-    WikiPage,
 )
-from app.schemas import KnowledgeBankEntryCreate, WikiPageCreate
-from app.services import document_service, knowledge_bank_service, wiki_service
+from app.schemas import KnowledgeBankEntryCreate
+from app.services import document_service, knowledge_bank_service
 from app.services.demo_pdfs import DISCLOSURE_BLOCKS, NDA_BLOCKS, SPA_BLOCKS, DemoPdf
 from app.services.resource_metadata_service import (
     RESOURCE_ACTION_ITEM,
     RESOURCE_DOCUMENT,
     RESOURCE_KB_ENTRY,
     RESOURCE_REVIEW_HANDOFF,
-    RESOURCE_WIKI_PAGE,
     delete_resource_metadata,
     sync_action_metadata,
     sync_handoff_metadata,
@@ -178,24 +175,6 @@ JANE_MEMORIES = [
     ("episodic", "Sarah flagged an uncapped indemnity in my NDA draft this week."),
 ]
 
-WIKI_PAGES = [
-    (
-        "Meridian share purchase: overview",
-        "source_summary",
-        "# Meridian share purchase\n\nMeridian Capital Ltd is buying Oaktree Holdings Ltd. See [[Parties and roles]] and [[Key risks]].\n\n- NDA signed and under revision\n- SPA indemnity and governing-law points open",
-    ),
-    (
-        "Parties and roles",
-        "entity",
-        "# Parties and roles\n\n- **Buyer:** Meridian Capital Ltd (client)\n- **Target:** Oaktree Holdings Ltd\n- **Our team:** Sarah Chen (senior associate), Jane Pereira (associate)",
-    ),
-    (
-        "Key risks",
-        "issue",
-        "# Key risks\n\n1. Uncapped indemnity in the NDA\n2. New York governing law on a UK deal\n3. Deductible basket in the SPA favours sellers",
-    ),
-]
-
 
 class DemoSeedError(RuntimeError):
     pass
@@ -245,13 +224,6 @@ def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> Non
         if DEMO_TAG in (entry.tags or []):
             delete_resource_metadata(db, resource_type=RESOURCE_KB_ENTRY, resource_id=entry.id)
             db.delete(entry)
-
-    wiki_filter = WikiPage.owner_user_id.in_(demo_user_ids)
-    for page in db.scalars(select(WikiPage).where(wiki_filter)):
-        delete_resource_metadata(db, resource_type=RESOURCE_WIKI_PAGE, resource_id=page.id)
-        db.execute(delete(WikiLink).where(WikiLink.source_page_id == page.id))
-        db.execute(delete(WikiLink).where(WikiLink.target_page_id == page.id))
-        db.delete(page)
 
     for thread in db.scalars(select(ChatThread).where(ChatThread.user_id.in_(demo_user_ids))):
         db.delete(thread)
@@ -416,7 +388,7 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
         sync_metadata_safe(db, sync_handoff_metadata, handoff)
     summary.update(tickets=len(TICKETS), review_rounds=2, annotations=len(NDA_FEEDBACK))
 
-    # Memories, chat thread, wiki --------------------------------------------------------------
+    # Memories, chat thread --------------------------------------------------------------
     for category, content in JANE_MEMORIES:
         db.add(Memory(user_id=jane.id, category=category, content=content, scope="personal"))
     thread = ChatThread(user_id=jane.id, title="NDA indemnity question", matter_id=matter.id)
@@ -440,36 +412,6 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
     )
     db.commit()
     summary["memories"] = len(JANE_MEMORIES)
-
-    pages: dict[str, WikiPage] = {}
-    for title, page_type, body in WIKI_PAGES:
-        pages[title] = wiki_service.create_wiki_page(
-            db,
-            user_id=jane.id,
-            schema=WikiPageCreate(
-                title=title,
-                body_markdown=body,
-                page_type=page_type,
-                status="published",
-                matter_id=matter.id,
-            ),
-        )
-    overview, parties, risks = (pages[t] for t, _, _ in WIKI_PAGES)
-    for source, target, text in (
-        (overview, parties, "Parties and roles"),
-        (overview, risks, "Key risks"),
-        (risks, parties, "Who is affected"),
-    ):
-        db.add(
-            WikiLink(
-                source_page_id=source.id,
-                target_page_id=target.id,
-                link_text=text,
-                link_type="related",
-            )
-        )
-    db.commit()
-    summary["wiki_pages"] = len(WIKI_PAGES)
 
     processing = db.scalar(
         select(Document.id)

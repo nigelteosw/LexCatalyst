@@ -322,7 +322,7 @@ export function MattersSection({
             {deleteMutation.error && <ErrorBanner message={getErrorMessage(deleteMutation.error)} />}
             <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
               <strong>{pendingDelete.title}</strong> ({pendingDelete.caseNumber}) will be deleted. This cannot
-              be undone. Its LexChats, documents and wiki pages move to General. Matter-only Knowledge Bank
+              be undone. Its LexChats, documents move to General. Matter-only Knowledge Bank
               entries become private to their authors. Matter members lose access.
             </p>
             <div className="flex justify-end gap-2">

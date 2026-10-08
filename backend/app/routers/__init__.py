@@ -24,7 +24,6 @@ from app.routers import (
     resource_metadata,
     system,
     user_settings,
-    wiki,
 )
 
 all_routers: list[APIRouter] = [
@@ -32,7 +31,6 @@ all_routers: list[APIRouter] = [
     auth.router,
     documents.router,
     document_folders.router,
-    wiki.router,
     chat.router,
     birdie.router,
     birdie_reviews.router,

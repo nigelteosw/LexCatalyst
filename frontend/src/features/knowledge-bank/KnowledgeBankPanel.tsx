@@ -126,14 +126,14 @@ type KnowledgeBankPanelProps = {
   currentUser: CurrentUser | null
 }
 
-type ListTab = 'all' | KnowledgeBankEntryType | 'upload'
+type ListTab = 'all' | KnowledgeBankEntryType
 
 const listTabs: Array<{ id: ListTab; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'knowledge_bank', label: 'Knowledge' },
   { id: 'style_guide', label: 'Style guides' },
   { id: 'action', label: 'Actions' },
-  { id: 'upload', label: 'Uploads' },
+  { id: 'document', label: 'Documents' },
 ]
 
 function canWrite(user: CurrentUser | null) {
@@ -251,11 +251,10 @@ export function KnowledgeBankPanel({
       knowledge_bank: 0,
       style_guide: 0,
       action: 0,
-      upload: 0,
+      document: 0,
     }
     for (const entry of matterEntries) {
       if (entry.entryType in counts) counts[entry.entryType] += 1
-      if (entry.sourceDocumentId) counts.upload += 1
     }
     return counts
   }, [matterEntries])
@@ -263,7 +262,6 @@ export function KnowledgeBankPanel({
     () =>
       matterEntries.filter((entry) => {
         if (listTab === 'all') return true
-        if (listTab === 'upload') return !!entry.sourceDocumentId
         return entry.entryType === listTab
       }),
     [matterEntries, listTab],
@@ -279,10 +277,10 @@ export function KnowledgeBankPanel({
         rest = filteredEntries.filter((e) => !pending.includes(e))
       }
     }
-    if (listTab === 'upload') {
-      return rest.length > 0 ? [{ key: 'upload', label: 'Uploads', icon: Upload, entries: rest }] : []
+    if (listTab === 'document') {
+      return rest.length > 0 ? [{ key: 'document', label: 'Documents', icon: FileText, entries: rest }] : []
     }
-    for (const type of listTabs.slice(1, 4)) {
+    for (const type of listTabs.slice(1, 5)) {
       const entries = rest.filter((e) => e.entryType === type.id)
       if (entries.length > 0) groups.push({ key: type.id, label: type.label, icon: typeIcon[type.id as KnowledgeBankEntryType], entries })
     }
@@ -1005,6 +1003,7 @@ const typeIcon: Record<KnowledgeBankEntryType, LucideIcon> = {
   knowledge_bank: BookMarked,
   style_guide: FileText,
   action: ListChecks,
+  document: FileText,
 }
 
 function listDate(value: string) {

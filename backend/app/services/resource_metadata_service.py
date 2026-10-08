@@ -24,12 +24,10 @@ from app.models import (
     ReviewHandoff,
     TeamMember,
     User,
-    WikiPage,
 )
 
 RESOURCE_DOCUMENT = "document"
 RESOURCE_KB_ENTRY = "knowledge_bank_entry"
-RESOURCE_WIKI_PAGE = "wiki_page"
 RESOURCE_ACTION_ITEM = "action_item"
 RESOURCE_REVIEW_HANDOFF = "review_handoff"
 
@@ -216,28 +214,6 @@ def sync_kb_metadata(
         commit=commit,
     )
 
-
-def sync_wiki_metadata(
-    db: Session,
-    page: WikiPage,
-    *,
-    commit: bool = False,
-) -> ResourceMetadata:
-    return upsert_resource_metadata(
-        db,
-        resource_type=RESOURCE_WIKI_PAGE,
-        resource_id=page.id,
-        title=page.title,
-        owner_user_id=page.owner_user_id,
-        created_by=page.author_user_id,
-        team_id=None,
-        matter_id=page.matter_id,
-        scope="firm_wide" if page.status == "published" else "private",
-        source_document_id=page.source_document_id,
-        status=page.status,
-        metadata_json={"page_type": page.page_type, "slug": page.slug},
-        commit=commit,
-    )
 
 
 def sync_action_metadata(
