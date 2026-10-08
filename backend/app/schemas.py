@@ -677,6 +677,7 @@ class LlmSettingsUpdate(BaseModel):
     model_high: str | None = Field(default=None, max_length=200)
     model_mid: str | None = Field(default=None, max_length=200)
     feature_tiers: dict[str, str] | None = None
+    favourite_models: list[str] | None = Field(default=None, max_length=12)
 
 
 class LlmFeatureResponse(BaseModel):
@@ -685,13 +686,24 @@ class LlmFeatureResponse(BaseModel):
     default_tier: LlmTier
 
 
+class LlmResolvedFeatureResponse(BaseModel):
+    tier: LlmTier
+    model: str
+
+
 class LlmSettingsResponse(BaseModel):
     has_key: bool
     key_last4: str | None = None
+    key_label: str | None = None
+    key_status: Literal["valid", "invalid", "unchecked"] | None = None
+    key_verified_at: str | None = None
     key_source: Literal["user", "demo"] | None = None
     custom_models: dict[str, str | None]
     models: dict[str, str]
+    default_models: dict[str, str] = {}
+    favourite_models: list[str] = []
     feature_tiers: dict[str, str]
+    resolved: dict[str, LlmResolvedFeatureResponse] = {}
     features: list[LlmFeatureResponse]
 
 
@@ -723,8 +735,11 @@ class FeedbackRoundResponse(BaseModel):
 class OpenRouterModelResponse(BaseModel):
     id: str
     name: str
+    provider: str
     context_length: int | None = None
     prompt_price_per_million: float | None = None
+    completion_price_per_million: float | None = None
+    supports_tools: bool = False
 
 
 class PrecedentSearchRequest(BaseModel):

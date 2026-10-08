@@ -17,10 +17,24 @@ MODELS_URL = "https://openrouter.ai/api/v1/models"
 CACHE_SECONDS = 3600
 _cache: tuple[float, list[dict]] | None = None
 
+
+
+def _fallback(model_id: str, name: str) -> dict:
+    return {
+        "id": model_id,
+        "name": name,
+        "provider": model_id.split("/", 1)[0],
+        "context_length": None,
+        "prompt_price_per_million": None,
+        "completion_price_per_million": None,
+        "supports_tools": True,
+    }
+
+
 FALLBACK_MODELS = [
-    {"id": DEFAULT_OPENROUTER_MODEL, "name": "Anthropic: Claude Sonnet 5.5", "context_length": None, "prompt_price_per_million": None},
-    {"id": "anthropic/claude-opus-5.5", "name": "Anthropic: Claude Opus 5.5", "context_length": None, "prompt_price_per_million": None},
-    {"id": "openai/gpt-4o-mini", "name": "OpenAI: GPT-4o mini", "context_length": None, "prompt_price_per_million": None},
+    _fallback(DEFAULT_OPENROUTER_MODEL, "Anthropic: Claude Sonnet 5.5"),
+    _fallback("anthropic/claude-opus-5.5", "Anthropic: Claude Opus 5.5"),
+    _fallback("openai/gpt-4o-mini", "OpenAI: GPT-4o mini"),
 ]
 
 
@@ -39,12 +53,17 @@ def _parse(payload: dict) -> list[dict]:
             continue
         if "text" not in (item.get("architecture") or {}).get("output_modalities", ["text"]):
             continue
+        pricing = item.get("pricing") or {}
         models.append(
             {
                 "id": model_id,
                 "name": item.get("name") or model_id,
+                "provider": model_id.split("/", 1)[0],
                 "context_length": item.get("context_length"),
-                "prompt_price_per_million": _per_million((item.get("pricing") or {}).get("prompt")),
+                "prompt_price_per_million": _per_million(pricing.get("prompt")),
+                "completion_price_per_million": _per_million(pricing.get("completion")),
+                # LexChat and Birdie run tool loops, so the picker flags models without tools.
+                "supports_tools": "tools" in (item.get("supported_parameters") or []),
             }
         )
     models.sort(key=lambda m: m["name"].lower())

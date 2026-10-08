@@ -12,11 +12,18 @@ from app.services.user_settings_service import llm_settings_payload
 
 
 def _setting(**kw):
+    key = kw.pop("openrouter_api_key", "sk-or-test-1234")
     base = dict(
-        openrouter_api_key="sk-or-test-1234",
+        openrouter_api_key=key,
+        openrouter_key_ciphertext="v2:stub" if key else None,
+        openrouter_key_last4=key[-4:] if key else None,
+        openrouter_key_label=None,
+        openrouter_key_status="valid" if key else None,
+        openrouter_key_verified_at=None,
         model_high=None,
         model_mid=None,
         feature_tiers={},
+        favourite_models=[],
     )
     base.update(kw)
     return SimpleNamespace(**base)

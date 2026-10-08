@@ -9,6 +9,17 @@ export function shortModelName(id: string, name?: string): string {
   return (name ?? id).replace(/^[^:]+:\s*/, '').replace(/^[^/]+\//, '').replace(/^Claude\s+/i, '')
 }
 
+export function formatPrice(perMillion: number | null): string {
+  if (perMillion == null) return '–'
+  if (perMillion === 0) return 'free'
+  return perMillion < 1 ? `$${perMillion.toFixed(2)}` : `$${perMillion.toFixed(perMillion < 10 ? 2 : 1)}`
+}
+
+export function formatContext(tokens: number | null): string {
+  if (!tokens) return '–'
+  return tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1)}M ctx` : `${Math.round(tokens / 1000)}k ctx`
+}
+
 export function describeModelChoice(
   choice: ModelChoice,
   settings: LlmSettings | undefined,

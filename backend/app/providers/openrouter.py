@@ -5,9 +5,14 @@ OpenRouter and the model provider behind the chosen model. In DEMO_MODE the firm
 DEMO_OPENROUTER_KEY may stand in for a user key (see app.services.llm_service).
 """
 
+from typing import NamedTuple
+
+import requests
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, OpenAIError
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_KEY_URL = f"{OPENROUTER_BASE_URL}/key"
+KEY_CHECK_TIMEOUT_SECONDS = 5
 DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-5.5"
 TEMPERATURE = 0.2
 KEY_REJECTED_MESSAGE = (
@@ -41,6 +46,37 @@ _HEADERS = {"HTTP-Referer": "https://lexcatalyst.app", "X-Title": "LexCatalyst"}
 
 class OpenRouterError(RuntimeError):
     pass
+
+
+class OpenRouterKeyRejected(OpenRouterError):
+    """OpenRouter said the key is invalid or disabled."""
+
+
+class OpenRouterKeyUnverified(OpenRouterError):
+    """The key could not be checked (network or OpenRouter outage). It may still be valid."""
+
+
+class KeyCheck(NamedTuple):
+    label: str | None
+    limit_remaining: float | None
+
+
+def check_key(api_key: str) -> KeyCheck:
+    """Ask OpenRouter whether a key works. Never includes the key in an error message."""
+    try:
+        response = requests.get(
+            OPENROUTER_KEY_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=KEY_CHECK_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
+        raise OpenRouterKeyUnverified(PROVIDER_UNREACHABLE_MESSAGE) from exc
+    if response.status_code in (401, 403):
+        raise OpenRouterKeyRejected(KEY_REJECTED_MESSAGE)
+    if response.status_code >= 400:
+        raise OpenRouterKeyUnverified(PROVIDER_UNAVAILABLE_MESSAGE)
+    data = (response.json() or {}).get("data") or {}
+    return KeyCheck(label=data.get("label"), limit_remaining=data.get("limit_remaining"))
 
 
 class OpenRouterKeyMissing(OpenRouterError):

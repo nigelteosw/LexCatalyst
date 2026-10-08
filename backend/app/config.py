@@ -44,6 +44,10 @@ class Settings(BaseModel):
                 raise ValueError(
                     "FIELD_ENCRYPTION_KEY must be set explicitly outside development"
                 )
+            if not (self.openrouter_key_encryption_key or "").strip():
+                raise ValueError(
+                    "OPENROUTER_KEY_ENCRYPTION_KEY must be set explicitly outside development"
+                )
         return self
 
     # Optional env defaults for each tier when a user hasn't picked a model.
@@ -68,6 +72,12 @@ class Settings(BaseModel):
     # Dedicated key for at-rest field encryption. Kept separate from JWT_SECRET_KEY so that
     # rotating the JWT secret does not destroy every encrypted column.
     field_encryption_key: str | None = getenv("FIELD_ENCRYPTION_KEY")
+    # Seals users' OpenRouter keys (app.services.secret_store). Separate from FIELD_ENCRYPTION_KEY.
+    # Previous secrets stay listed (comma-separated) until values are re-sealed.
+    openrouter_key_encryption_key: str | None = getenv("OPENROUTER_KEY_ENCRYPTION_KEY")
+    openrouter_key_encryption_keys_old: list[str] = [
+        k for k in getenv("OPENROUTER_KEY_ENCRYPTION_KEYS_OLD", "").split(",") if k.strip()
+    ]
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
     cors_origins: list[str] = getenv(

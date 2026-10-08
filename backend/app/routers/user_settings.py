@@ -32,16 +32,29 @@ def put_llm_settings(
         for feature, tier in body.feature_tiers.items():
             if feature not in FEATURES or tier not in TIERS:
                 raise HTTPException(status_code=422, detail=f"Invalid feature tier: {feature}={tier}")
-    setting = svc.update_llm_settings(
-        db,
-        user_id=current_user.id,
-        api_key=body.openrouter_api_key,
-        fields_set=body.model_fields_set,
-        model_high=body.model_high,
-        model_mid=body.model_mid,
-        feature_tiers=body.feature_tiers,
-    )
+    try:
+        setting = svc.update_llm_settings(
+            db,
+            user_id=current_user.id,
+            api_key=body.openrouter_api_key,
+            fields_set=body.model_fields_set,
+            model_high=body.model_high,
+            model_mid=body.model_mid,
+            feature_tiers=body.feature_tiers,
+            favourite_models=body.favourite_models,
+        )
+    except svc.InvalidOpenRouterKey as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return svc.llm_settings_payload(setting)
+
+
+@router.post("/settings/llm/openrouter-key/verify", response_model=LlmSettingsResponse)
+def verify_openrouter_key(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Re-check the saved key with OpenRouter. Only ever touches the caller's own key."""
+    return svc.llm_settings_payload(svc.verify_saved_key(db, user_id=current_user.id))
 
 
 @router.delete("/settings/llm/openrouter-key", response_model=LlmSettingsResponse)

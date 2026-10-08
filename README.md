@@ -292,6 +292,10 @@ CLOUDFLARE_R2_ENDPOINT_URL=...
 JWT_SECRET_KEY=at_least_32_characters_long
 # Separate encryption key, required outside development; keep it stable
 FIELD_ENCRYPTION_KEY=your_fernet_key
+# Seals users' saved OpenRouter keys; separate from FIELD_ENCRYPTION_KEY, required outside development
+OPENROUTER_KEY_ENCRYPTION_KEY=at_least_32_random_characters
+# Comma-separated previous OPENROUTER_KEY_ENCRYPTION_KEY values, kept until keys are re-sealed
+# OPENROUTER_KEY_ENCRYPTION_KEYS_OLD=
 ADMIN_EMAILS=admin@example.com
 CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 
@@ -308,7 +312,15 @@ VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
 
 Keep secrets in `backend/.env`, never in `VITE_*` variables. Generate a dedicated field encryption key with `backend/.venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Rotating that key makes existing encrypted fields and saved OpenRouter keys unreadable. Apply schema changes through `make migrate`; do not rely on automatic table creation.
 
-Users' personal OpenRouter keys are not environment variables: they are saved per user in Settings, encrypted with `FIELD_ENCRYPTION_KEY` (or the dev fallback), and never returned by the API.
+Users' personal OpenRouter keys are not environment variables: they are saved per user in Settings, checked with OpenRouter on save, sealed with AES-256-GCM under `OPENROUTER_KEY_ENCRYPTION_KEY` (bound to the user's id), and never returned by the API. Generate the key with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Rotating it requires moving the old value to `OPENROUTER_KEY_ENCRYPTION_KEYS_OLD` first, or users must re-enter their keys. Settings → AI models also has a "Check key" action, and a model picker with search, provider and tool-support filters, price and context columns, and starred favourites.
+
+Settings routes (all require sign-in and touch only the caller's own row):
+
+- `GET /settings/llm`: status, models, favourites and each feature's resolved model. Never includes the key.
+- `PUT /settings/llm`: save a key (checked first; a rejected key leaves the saved one in place), High/Mid models, favourites (max 12) and feature tiers.
+- `POST /settings/llm/openrouter-key/verify`: re-check the saved key.
+- `DELETE /settings/llm/openrouter-key`: remove the key.
+- `GET /settings/llm/models`: OpenRouter's model catalogue, cached for an hour.
 
 ---
 

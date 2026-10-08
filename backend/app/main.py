@@ -24,6 +24,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
+from app.log_filters import install_secret_redaction
 from app.database import SessionLocal, create_db_tables
 from app.models import Document, DreamJob, KnowledgeBankEntry
 from app.routers import all_routers
@@ -117,6 +118,7 @@ async def lifespan(_app: FastAPI):
         await asyncio.to_thread(_release_active_claims)
 
 
+install_secret_redaction()
 app = FastAPI(title="LexCatalyst API", lifespan=lifespan)
 
 app.add_middleware(

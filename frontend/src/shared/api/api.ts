@@ -32,6 +32,7 @@ import type {
   DocumentMetadata,
   WorkspaceDocument,
   BirdiePageContext,
+  LlmKeyStatus,
   LlmSettings,
   LlmTier,
   BirdieLesson,
@@ -1967,10 +1968,16 @@ export async function deleteDummyUsers(): Promise<void> {
 type BackendLlmSettings = {
   has_key: boolean
   key_last4: string | null
+  key_label: string | null
+  key_status: LlmKeyStatus | null
+  key_verified_at: string | null
   key_source: 'user' | 'demo' | null
   custom_models: { high: string | null; mid: string | null }
   models: { high: string; mid: string }
+  default_models: { high: string; mid: string }
+  favourite_models: string[]
   feature_tiers: Record<string, LlmTier>
+  resolved: Record<string, { tier: LlmTier; model: string }>
   features: { key: string; label: string; default_tier: LlmTier }[]
 }
 
@@ -1978,10 +1985,16 @@ function mapLlmSettings(s: BackendLlmSettings): LlmSettings {
   return {
     hasKey: s.has_key,
     keyLast4: s.key_last4,
+    keyLabel: s.key_label,
+    keyStatus: s.key_status,
+    keyVerifiedAt: s.key_verified_at,
     keySource: s.key_source,
     customModels: s.custom_models,
     models: s.models,
+    defaultModels: s.default_models,
+    favouriteModels: s.favourite_models,
     featureTiers: s.feature_tiers,
+    resolved: s.resolved,
     features: s.features.map((f) => ({ key: f.key, label: f.label, defaultTier: f.default_tier })),
   }
 }
@@ -1995,12 +2008,14 @@ export async function updateLlmSettings(payload: {
   modelHigh?: string | null
   modelMid?: string | null
   featureTiers?: Record<string, LlmTier>
+  favouriteModels?: string[]
 }): Promise<LlmSettings> {
   const body: Record<string, unknown> = {}
   if (payload.openrouterApiKey) body.openrouter_api_key = payload.openrouterApiKey
   if (payload.modelHigh !== undefined) body.model_high = payload.modelHigh
   if (payload.modelMid !== undefined) body.model_mid = payload.modelMid
   if (payload.featureTiers !== undefined) body.feature_tiers = payload.featureTiers
+  if (payload.favouriteModels !== undefined) body.favourite_models = payload.favouriteModels
   return mapLlmSettings(
     await request<BackendLlmSettings>('/settings/llm', {
       method: 'PUT',
@@ -2012,20 +2027,40 @@ export async function updateLlmSettings(payload: {
 export type OpenrouterModel = {
   id: string
   name: string
+  provider: string
   contextLength: number | null
   promptPricePerMillion: number | null
+  completionPricePerMillion: number | null
+  supportsTools: boolean
+}
+
+type BackendOpenrouterModel = {
+  id: string
+  name: string
+  provider: string
+  context_length: number | null
+  prompt_price_per_million: number | null
+  completion_price_per_million: number | null
+  supports_tools: boolean
 }
 
 export async function listOpenrouterModels(): Promise<OpenrouterModel[]> {
-  const models = await request<
-    { id: string; name: string; context_length: number | null; prompt_price_per_million: number | null }[]
-  >('/settings/llm/models')
+  const models = await request<BackendOpenrouterModel[]>('/settings/llm/models')
   return models.map((m) => ({
     id: m.id,
     name: m.name,
+    provider: m.provider,
     contextLength: m.context_length,
     promptPricePerMillion: m.prompt_price_per_million,
+    completionPricePerMillion: m.completion_price_per_million,
+    supportsTools: m.supports_tools,
   }))
+}
+
+export async function verifyOpenrouterKey(): Promise<LlmSettings> {
+  return mapLlmSettings(
+    await request<BackendLlmSettings>('/settings/llm/openrouter-key/verify', { method: 'POST' }),
+  )
 }
 
 export async function clearOpenrouterKey(): Promise<LlmSettings> {

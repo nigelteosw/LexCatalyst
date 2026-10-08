@@ -49,11 +49,17 @@ export function ModelPicker({
     }
   }, [open])
 
+  const favouriteModels = settings?.favouriteModels
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
     const all = modelsQuery.data ?? []
-    return (q ? all.filter((m) => `${m.id} ${m.name}`.toLowerCase().includes(q)) : all).slice(0, 40)
-  }, [modelsQuery.data, query])
+    if (q) return all.filter((m) => `${m.id} ${m.name}`.toLowerCase().includes(q)).slice(0, 40)
+    // Starred models first, then the rest of the catalogue.
+    const starred = (favouriteModels ?? [])
+      .map((id) => all.find((m) => m.id === id))
+      .filter((m): m is NonNullable<typeof m> => !!m)
+    return [...starred, ...all.filter((m) => !starred.includes(m))].slice(0, 40)
+  }, [modelsQuery.data, query, favouriteModels])
 
   if (settings && !settings.hasKey) {
     return (

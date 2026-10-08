@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.config import get_settings
 from app.database import Base
 from app.services.field_encryption import decrypt_text, encrypt_text
+from app.services.secret_store import SecretUnavailable, decrypt_secret, encrypt_secret, fingerprint
 
 EMBEDDING_DIMENSIONS = get_settings().openai_embedding_dimensions
 
@@ -997,14 +998,21 @@ class UserSetting(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    # Stored via field_encryption; never returned by the API.
-    _openrouter_api_key: Mapped[str | None] = mapped_column(
-        "openrouter_api_key", Text, nullable=True
+    # Sealed by secret_store; the plaintext is only decrypted in llm_service.key_for.
+    openrouter_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    openrouter_key_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    openrouter_key_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    openrouter_key_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    openrouter_key_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    openrouter_key_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     model_high: Mapped[str | None] = mapped_column(String(200), nullable=True)
     model_mid: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # {feature_key: "high" | "mid"}; missing keys use the feature default (llm_service.FEATURES).
     feature_tiers: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Model ids starred in the Settings picker, newest first (max 12).
+    favourite_models: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -1014,8 +1022,29 @@ class UserSetting(Base):
 
     @property
     def openrouter_api_key(self) -> str | None:
-        return decrypt_text(self._openrouter_api_key)
+        if not self.openrouter_key_ciphertext:
+            return None
+        try:
+            return decrypt_secret(self.openrouter_key_ciphertext, user_id=self.user_id)
+        except SecretUnavailable:
+            return None
 
-    @openrouter_api_key.setter
-    def openrouter_api_key(self, value: str | None) -> None:
-        self._openrouter_api_key = encrypt_text(value)
+    def set_openrouter_key(self, plaintext: str) -> None:
+        """Seal a new key and store its fingerprint and display fields. Status is reset."""
+        self.openrouter_key_ciphertext = encrypt_secret(plaintext, user_id=self.user_id)
+        self.openrouter_key_fingerprint = fingerprint(plaintext)
+        self.openrouter_key_last4 = plaintext[-4:]
+        self.openrouter_key_label = None
+        self.openrouter_key_status = "unchecked"
+        self.openrouter_key_verified_at = None
+
+    def clear_openrouter_key(self) -> None:
+        for column in (
+            "openrouter_key_ciphertext",
+            "openrouter_key_fingerprint",
+            "openrouter_key_last4",
+            "openrouter_key_label",
+            "openrouter_key_status",
+            "openrouter_key_verified_at",
+        ):
+            setattr(self, column, None)

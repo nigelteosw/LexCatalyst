@@ -42,8 +42,15 @@ class SecurityGuardTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Settings(**base, admin_emails=["ops@example.com"], field_encryption_key="")
 
+        with self.assertRaises(ValidationError):
+            Settings(
+                **base, admin_emails=["ops@example.com"], field_encryption_key="k" * 32,
+                openrouter_key_encryption_key="",
+            )
+
         settings = Settings(
-            **base, admin_emails=["ops@example.com"], field_encryption_key="k" * 32
+            **base, admin_emails=["ops@example.com"], field_encryption_key="k" * 32,
+            openrouter_key_encryption_key="o" * 32,
         )
         self.assertEqual(settings.admin_emails, ["ops@example.com"])
 

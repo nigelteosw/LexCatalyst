@@ -379,13 +379,21 @@ export type LlmFeature = {
   defaultTier: LlmTier
 }
 
+export type LlmKeyStatus = 'valid' | 'invalid' | 'unchecked'
+
 export type LlmSettings = {
   hasKey: boolean
   keyLast4: string | null
+  keyLabel: string | null
+  keyStatus: LlmKeyStatus | null
+  keyVerifiedAt: string | null
   keySource: 'user' | 'demo' | null
   customModels: { high: string | null; mid: string | null }
   models: { high: string; mid: string }
+  defaultModels: { high: string; mid: string }
+  favouriteModels: string[]
   featureTiers: Record<string, LlmTier>
+  resolved: Record<string, { tier: LlmTier; model: string }>
   features: LlmFeature[]
 }
 

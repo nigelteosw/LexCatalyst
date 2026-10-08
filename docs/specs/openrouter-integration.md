@@ -1,6 +1,6 @@
 # Spec: OpenRouter key security and model switching
 
-Status: proposed · 2026-10-08
+Status: implemented (backend, Settings UI, composer favourites) · 2026-10-08. Deviations: the fingerprint key is derived from OPENROUTER_KEY_ENCRYPTION_KEY rather than a separate KEY_FINGERPRINT_SECRET; the model list is filtered in the browser, not by query parameters; saving a model does not check it against the catalogue.
 
 ## Goal
 
