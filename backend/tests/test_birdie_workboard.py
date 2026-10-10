@@ -3,27 +3,28 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from app.models import ActionItem, Matter, MatterMember, ResourceMetadata, Team, User
+from app.models import ClassMembership, MentorshipClass, ActionItem, Matter, MatterMember, ResourceMetadata, Team, User
 from app.services.birdie_workboard_service import execute_workboard_tool
 
 @pytest.fixture
 def board():
     engine = create_engine('sqlite://')
-    for model in (Team, User, Matter, MatterMember, ActionItem, ResourceMetadata):
+    for model in (MentorshipClass, ClassMembership, Team, User, Matter, MatterMember, ActionItem, ResourceMetadata):
         model.__table__.create(engine)
     with Session(engine) as db:
         user = User(id='me', email='me@example.test', google_id='me', firm_role='associate')
-        db.add_all([user, User(id='other', email='other@example.test', full_name='Jane', google_id='other'), Team(id='team', name='Firm')])
+        db.add_all([user, User(id='other', email='other@example.test', full_name='Jane', google_id='other'), Team(id='team', class_id='class', name='Firm'), MentorshipClass(id='class', name='Test team', status='active')])
         db.flush()
-        db.add_all([Matter(id='matter', team_id='team', title='Matter', case_number='M1'), Matter(id='private', team_id='team', title='Private', case_number='M2')])
+        db.add_all([Matter(class_id='class', id='matter', team_id='team', title='Matter', case_number='M1'), Matter(class_id='class', id='private', team_id='team', title='Private', case_number='M2')])
         db.flush()
         db.add_all([MatterMember(matter_id='matter', user_id='me', role='associate'), MatterMember(matter_id='matter', user_id='other', role='associate')])
         db.add_all([
-            ActionItem(id='own', title='Draft', assigner_id='other', assignee_id='me', matter_id='matter'),
-            ActionItem(id='general', title='General', assigner_id='other', assignee_id='me'),
-            ActionItem(id='others', title='Someone else', assigner_id='me', assignee_id='other', matter_id='matter'),
-            ActionItem(id='hidden', title='Hidden', assigner_id='me', assignee_id='me', matter_id='private'),
+            ActionItem(class_id='class', id='own', title='Draft', assigner_id='other', assignee_id='me', matter_id='matter'),
+            ActionItem(class_id='class', id='general', title='General', assigner_id='other', assignee_id='me'),
+            ActionItem(class_id='class', id='others', title='Someone else', assigner_id='me', assignee_id='other', matter_id='matter'),
+            ActionItem(class_id='class', id='hidden', title='Hidden', assigner_id='me', assignee_id='me', matter_id='private'),
         ])
+        db.add_all([ClassMembership(class_id='class', user_id=uid, role='member', status='active') for uid in ('me', 'other')])
         db.commit()
         yield db, user
     engine.dispose()
@@ -95,7 +96,7 @@ def test_review_linked_tickets_cannot_bypass_review_workflow(board, name, args):
 def test_progress_counts_done_overdue_and_all_rows_not_just_list_limit(board):
     db, _ = board
     db.get(ActionItem, 'own').due_date = datetime.now(timezone.utc) - timedelta(days=1)
-    db.add_all([ActionItem(title=f'Done {i}', assigner_id='other', assignee_id='me', matter_id='matter', status='done') for i in range(55)])
+    db.add_all([ActionItem(class_id='class', title=f'Done {i}', assigner_id='other', assignee_id='me', matter_id='matter', status='done') for i in range(55)])
     db.commit()
     result = call(board, 'get_workboard_progress', {})
     assert (result['total'], result['by_status']['done'], result['outstanding'], result['overdue']) == (56, 55, 1, 1)

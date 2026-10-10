@@ -23,6 +23,8 @@ from app.services.knowledge_bank_service import search_kb_for_chat
 from app.services.lesson_service import distill_lessons, list_feedback_rounds
 from app.services.llm_service import get_llm
 from app.services.precedent_service import search_precedents
+from app.dependencies import require_matter_member
+from app.services.mentorship_class_service import require_active_class_id, revalidate_class_access
 
 TYPES = ("replace", "insert", "comment")
 CATEGORIES = ("style", "substance", "question")
@@ -344,7 +346,11 @@ def create_review(
     db: Session, *, user: User, url: str, title: str | None, text: str,
     matter_id: str | None, model: str,
 ) -> BirdieReview:
+    class_id = require_active_class_id(db, user.id)
+    if matter_id:
+        require_matter_member(db, user, matter_id)
     review = BirdieReview(
+        class_id=class_id,
         user_id=user.id, matter_id=matter_id, source_url=url, title=title,
         source_text=text, model=model, status="processing", stats={},
     )
@@ -363,6 +369,7 @@ async def run_review(review_id: str) -> None:
             return
         user = db.get(User, review.user_id)
         try:
+            revalidate_class_access(db, user_id=review.user_id, class_id=review.class_id)
             text = review.source_text
             precedents, kb_entries = await gather_firm_sources(db, user=user, review=review)
             llm = get_llm(db, user.id, feature="birdie_review", model=review.model)
@@ -383,6 +390,7 @@ async def run_review(review_id: str) -> None:
                 parse_suggestions(raw), text=text, sources=sources, cases=cases, source_blob=block
             )
             review = db.get(BirdieReview, review_id)
+            revalidate_class_access(db, user_id=review.user_id, class_id=review.class_id)
             for item in items:
                 review.suggestions.append(BirdieSuggestion(**item))
             review.stats = {**stats, "total": len(items)}
@@ -413,8 +421,9 @@ def expire_stale(review: BirdieReview) -> None:
 
 
 def get_review(db: Session, review_id: str, user_id: str) -> BirdieReview | None:
+    class_id = require_active_class_id(db, user_id)
     review = db.scalar(
-        select(BirdieReview).where(BirdieReview.id == review_id, BirdieReview.user_id == user_id)
+        select(BirdieReview).where(BirdieReview.id == review_id, BirdieReview.user_id == user_id, BirdieReview.class_id == class_id)
     )
     if review:
         expire_stale(review)
@@ -423,9 +432,10 @@ def get_review(db: Session, review_id: str, user_id: str) -> BirdieReview | None
 
 
 def latest_review_for_url(db: Session, url: str, user_id: str) -> BirdieReview | None:
+    class_id = require_active_class_id(db, user_id)
     review = db.scalar(
         select(BirdieReview)
-        .where(BirdieReview.user_id == user_id, BirdieReview.source_url == url)
+        .where(BirdieReview.user_id == user_id, BirdieReview.source_url == url, BirdieReview.class_id == class_id)
         .order_by(BirdieReview.created_at.desc())
         .limit(1)
     )
@@ -437,8 +447,9 @@ def latest_review_for_url(db: Session, url: str, user_id: str) -> BirdieReview |
 
 def reset_reviews_for_url(db: Session, url: str, user_id: str) -> int:
     """Delete the user's own reviews of this page (suggestions and replies cascade)."""
+    class_id = require_active_class_id(db, user_id)
     reviews = db.scalars(
-        select(BirdieReview).where(BirdieReview.user_id == user_id, BirdieReview.source_url == url)
+        select(BirdieReview).where(BirdieReview.user_id == user_id, BirdieReview.source_url == url, BirdieReview.class_id == class_id)
     ).all()
     for review in reviews:
         db.delete(review)
@@ -447,10 +458,11 @@ def reset_reviews_for_url(db: Session, url: str, user_id: str) -> int:
 
 
 def get_suggestion(db: Session, suggestion_id: str, user_id: str) -> BirdieSuggestion | None:
+    class_id = require_active_class_id(db, user_id)
     return db.scalar(
         select(BirdieSuggestion)
         .join(BirdieReview, BirdieReview.id == BirdieSuggestion.review_id)
-        .where(BirdieSuggestion.id == suggestion_id, BirdieReview.user_id == user_id)
+        .where(BirdieSuggestion.id == suggestion_id, BirdieReview.user_id == user_id, BirdieReview.class_id == class_id)
     )
 
 

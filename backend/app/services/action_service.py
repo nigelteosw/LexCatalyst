@@ -13,7 +13,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.dependencies import is_senior_or_above
-from app.models import ActionItem, User
+from app.models import ActionItem, ClassMembership, Matter, User
+from app.services.mentorship_class_service import ClassAccessError, require_class_context
 from app.schemas import ActionItemCreate, ActionItemUpdate
 from app.services.resource_metadata_service import (
     RESOURCE_ACTION_ITEM,
@@ -38,6 +39,7 @@ def _action_query():
 def list_action_items(
     db: Session,
     *,
+    user: User,
     matter_id: str | None = None,
     status: str | None = None,
     limit: int = DEFAULT_LIMIT,
@@ -50,7 +52,8 @@ def list_action_items(
     in-browser filtering feels instant, and skipping the roundtrip is
     what makes filter chips snappy.
     """
-    stmt = _action_query()
+    context = require_class_context(db, user)
+    stmt = _action_query().where(ActionItem.class_id == context.class_id)
     if matter_id:
         stmt = stmt.where(ActionItem.matter_id == matter_id)
     if status:
@@ -59,8 +62,9 @@ def list_action_items(
     return list(db.scalars(stmt))
 
 
-def get_action_item(db: Session, item_id: str) -> ActionItem | None:
-    return db.scalar(_action_query().where(ActionItem.id == item_id))
+def get_action_item(db: Session, item_id: str, *, user: User) -> ActionItem | None:
+    context = require_class_context(db, user)
+    return db.scalar(_action_query().where(ActionItem.id == item_id, ActionItem.class_id == context.class_id))
 
 
 def create_action_item(
@@ -69,7 +73,21 @@ def create_action_item(
     user: User,
     schema: ActionItemCreate,
 ) -> ActionItem:
+    context = require_class_context(db, user)
+    if schema.matter_id:
+        matter = db.get(Matter, schema.matter_id)
+        if not matter or matter.class_id != context.class_id:
+            raise ClassAccessError("Matter not found", 404)
+    if schema.assignee_id:
+        assignee = db.scalar(select(ClassMembership.id).where(
+            ClassMembership.class_id == context.class_id,
+            ClassMembership.user_id == schema.assignee_id,
+            ClassMembership.status == "active",
+        ))
+        if not assignee:
+            raise ClassAccessError("Assignee not found", 404)
     item = ActionItem(
+        class_id=context.class_id,
         title=schema.title,
         description=schema.description,
         assignee_id=schema.assignee_id,
@@ -82,7 +100,7 @@ def create_action_item(
     db.add(item)
     db.commit()
     sync_metadata_safe(db, sync_action_metadata, item)
-    return get_action_item(db, item.id) or item
+    return get_action_item(db, item.id, user=user) or item
 
 
 def update_action_item(
@@ -98,8 +116,9 @@ def update_action_item(
     - Seniors+ and admins can update any field.
     - Other users get a 403 (None return → caller maps to 404/403).
     """
+    context = require_class_context(db, user)
     item = db.get(ActionItem, item_id)
-    if not item:
+    if not item or item.class_id != context.class_id:
         return None
 
     is_assignee = item.assignee_id == user.id
@@ -108,6 +127,18 @@ def update_action_item(
         return None
 
     payload = schema.model_dump(exclude_unset=True)
+    if payload.get("matter_id"):
+        matter = db.get(Matter, payload["matter_id"])
+        if not matter or matter.class_id != context.class_id:
+            raise ClassAccessError("Matter not found", 404)
+    if payload.get("assignee_id"):
+        assignee = db.scalar(select(ClassMembership.id).where(
+            ClassMembership.class_id == context.class_id,
+            ClassMembership.user_id == payload["assignee_id"],
+            ClassMembership.status == "active",
+        ))
+        if not assignee:
+            raise ClassAccessError("Assignee not found", 404)
 
     # An assignee who is not also a manager can only flip the status.
     if is_assignee and not is_manager:
@@ -125,14 +156,15 @@ def update_action_item(
         setattr(item, field, value)
     db.commit()
     sync_metadata_safe(db, sync_action_metadata, item)
-    return get_action_item(db, item.id)
+    return get_action_item(db, item.id, user=user)
 
 
 def delete_action_item(db: Session, *, user: User, item_id: str) -> bool:
     """Delete a Workboard ticket. Permitted for assignee, assigner, or senior+."""
     from app.dependencies import is_senior_or_above
+    context = require_class_context(db, user)
     item = db.get(ActionItem, item_id)
-    if not item:
+    if not item or item.class_id != context.class_id:
         return False
     if not (
         is_senior_or_above(user)

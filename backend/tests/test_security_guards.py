@@ -34,7 +34,11 @@ class SecurityGuardTests(unittest.TestCase):
                 importlib.reload(config)
 
     def test_production_requires_admin_emails_and_encryption_key(self) -> None:
-        base = {"jwt_secret_key": "x" * 32, "environment": "production"}
+        base = {"jwt_secret_key": "x" * 32, "environment": "production", "class_invite_secret": "i" * 32}
+
+        with self.assertRaises(ValidationError):
+            Settings(**{**base, "class_invite_secret": ""}, admin_emails=["ops@example.com"],
+                     field_encryption_key="k" * 32, openrouter_key_encryption_key="o" * 32)
 
         with self.assertRaises(ValidationError):
             Settings(**base, admin_emails=[], field_encryption_key="k" * 32)
@@ -67,7 +71,7 @@ class SecurityGuardTests(unittest.TestCase):
 
     def test_handoff_creation_rejects_another_users_document(self) -> None:
         db = MagicMock()
-        db.get.return_value = SimpleNamespace(user_id="owner")
+        db.get.return_value = SimpleNamespace(class_id="class-a", user_id="owner")
         user = SimpleNamespace(id="outsider", is_admin=False)
         schema = SimpleNamespace(
             document_id="document",
@@ -76,8 +80,9 @@ class SecurityGuardTests(unittest.TestCase):
             reviewer_id=None,
         )
 
-        with self.assertRaises(ReviewHandoffError):
-            create_handoff(db, user=user, schema=schema)
+        with patch("app.services.review_handoff_service.require_active_class_id", return_value="class-a"):
+            with self.assertRaises(ReviewHandoffError):
+                create_handoff(db, user=user, schema=schema)
 
     def test_annotation_uses_handoff_document(self) -> None:
         db = MagicMock()

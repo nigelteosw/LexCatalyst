@@ -20,6 +20,7 @@ from app.services.rag_service import (
 )
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
 from app.services.agent_tools import TASK_AWARENESS_GUIDANCE, WORKBOARD_RULES, today_line
+from app.services.mentorship_class_service import require_active_class_id, revalidate_class_access
 
 SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Answer clearly and conservatively. If the question needs document evidence, say what evidence is missing.
@@ -50,13 +51,14 @@ def make_thread_title(message: str) -> str:
 def get_or_create_thread(
     db: Session, thread_id: str | None, first_message: str, user_id: str
 ) -> ChatThread:
+    class_id = require_active_class_id(db, user_id)
     if thread_id:
-        stmt = select(ChatThread).where(ChatThread.id == thread_id, ChatThread.user_id == user_id)
+        stmt = select(ChatThread).where(ChatThread.id == thread_id, ChatThread.user_id == user_id, ChatThread.class_id == class_id)
         thread = db.scalar(stmt)
         if thread:
             return thread
 
-    thread = ChatThread(user_id=user_id, title=make_thread_title(first_message))
+    thread = ChatThread(class_id=class_id, user_id=user_id, title=make_thread_title(first_message))
     db.add(thread)
     db.flush()
     return thread
@@ -158,6 +160,7 @@ async def _generate_summary(db: Session, user_id: str, older_messages: list[Chat
 
 async def _maybe_refresh_summary(db: Session, thread: ChatThread, user_id: str) -> None:
     """Regenerate the summary whenever the archived history grows."""
+    revalidate_class_access(db, user_id=user_id, class_id=thread.class_id)
     total = _count_messages(db, thread.id)
     archived = total - _RECENT_LIMIT
     if archived <= 0:
@@ -170,6 +173,7 @@ async def _maybe_refresh_summary(db: Session, thread: ChatThread, user_id: str) 
     older = all_messages[:-_RECENT_LIMIT]
     summary = await _generate_summary(db, user_id, older)
     if summary:
+        revalidate_class_access(db, user_id=user_id, class_id=thread.class_id)
         thread.summary = summary
         thread.summary_up_to = archived
         db.commit()
@@ -281,6 +285,8 @@ async def create_chat_response(
         ),
     )
 
+    revalidate_class_access(db, user_id=user_id, class_id=thread.class_id)
+
     assistant_message = add_message(
         db,
         thread_id=thread.id,
@@ -297,10 +303,12 @@ async def create_chat_response(
     db.refresh(thread)
 
     candidates = await extract_memory_candidates(db, user_id, user_message, assistant_content)
+    revalidate_class_access(db, user_id=user_id, class_id=thread.class_id)
     save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
 
     await _maybe_refresh_summary(db, thread, user_id)
 
+    revalidate_class_access(db, user_id=user_id, class_id=thread.class_id)
     return thread, assistant_message
 
 
@@ -422,6 +430,7 @@ async def persist_assistant_message(
     sources: list | None = None,
 ) -> ChatMessage:
     """Save the assistant message to DB only — no memory extraction or summarization."""
+    revalidate_class_access(db, user_id=thread.user_id, class_id=thread.class_id)
     # `model` is the already-resolved model id from the agent loop.
     assistant_message = add_message(
         db,
@@ -448,8 +457,10 @@ async def run_post_save_tasks(
     user_message: str | None = None,
 ) -> None:
     """Run memory extraction and summarization after the response has been sent to the client."""
+    revalidate_class_access(db, user_id=user_id, class_id=thread.class_id)
     if user_message:
         candidates = await extract_memory_candidates(db, user_id, user_message, assistant_message.content)
+        revalidate_class_access(db, user_id=user_id, class_id=thread.class_id)
         save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
     await _maybe_refresh_summary(db, thread, user_id)
 
@@ -486,7 +497,8 @@ def list_threads(
     offset: int = 0,
 ) -> list[ChatThread]:
     """matter_filter: None = all threads, GENERAL = no matter, else a matter id."""
-    stmt = select(ChatThread).where(ChatThread.user_id == user_id)
+    class_id = require_active_class_id(db, user_id)
+    stmt = select(ChatThread).where(ChatThread.user_id == user_id, ChatThread.class_id == class_id)
     if matter_filter == GENERAL:
         stmt = stmt.where(ChatThread.matter_id.is_(None))
     elif matter_filter:
@@ -509,8 +521,9 @@ def list_thread_messages(
     Pass ``before_message_id`` to walk backwards: only messages strictly older
     than that message are returned.
     """
+    class_id = require_active_class_id(db, user_id)
     thread_stmt = select(ChatThread).where(
-        ChatThread.id == thread_id, ChatThread.user_id == user_id
+        ChatThread.id == thread_id, ChatThread.user_id == user_id, ChatThread.class_id == class_id,
     )
     if not db.scalar(thread_stmt):
         return []
@@ -542,9 +555,10 @@ def update_thread(
     matter_id: str | None,
     set_matter: bool,
 ) -> ChatThread | None:
+    class_id = require_active_class_id(db, user_id)
     thread = db.scalar(
         select(ChatThread).where(
-            ChatThread.id == thread_id, ChatThread.user_id == user_id,
+            ChatThread.id == thread_id, ChatThread.user_id == user_id, ChatThread.class_id == class_id,
         )
     )
     if not thread:
@@ -560,9 +574,10 @@ def update_thread(
 
 
 def delete_thread(db: Session, *, user_id: str, thread_id: str) -> bool:
+    class_id = require_active_class_id(db, user_id)
     thread = db.scalar(
         select(ChatThread).where(
-            ChatThread.id == thread_id, ChatThread.user_id == user_id,
+            ChatThread.id == thread_id, ChatThread.user_id == user_id, ChatThread.class_id == class_id,
         )
     )
     if not thread:
@@ -580,10 +595,11 @@ def delete_message(db: Session, *, user_id: str, message_id: str) -> bool:
     Callers should be aware that this can make the conversation look
     incoherent on re-read.
     """
+    class_id = require_active_class_id(db, user_id)
     message = db.scalar(
         select(ChatMessage)
         .join(ChatThread, ChatThread.id == ChatMessage.thread_id)
-        .where(ChatMessage.id == message_id, ChatThread.user_id == user_id)
+        .where(ChatMessage.id == message_id, ChatThread.user_id == user_id, ChatThread.class_id == class_id)
     )
     if not message:
         return False

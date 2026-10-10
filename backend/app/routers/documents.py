@@ -22,6 +22,7 @@ from app.database import get_db
 from app.dependencies import authenticate_user_token, get_current_user, require_matter_member
 from app.services.document_folder_service import get_folder, require_folder_access
 from app.models import Document, User
+from app.services.mentorship_class_service import ClassAccessError, require_active_class_id
 from app.schemas import (
     DocumentCommentCreate,
     DocumentCommentResponse,
@@ -134,7 +135,7 @@ async def upload_document(
     if matter_id:
         require_matter_member(db, current_user, matter_id)
     if folder_id:
-        folder = get_folder(db, folder_id)
+        folder = get_folder(db, current_user, folder_id)
         if not folder:
             raise HTTPException(status_code=404, detail="Folder not found")
         require_folder_access(db, current_user, folder)
@@ -167,6 +168,8 @@ async def upload_document(
         )
     except UnsupportedDocumentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ClassAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Document database is unavailable") from exc
 
@@ -226,7 +229,7 @@ def rename_document(
     if set_matter and schema.matter_id:
         require_matter_member(db, current_user, schema.matter_id)
     if set_folder and schema.folder_id:
-        folder = get_folder(db, schema.folder_id)
+        folder = get_folder(db, current_user, schema.folder_id)
         if not folder:
             raise HTTPException(status_code=404, detail="Folder not found")
         require_folder_access(db, current_user, folder)
@@ -245,7 +248,7 @@ def rename_document(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Document database is unavailable") from exc
-    if not document:
+    if not document or document.class_id != require_active_class_id(db, current_user.id):
         raise HTTPException(status_code=404, detail="Document not found")
     document_with_count = get_user_document(db, current_user.id, document.id)
     return build_document_response(
@@ -259,17 +262,16 @@ def rename_document(
 def document_file(
     document_id: str,
     download: bool = Query(default=False),
-    token: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> Response:
     bearer_token = None
     if authorization and authorization.lower().startswith("bearer "):
         bearer_token = authorization[7:].strip()
-    current_user = authenticate_user_token(db, token or bearer_token)
+    current_user = authenticate_user_token(db, bearer_token)
 
     document = db.get(Document, document_id)
-    if not document:
+    if not document or document.class_id != require_active_class_id(db, current_user.id):
         raise HTTPException(status_code=404, detail="Document not found")
     if not (
         can_access_document(db, user_id=current_user.id, document=document)

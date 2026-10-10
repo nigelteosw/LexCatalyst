@@ -13,6 +13,7 @@ from app.routers import (
     birdie,
     birdie_reviews,
     chat,
+    mentorship_classes,
     demo,
     document_folders,
     document_metadata,
@@ -30,6 +31,7 @@ from app.routers import (
 all_routers: list[APIRouter] = [
     system.router,
     auth.router,
+    mentorship_classes.router,
     documents.router,
     document_metadata.router,
     document_folders.router,

@@ -14,6 +14,7 @@ from app.services.birdie_workboard_service import _require_matter
 from app.models import Matter, User
 from app.providers.openrouter import OpenRouterError, OpenRouterKeyMissing
 from app.services.error_reporting import unexpected_error_detail
+from app.services.mentorship_class_service import ClassAccessError, require_class_context, revalidate_class_access
 from app.schemas import FeedbackRoundResponse, LessonResponse, LlmTier, PageContext, WebContext
 from app.services import lesson_service
 from app.services.llm_service import get_llm
@@ -50,6 +51,7 @@ async def birdie_stream(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
+    context = require_class_context(db, current_user)
     # A stale saved matter (e.g. after switching demo users) falls back to General instead of failing.
     try:
         _require_matter(db, current_user, request.matter_id)
@@ -81,6 +83,7 @@ async def birdie_stream(
             )
 
             # Tell the client which matter this turn used, so the user can see and correct it.
+            revalidate_class_access(db, user_id=current_user.id, class_id=context.class_id)
             yield event("matter", {"id": matter.id, "title": matter.title} if matter else {"id": None, "title": None})
 
             chunks: list[str] = []
@@ -96,6 +99,7 @@ async def birdie_stream(
                 tier=request.tier,
                 model=request.model,
             ):
+                revalidate_class_access(db, user_id=current_user.id, class_id=context.class_id)
                 if event_name == 'token':
                     chunks.append(payload['content'])
                 yield event(event_name, payload)
@@ -109,9 +113,14 @@ async def birdie_stream(
                 return
             warning = validate_case_citations(full_response, case_sources)
             if warning:
+                revalidate_class_access(db, user_id=current_user.id, class_id=context.class_id)
                 yield event("token", {"content": warning})
                 full_response += warning
+            revalidate_class_access(db, user_id=current_user.id, class_id=context.class_id)
             yield event("done", {"content": full_response})
+        except ClassAccessError as exc:
+            db.rollback()
+            yield event("error", {"detail": str(exc)})
         except OpenRouterError as exc:
             yield event("error", {"detail": str(exc)})
         except Exception as exc:

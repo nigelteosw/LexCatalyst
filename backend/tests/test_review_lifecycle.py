@@ -191,25 +191,26 @@ class ResubmitTests(unittest.TestCase):
         from app.models import ActionItem, Document, ReviewHandoff
 
         document = SimpleNamespace(
-            id="doc-2", user_id="junior", matter_id=None, filename="draft.pdf",
+            id="doc-2", class_id="class-a", user_id="junior", matter_id=None, filename="draft.pdf",
             content_type="application/pdf", storage_key="k",
         )
         action = SimpleNamespace(
-            id="action", assignee_id="junior", assigner_id="senior",
+            id="action", class_id="class-a", assignee_id="junior", assigner_id="senior",
             matter_id=None, active_handoff_id="round-1", status="in_progress",
         )
         previous = _handoff(previous_status)
         by_type = {Document: document, ActionItem: action, ReviewHandoff: previous}
         db = MagicMock()
         db.get.side_effect = lambda model, _id: by_type.get(model)
-        db.scalar.return_value = None
+        db.scalar.return_value = "membership"
         return db, action
 
     def test_new_round_refused_while_previous_is_active(self) -> None:
         db, _ = self._db(previous_status="in_review")
         schema = SimpleNamespace(document_id="doc-2", matter_id=None, action_id="action", reviewer_id=None)
-        with self.assertRaises(ReviewHandoffError):
-            rhs.create_handoff(db, user=SimpleNamespace(id="junior", is_admin=False), schema=schema)
+        with patch.object(rhs, "require_active_class_id", return_value="class-a"):
+            with self.assertRaises(ReviewHandoffError):
+                rhs.create_handoff(db, user=SimpleNamespace(id="junior", is_admin=False), schema=schema)
         db.add.assert_not_called()
 
     def test_new_round_allowed_after_return(self) -> None:
@@ -218,6 +219,7 @@ class ResubmitTests(unittest.TestCase):
         with (
             patch.object(rhs, "_carry_forward_annotations") as carry,
             patch.object(rhs, "sync_metadata_safe"),
+            patch.object(rhs, "require_active_class_id", return_value="class-a"),
         ):
             handoff = rhs.create_handoff(db, user=SimpleNamespace(id="junior", is_admin=False), schema=schema)
         carry.assert_called_once()

@@ -44,6 +44,7 @@ from app.services.resource_metadata_service import (
 )
 from app.services.storage_service import StorageError, delete_document_file
 from app.services.user_service import create_dummy_users
+from app.services.mentorship_class_service import require_class_context
 
 _log = logging.getLogger(__name__)
 
@@ -182,19 +183,21 @@ class DemoSeedError(RuntimeError):
 
 def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> None:
     """Delete previously seeded demo content. Keeps the dummy users themselves."""
-    matter = db.scalar(select(Matter).where(Matter.case_number == DEMO_CASE))
-    team = db.scalar(select(Team).where(Team.name == DEMO_TEAM))
+    class_id = require_class_context(db, presenter).class_id
+    matter = db.scalar(select(Matter).where(Matter.class_id == class_id, Matter.case_number == DEMO_CASE))
+    team = db.scalar(select(Team).where(Team.class_id == class_id, Team.name == DEMO_TEAM))
     matter_id = matter.id if matter else None
 
     # Actions and handoffs reference each other; break the cycle first.
-    action_filter = (
+    action_filter = (ActionItem.class_id == class_id) & (
         ActionItem.assignee_id.in_(demo_user_ids)
         | ActionItem.assigner_id.in_(demo_user_ids)
         | (ActionItem.matter_id == matter_id if matter_id else ActionItem.id.is_(None))
     )
     action_ids = list(db.scalars(select(ActionItem.id).where(action_filter)))
-    handoff_filter = ReviewHandoff.submitted_by.in_(demo_user_ids) | (
-        ReviewHandoff.matter_id == matter_id if matter_id else ReviewHandoff.id.is_(None)
+    handoff_filter = (ReviewHandoff.class_id == class_id) & (
+        ReviewHandoff.submitted_by.in_(demo_user_ids)
+        | (ReviewHandoff.matter_id == matter_id if matter_id else ReviewHandoff.id.is_(None))
     )
     handoff_ids = list(db.scalars(select(ReviewHandoff.id).where(handoff_filter)))
     if action_ids:
@@ -211,7 +214,7 @@ def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> Non
     db.flush()
 
     storage_keys: list[str] = []
-    for document in db.scalars(select(Document).where(Document.user_id.in_(demo_user_ids))):
+    for document in db.scalars(select(Document).where(Document.class_id == class_id, Document.user_id.in_(demo_user_ids))):
         if document.storage_key:
             storage_keys.append(document.storage_key)
         delete_resource_metadata(db, resource_type=RESOURCE_DOCUMENT, resource_id=document.id)
@@ -219,15 +222,15 @@ def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> Non
 
     creators = [presenter.id, *demo_user_ids]
     for entry in db.scalars(
-        select(KnowledgeBankEntry).where(KnowledgeBankEntry.created_by.in_(creators))
+        select(KnowledgeBankEntry).where(KnowledgeBankEntry.class_id == class_id, KnowledgeBankEntry.created_by.in_(creators))
     ):
         if DEMO_TAG in (entry.tags or []):
             delete_resource_metadata(db, resource_type=RESOURCE_KB_ENTRY, resource_id=entry.id)
             db.delete(entry)
 
-    for thread in db.scalars(select(ChatThread).where(ChatThread.user_id.in_(demo_user_ids))):
+    for thread in db.scalars(select(ChatThread).where(ChatThread.class_id == class_id, ChatThread.user_id.in_(demo_user_ids))):
         db.delete(thread)
-    for memory in db.scalars(select(Memory).where(Memory.user_id.in_(demo_user_ids))):
+    for memory in db.scalars(select(Memory).where(Memory.class_id == class_id, Memory.user_id.in_(demo_user_ids))):
         db.delete(memory)
 
     if matter:
@@ -248,7 +251,8 @@ def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> Non
 
 
 async def seed_demo(db: Session, *, presenter: User) -> dict:
-    users = {u.google_id.split(":", 1)[1].split("-")[0]: u for u in create_dummy_users(db)}
+    class_id = require_class_context(db, presenter).class_id
+    users = {u.google_id.split(":", 1)[1].split("-")[0]: u for u in create_dummy_users(db, actor=presenter)}
     sarah, jane, marcus = users["sarah"], users["jane"], users["marcus"]
     demo_ids = [u.id for u in users.values()]
 
@@ -258,14 +262,14 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
     summary: dict = {"documents": 0, "documents_failed": 0, "kb_entries": 0, "kb_failed": 0}
 
     # Team + matter ---------------------------------------------------------------------------
-    team = Team(name=DEMO_TEAM, practice_area="Corporate / M&A")
+    team = Team(class_id=class_id, name=DEMO_TEAM, practice_area="Corporate / M&A")
     db.add(team)
     db.flush()
     for user in (presenter, sarah, jane, marcus):
         db.add(TeamMember(team_id=team.id, user_id=user.id, role=user.firm_role))
     for user in (sarah, jane, marcus):
         user.default_team_id = team.id
-    matter = Matter(team_id=team.id, title=DEMO_MATTER_TITLE, case_number=DEMO_CASE)
+    matter = Matter(class_id=class_id, team_id=team.id, title=DEMO_MATTER_TITLE, case_number=DEMO_CASE)
     matter.client_name = "Meridian Capital Ltd"
     db.add(matter)
     db.flush()
@@ -328,6 +332,7 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
     actions: dict[str, ActionItem] = {}
     for title, description, status, priority, due_days, assignee_key in TICKETS:
         action = ActionItem(
+            class_id=class_id,
             title=title,
             description=description,
             assignee_id=assignees[assignee_key].id,
@@ -345,6 +350,7 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
     nda_action = actions["Revise Meridian NDA after Sarah's comments"]
     spa_action = actions[SPA_TICKET]
     round1 = ReviewHandoff(
+        class_id=class_id,
         action_id=nda_action.id,
         matter_id=matter.id,
         document_id=docs["nda"].id,
@@ -354,6 +360,7 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
         completed_at=now - timedelta(days=1),
     )
     round2 = ReviewHandoff(
+        class_id=class_id,
         action_id=spa_action.id,
         matter_id=matter.id,
         document_id=docs["spa"].id,
@@ -390,8 +397,8 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
 
     # Memories, chat thread --------------------------------------------------------------
     for category, content in JANE_MEMORIES:
-        db.add(Memory(user_id=jane.id, category=category, content=content, scope="personal"))
-    thread = ChatThread(user_id=jane.id, title="NDA indemnity question", matter_id=matter.id)
+        db.add(Memory(class_id=class_id, user_id=jane.id, category=category, content=content, scope="personal"))
+    thread = ChatThread(class_id=class_id, user_id=jane.id, title="NDA indemnity question", matter_id=matter.id)
     db.add(thread)
     db.flush()
     db.add(

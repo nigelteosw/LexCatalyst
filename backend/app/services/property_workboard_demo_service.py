@@ -36,6 +36,7 @@ from app.services.resource_metadata_service import (
     sync_metadata_safe,
 )
 from app.services.user_service import create_dummy_users
+from app.services.mentorship_class_service import require_class_context
 
 _log = logging.getLogger(__name__)
 
@@ -239,11 +240,13 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
 
     now = datetime.now(UTC)
     round1 = ReviewHandoff(
+        class_id=matter.class_id,
         action_id=ticket.id, matter_id=matter.id, document_id=docs[0].id, submitted_by=jane.id,
         reviewer_id=sarah.id, status="returned", completed_at=now - timedelta(days=1),
         submitted_at=now - timedelta(days=2),
     )
     round2 = ReviewHandoff(
+        class_id=matter.class_id,
         action_id=ticket.id, matter_id=matter.id, document_id=docs[1].id, submitted_by=jane.id,
         reviewer_id=sarah.id, status="ready_for_review",
     )
@@ -264,6 +267,7 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
     db.flush()
     for title, body, sources in NOTE_V1_LESSONS:
         db.add(ReviewLesson(
+            class_id=matter.class_id,
             handoff_id=round1.id, title=title, body=body,
             source_annotation_ids=[annotations[i].id for i in sources],
         ))
@@ -327,7 +331,8 @@ async def _seed_tampines_documents(db: Session, *, matter: Matter, team: Team, u
 
 async def _seed_style_guide(db: Session, *, presenter: User) -> bool:
     """Firm-wide conveyancing style guide that Birdie's draft review cites. Created once."""
-    if db.scalar(select(KnowledgeBankEntry.id).where(KnowledgeBankEntry.title == STYLE_GUIDE_TITLE)):
+    class_id = require_class_context(db, presenter).class_id
+    if db.scalar(select(KnowledgeBankEntry.id).where(KnowledgeBankEntry.class_id == class_id, KnowledgeBankEntry.title == STYLE_GUIDE_TITLE)):
         return False
     try:
         await knowledge_bank_service.create_kb_entry(
@@ -347,11 +352,12 @@ async def _seed_style_guide(db: Session, *, presenter: User) -> bool:
 
 
 async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
-    users = {u.google_id.split(":", 1)[1].split("-")[0]: u for u in create_dummy_users(db)}
+    class_id = require_class_context(db, presenter).class_id
+    users = {u.google_id.split(":", 1)[1].split("-")[0]: u for u in create_dummy_users(db, actor=presenter)}
     participants = [presenter, *users.values()]
-    team = db.scalar(select(Team).where(Team.name == "Singapore Property (Demo)"))
+    team = db.scalar(select(Team).where(Team.class_id == class_id, Team.name == "Singapore Property (Demo)"))
     if team is None:
-        team = Team(name="Singapore Property (Demo)", practice_area="Singapore property law")
+        team = Team(class_id=class_id, name="Singapore Property (Demo)", practice_area="Singapore property law")
         db.add(team)
         db.flush()
     for user in participants:
@@ -359,9 +365,9 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
             db.add(TeamMember(team_id=team.id, user_id=user.id, role=user.firm_role))
     matters = []
     for case_number, title in MATTERS:
-        matter = db.scalar(select(Matter).where(Matter.case_number == case_number))
+        matter = db.scalar(select(Matter).where(Matter.class_id == class_id, Matter.case_number == case_number))
         if matter is None:
-            matter = Matter(team_id=team.id, case_number=case_number, title=title)
+            matter = Matter(class_id=class_id, team_id=team.id, case_number=case_number, title=title)
             db.add(matter)
             db.flush()
         for user in participants:
@@ -379,7 +385,7 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
         matter = matters[index]
         if (matter.id, title) in existing:
             continue
-        item = ActionItem(title=title, description="Synthetic demo task. " + description,
+        item = ActionItem(class_id=class_id, title=title, description="Synthetic demo task. " + description,
                           matter_id=matter.id, assigner_id=users["sarah"].id,
                           assignee_id=users[assignee].id, status=status, priority=priority,
                           due_date=now + timedelta(days=offset), tags=[DEMO_TAG, "Singapore property"])
@@ -395,7 +401,7 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
             ))
             if existing_thread is not None:
                 continue
-            thread = ChatThread(user_id=user.id, matter_id=matter.id, title=title)
+            thread = ChatThread(class_id=class_id, user_id=user.id, matter_id=matter.id, title=title)
             db.add(thread)
             db.flush()
             db.add_all([

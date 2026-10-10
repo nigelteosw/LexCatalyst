@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models import Memory
 from app.schemas import MemoryCreate, MemoryUpdate, MemoryExtractionResult, MemoryExtractionCandidate
 from app.services.llm_service import get_llm
+from app.services.mentorship_class_service import require_active_class_id
 
 EXTRACTION_PROMPT = """You are a memory extraction assistant. Extract patterns about who the user is and how they work from a conversation between a user and a legal assistant.
 
@@ -29,7 +30,9 @@ Assistant: {assistant_message}
 
 
 def create_memory(db: Session, user_id: str, schema: MemoryCreate, confidence: float = 1.0) -> Memory:
+    class_id = require_active_class_id(db, user_id)
     memory = Memory(
+        class_id=class_id,
         user_id=user_id,
         category=schema.category,
         content=schema.content,
@@ -70,7 +73,8 @@ def list_memories(
     limit: int | None = None,
     contains: str | None = None,
 ) -> list[Memory]:
-    stmt = select(Memory).where(Memory.user_id == user_id)
+    class_id = require_active_class_id(db, user_id)
+    stmt = select(Memory).where(Memory.user_id == user_id, Memory.class_id == class_id)
     if category:
         stmt = stmt.where(Memory.category == category)
     if contains:
@@ -85,7 +89,8 @@ def list_memories(
 
 
 def get_memory(db: Session, user_id: str, memory_id: str) -> Memory | None:
-    stmt = select(Memory).where(Memory.id == memory_id, Memory.user_id == user_id)
+    class_id = require_active_class_id(db, user_id)
+    stmt = select(Memory).where(Memory.id == memory_id, Memory.user_id == user_id, Memory.class_id == class_id)
     return db.scalar(stmt)
 
 
@@ -149,9 +154,11 @@ def save_memory_candidates(
     if not candidates:
         return []
 
+    class_id = require_active_class_id(db, user_id)
+
     existing = {
         m.content.strip().lower()
-        for m in db.scalars(select(Memory).where(Memory.user_id == user_id))
+        for m in db.scalars(select(Memory).where(Memory.user_id == user_id, Memory.class_id == class_id))
     }
 
     saved = []
@@ -160,6 +167,7 @@ def save_memory_candidates(
         if normalised in existing:
             continue
         memory = Memory(
+            class_id=class_id,
             user_id=user_id,
             category=candidate.category,
             content=candidate.content,

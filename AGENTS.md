@@ -41,7 +41,7 @@ backend/
     routers/          # thin HTTP handlers — one file per domain
     services/         # business logic — keep route handlers thin
     providers/        # LLM and embedding adapters (openrouter, embeddings)
-  migrations/         # Alembic; current head: c9d0e1f2a3b4
+  migrations/         # Alembic; current head: b5c6d7e8f9a0
   Makefile
   requirements.txt
 
@@ -179,7 +179,7 @@ Do not add a tool registry unless it removes real duplication.
 
 All schema changes go through Alembic (`backend/migrations/`). Never add new tables or indexes only to `create_db_tables()` — that path runs only when `AUTO_CREATE_TABLES=true`, which is not the case in production.
 
-Current head: `c9d0e1f2a3b4`
+Current head: `b5c6d7e8f9a0`
 
 ```sh
 cd backend && source .venv/bin/activate
@@ -224,6 +224,8 @@ Every retrieval path must check:
 - document ownership or matter association
 
 Never retrieve across matters or workspaces by default.
+
+Every content root carries `class_id`. Require active membership in that mentorship class (shown as Team in the UI) before applying the resource audience. Admin status and professional titles do not bypass private content or explicit matter membership. Streams and background work retain their original class and revalidate live membership before delivery or saving derived results.
 
 For demos, use synthetic or non-confidential documents. If external LLM providers receive document text, make that explicit in code comments, docs, or demo setup notes.
 
@@ -295,5 +297,7 @@ LexChat and Birdie offer the same tools, defined once in `agent_tools.py`: the W
 The Chrome extension (`extension/`) runs its selection content script only on origins the user turns on, and sends user-shared webpage text to Birdie as `web_context` on `POST /birdie/stream` and highlighted clauses to `POST /precedent/search`; keep the side-panel disclosure in sync with the provider line above. Birdie cites case law only from eLitigation (`case_law_service.py`); only a search phrase is sent there.
 
 `DEMO_MODE=true` enables `/demo/*` (admin-only, 404 otherwise) for user switching and seeding, makes every Google sign-in an admin, and lets users mimic any role via `PUT /demo/role` (Settings → View as). Never enable it in a deployment with real client data.
+
+Demo seeds populate the caller's current approved testing team. Synthetic accounts are separate per class; roster, switching, reset and `/system/dummy-users` creation/deletion stay in that class. The system dummy endpoints also require demo mode. `CLASS_INVITE_SECRET` must be a dedicated random secret of at least 32 characters. Legacy content is quarantined by the class migration until explicitly mapped with `python -m scripts.backfill_classes`; never infer membership from the old default team.
 
 If a new Alembic migration is added, update the "Current head" reference above.

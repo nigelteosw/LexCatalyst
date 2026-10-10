@@ -33,6 +33,7 @@ from app.services.case_law_service import (
     search_case_sources,
 )
 from app.services.elitigation_service import ElitigationError
+from app.services.mentorship_class_service import require_class_context, revalidate_class_access
 from app.schemas import PageContext, WebContext
 from app.services.lesson_service import format_feedback_context
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
@@ -213,9 +214,9 @@ def resolve_page_context(db: Session, user: User, ctx: PageContext | None) -> Re
         kind, title, matter_id = "document", document.filename, document.matter_id
     elif ctx.kb_entry_id and (entry := get_kb_entry(db, ctx.kb_entry_id)) and check_kb_read(db, user, entry):
         kind, title, matter_id, body = "Knowledge Bank entry", entry.title, entry.matter_id, entry.body_markdown
-    elif ctx.action_id and (item := get_action_item(db, ctx.action_id)) and user.id in (item.assignee_id, item.assigner_id):
+    elif ctx.action_id and (item := get_action_item(db, ctx.action_id, user=user)) and user.id in (item.assignee_id, item.assigner_id):
         kind, title, matter_id, body = "Workboard ticket", item.title, item.matter_id, item.description or ""
-    elif ctx.thread_id and (thread := db.get(ChatThread, ctx.thread_id)) and thread.user_id == user.id:
+    elif ctx.thread_id and (thread := db.get(ChatThread, ctx.thread_id)) and thread.user_id == user.id and thread.class_id == require_class_context(db, user).class_id:
         kind, title, matter_id = "chat thread", thread.title, thread.matter_id
     text = f"\n\nCurrent context (what the user is working on right now):\nThe user is on {location}"
     if not title:
@@ -364,6 +365,8 @@ async def stream_birdie_response(
     tier: str | None = None,
     model: str | None = None,
 ):
+    context = require_class_context(db, user)
+    revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
     messages = await build_birdie_messages(
         db,
         user=user,
@@ -384,6 +387,7 @@ async def stream_birdie_response(
     # duplicate tickets or replay a destructive action.
     mutation_results: dict[str, dict] = {}
     for round_no in range(5):
+        revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
         tools = TOOLS if round_no < 4 else []
         if not tools:
             messages.append({'role': 'system', 'content':
@@ -391,6 +395,7 @@ async def stream_birdie_response(
         calls: list[dict] = []
         content = ''
         async for event_type, data in provider.stream_with_tools(messages, tools):
+            revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
             if event_type == 'token':
                 content += data
                 yield ('token', {'content': data})
@@ -404,6 +409,7 @@ async def stream_birdie_response(
         messages.append({'role': 'assistant', 'content': content or None, 'tool_calls': calls})
         for index, call in enumerate(calls):
             name = call['function']['name']
+            revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
             try:
                 args = json.loads(call['function']['arguments'])
                 if not isinstance(args, dict):
@@ -416,6 +422,7 @@ async def stream_birdie_response(
             if name in {'find_documents', 'search_documents', 'search_knowledge_bank', 'search_memories'} and isinstance(args, dict) and isinstance(args.get('query'), str):
                 step['query'] = args['query'][:200]
             yield ('tool_call', step)
+            revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
             changed = False
             fingerprint = json.dumps([name, args], sort_keys=True)
             is_mutation = name in MUTATION_TOOL_NAMES
@@ -426,29 +433,34 @@ async def stream_birdie_response(
             elif name in SHARED_TOOL_NAMES - WORKBOARD_TOOL_NAMES:
                 # Documents, matters, memories and the Knowledge Bank: the same tools LexChat has.
                 result = await execute_shared_tool(name, args, db=db, user=user, matter_id=matter_id)
+                revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
                 yield ('tool_result', {'step_id': call['id'], 'tool': name, 'success': 'error' not in result,
                                        'changed': False, 'summary': summarise_result(name, result)})
                 messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': tool_message(result)})
                 continue
             elif name == 'search_elitigation':
                 result, search_summary = await _search_elitigation(db, user, args, found)
+                revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
                 yield ('tool_result', {'step_id': call['id'], 'tool': name, 'success': 'error' not in result,
                                        'changed': False, 'summary': search_summary})
                 if found[shown_from:]:
+                    revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
                     yield ('sources', {'cases': [case_source_payload(s) for s in found[shown_from:]]})
                 messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(result)})
                 continue
             elif is_mutation and fingerprint in mutation_results:
                 result = mutation_results[fingerprint]
             else:
-                result = execute_workboard_tool(name, args, db=db, user=user, matter_id=matter_id)
+                result = await execute_shared_tool(name, args, db=db, user=user, matter_id=matter_id)
                 changed = result.get('changed') is True
                 if is_mutation:
                     mutation_results[fingerprint] = result
+            revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
             yield ('tool_result', {'step_id': call['id'], 'tool': name,
                                    'success': 'error' not in result, 'changed': changed,
                                    'summary': result.get('error') or ('Workboard updated' if changed else 'Workboard checked')})
             if changed:
+                revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
                 yield ('workboard_changed', {'tool': name, 'ticket_id':
                     result.get('ticket_id') or result['ticket']['id']})
             messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(result)})

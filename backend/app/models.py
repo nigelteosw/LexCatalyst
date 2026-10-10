@@ -9,14 +9,17 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.class_boundary import PARENT_TABLES
 from app.config import get_settings
 from app.database import Base
 from app.services.field_encryption import decrypt_text, encrypt_text
@@ -63,10 +66,74 @@ class User(Base):
     )
 
 
+class MentorshipClass(Base):
+    __tablename__ = "mentorship_classes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    # NULL is reserved for the archived quarantine class created by the legacy migration.
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ClassMembership(Base):
+    __tablename__ = "class_memberships"
+    __table_args__ = (
+        UniqueConstraint("class_id", "user_id", name="uq_class_membership_user"),
+        Index("uq_class_membership_active_user", "user_id", unique=True, postgresql_where=text("status = 'active'"), sqlite_where=text("status = 'active'")),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="member")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClassInvite(Base):
+    __tablename__ = "class_invites"
+    __table_args__ = (
+        Index("uq_class_invite_live_class", "class_id", unique=True, postgresql_where=text("revoked_at IS NULL"), sqlite_where=text("revoked_at IS NULL")),
+        Index("uq_class_invite_live_digest", "code_digest", unique=True, postgresql_where=text("revoked_at IS NULL"), sqlite_where=text("revoked_at IS NULL")),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="CASCADE"), nullable=False)
+    code_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class ClassJoinAttempt(Base):
+    __tablename__ = "class_join_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    source_ip_digest: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True, nullable=False)
+
+
+class ClassAuditEvent(Base):
+    __tablename__ = "class_audit_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="CASCADE"), index=True, nullable=False)
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    subject_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class ChatThread(Base):
     __tablename__ = "chat_threads"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
@@ -132,6 +199,7 @@ class Memory(Base):
     __tablename__ = "memories"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
@@ -183,6 +251,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
@@ -248,6 +317,7 @@ class DocumentFolder(Base):
     __tablename__ = "document_folders"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     # Deleting a matter deletes its folders; their documents fall back to General.
     matter_id: Mapped[str | None] = mapped_column(
         ForeignKey("matters.id", ondelete="CASCADE"),
@@ -329,9 +399,11 @@ class DocumentComment(Base):
 
 class Team(Base):
     __tablename__ = "teams"
+    __table_args__ = (UniqueConstraint("class_id", "name", name="uq_teams_class_name"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    name: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
     practice_area: Mapped[str | None] = mapped_column(String(160), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -367,15 +439,17 @@ class TeamMember(Base):
 
 class Matter(Base):
     __tablename__ = "matters"
+    __table_args__ = (UniqueConstraint("class_id", "case_number", name="uq_matters_class_case_number"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     team_id: Mapped[str] = mapped_column(
         ForeignKey("teams.id", ondelete="RESTRICT"),
         index=True,
         nullable=False,
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    case_number: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
+    case_number: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
     _client_name: Mapped[str | None] = mapped_column("client_name", Text, nullable=True)
     status: Mapped[str] = mapped_column(String(24), index=True, nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(
@@ -436,6 +510,7 @@ class KnowledgeBankEntry(Base):
     __tablename__ = "kb_entries"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     team_id: Mapped[str | None] = mapped_column(
         ForeignKey("teams.id", ondelete="SET NULL"),
         index=True,
@@ -549,6 +624,7 @@ class RetrievalAuditEvent(Base):
     __tablename__ = "retrieval_audit_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
@@ -571,6 +647,7 @@ class ResourceMetadata(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     resource_type: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
     resource_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -662,6 +739,7 @@ class DreamJob(Base):
     __tablename__ = "dream_jobs"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
@@ -688,6 +766,7 @@ class ActionItem(Base):
     __tablename__ = "action_items"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     assignee_id: Mapped[str | None] = mapped_column(
@@ -740,6 +819,7 @@ class ReviewHandoff(Base):
     __tablename__ = "review_handoffs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     action_id: Mapped[str | None] = mapped_column(
         ForeignKey("action_items.id", ondelete="SET NULL"),
         index=True,
@@ -894,6 +974,7 @@ class ReviewLesson(Base):
     __tablename__ = "review_lessons"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     handoff_id: Mapped[str] = mapped_column(
         ForeignKey("review_handoffs.id", ondelete="CASCADE"),
         index=True,
@@ -915,6 +996,7 @@ class BirdieReview(Base):
     __tablename__ = "birdie_reviews"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
@@ -1048,3 +1130,20 @@ class UserSetting(Base):
             "openrouter_key_verified_at",
         ):
             setattr(self, column, None)
+
+
+
+def _attach_same_class_constraints() -> None:
+    """Mirror the unique (class_id, id) targets from migration b5c6d7e8f9a0.
+
+    The matching composite foreign keys are database-only: each would add a second join path
+    between two tables, which makes the ORM relationships ambiguous. migrations/env.py excludes
+    them from autogenerate, and tests/test_class_migration_postgres.py checks them on Postgres.
+    """
+    for parent in PARENT_TABLES:
+        Base.metadata.tables[parent].append_constraint(
+            UniqueConstraint("class_id", "id", name=f"uq_{parent}_class_id_id")
+        )
+
+
+_attach_same_class_constraints()

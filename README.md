@@ -290,6 +290,7 @@ CLOUDFLARE_R2_ENDPOINT_URL=...
 
 # Must be at least 32 chars; rotating this invalidates existing JWT sessions
 JWT_SECRET_KEY=at_least_32_characters_long
+CLASS_INVITE_SECRET=separate_random_secret_at_least_32_characters_long
 # Separate encryption key, required outside development; keep it stable
 FIELD_ENCRYPTION_KEY=your_fernet_key
 # Seals users' saved OpenRouter keys; separate from FIELD_ENCRYPTION_KEY, required outside development
@@ -326,16 +327,16 @@ Settings routes (all require sign-in and touch only the caller's own row):
 
 ## Demo mode
 
-For presentations with synthetic data only. Never enable demo mode with real client data. Set `DEMO_MODE=true`, sign in with Google (demo mode grants admin access), then:
+For presentations with synthetic data only. Never enable demo mode with real client data. Set `DEMO_MODE=true`, sign in with Google (demo mode grants admin access), and create or join a team dedicated to testing. Demo seeds, synthetic users, switching and resets are restricted to your current approved team. Then:
 
 ```sh
 cd backend && source .venv/bin/activate
 make seed-demo PRESENTER=you@example.com   # or Settings → Development & Testing → Load demo data
 ```
 
-The seed creates a Corporate team, the *Meridian Capital — Share Purchase* matter, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), and memories. Re-running resets previous demo data and never touches your own.
+The seed creates a Corporate team, the *Meridian Capital — Share Purchase* matter, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), and memories. Re-running resets previous demo data and preserves other teams and your non-demo work.
 
-With demo mode on, admins get a **Switch user** picker in the sidebar to act as Sarah Chen (senior associate), Jane Pereira (associate) or Marcus Webb without Google. Switching works only into seeded `dummy:` users, never real accounts, and a banner shows who you are acting as. See `docs/demo-script.md` for the full walkthrough.
+With demo mode on, admins get a **Switch user** picker in the sidebar to act as Sarah Chen (senior associate), Jane Pereira (associate) or Marcus Webb without Google. Switching works only into seeded `dummy:` users in your current team, never real accounts, and a banner shows who you are acting as. See `docs/demo-script.md` for the full walkthrough.
 
 | Route | Auth | Behaviour |
 |---|---|---|
@@ -529,6 +530,8 @@ Knowledge and document records are unaffected.
 
 Authenticated document review routes:
 
+Team enrollment is available to any signed-in user through `GET /classes/status`, `POST /classes` (`{name}`), and `POST /classes/join` (`{code: "123-456"}`). Joining creates a pending request; it does not grant workspace access. Approved members use `GET /classes/current` and `/classes/current/members`. Owners and mentors use `/classes/current/requests`, `POST /classes/current/invite`, `DELETE /classes/current/invite`, and `POST /classes/current/members/{user_id}/approve|reject`; owners also use `PATCH /classes/current/members/{user_id}/role`, `POST /classes/current/transfer-owner`, and `POST /classes/current/archive`. Members can leave with `POST /classes/current/leave`; managers remove a member with `DELETE /classes/current/members/{user_id}`. Workspace routes require an active team membership in addition to their existing resource permissions. Team codes expire after 24 hours and require `CLASS_INVITE_SECRET` on the backend. Archived teams deny content access. Archiving retires active and pending memberships, so members can join or create another team. Returning members receive the member role; mentor permissions require a new owner promotion. Admin status and professional titles do not bypass private content or matter membership. LexChat and Birdie recheck live membership in the original team before tool dispatch and output delivery.
+
 - `PATCH /documents/{id}` renames and/or moves an uploaded document (`{filename?, matter_id?}`; `matter_id: null` moves it to General); uploader only, and the target matter must be one the caller belongs to.
 - `GET /document-folders?matter_id=<id|general>` lists folders in a matter (members only) or the caller's own General folders. `POST /document-folders` (`{name, matter_id?}`), `PATCH /document-folders/{id}` (`{name}`) and `DELETE /document-folders/{id}` manage them; creator or partner/admin only. Deleting a folder moves its documents back to the matter root.
 - `POST /documents/upload` also accepts optional `matter_id` and `folder_id` form fields; `PATCH /documents/{id}` accepts `folder_id` (`null` = matter root).
@@ -536,7 +539,7 @@ Authenticated document review routes:
 - `POST /chat/stream` also emits a `sources` event (numbered `{n, kind, id, title, locator, matter_id}`) as the agent consults documents and Knowledge Bank entries; the answer cites them as `[n]` and the list is stored on the assistant message (`sources`).
 - `GET /chat/threads?matter_id=<id|general>` lists the caller's threads for one matter (members only) or for General; omit it for all threads.
 - `PATCH /chat/threads/{id}` renames and/or moves a thread (`{title?, matter_id?}`; `matter_id: null` moves it to General); owner only.
-- `GET /documents/{id}/file` serves the original file inline. It accepts the normal Bearer header or the JWT `token` query parameter used by the PDF iframe.
+- `GET /documents/{id}/file` serves the original file inline to an authorized member of the document's team. It requires the normal Bearer header; JWTs in query strings are not accepted.
 - `GET|POST /documents/{id}/comments` lists or creates comments for the uploader or a member of the document's matter.
 - `GET|PATCH /documents/{id}/metadata` reads or edits a document's tags, summary, type, status and execution date. Allowed for the uploader or a member of the document's matter; anyone else gets `404`. `PATCH` returns `422` for an unknown type or status.
 - `GET /documents/metadata/search?q=&tags=&document_type=&matter_id=&limit=` finds documents by metadata (tags are an AND filter; `q` ranks by embedding similarity). `GET /documents/metadata/tags?matter_id=` lists tags in use. Both only return documents the caller can access.
@@ -566,3 +569,7 @@ Authenticated Workboard and review-handoff routes:
 Proprietary — Internal hackathon project.
 
 The extension retains the demo presenter session separately while viewing seeded users, so **View as** can switch repeatedly without giving those users admin rights. Sign out clears both sessions. Accepting draft-review suggestions changes Birdie’s copy only: use **Copy accepted text**, then paste into Google Docs.
+
+### Team isolation migration
+
+Alembic head is `b5c6d7e8f9a0`. Existing content is assigned to an archived quarantine class; no accounts are automatically enrolled and quarantined content is inaccessible through the application. Stop old backend instances and workers during cutover so unscoped code cannot serve quarantined data. Back up the database first. After `alembic upgrade head`, inspect legacy assignments with `python -m scripts.backfill_classes report`; apply an explicitly reviewed ID-to-class mapping with `python -m scripts.backfill_classes apply --mapping reviewed-mapping.json`. Unmapped rows remain quarantined. Fresh testing teams can be populated through Settings → Development & Testing in demo mode.

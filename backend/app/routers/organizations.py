@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import _is_matter_member, get_current_user, is_partner_or_admin, is_senior_or_above, require_matter_member, require_partner_or_admin
 from app.models import User
+from app.services.mentorship_class_service import ClassAccessError
 from app.schemas import (
     MatterCreate,
     MatterMemberCreate,
@@ -31,10 +32,8 @@ router = APIRouter(tags=["organizations"])
 
 
 def _require_membership_manager(db: Session, user: User, matter_id: str) -> None:
-    """Partners/admins can manage any matter's members.
-    Senior associates can manage members on matters they belong to.
-    Associates cannot manage members at all.
-    """
+    """Require explicit matter access before checking the management role."""
+    require_matter_member(db, user, matter_id)
     if is_partner_or_admin(user):
         return
     if is_senior_or_above(user) and _is_matter_member(db, user.id, matter_id):
@@ -109,6 +108,7 @@ def patch_matter(
     current_user: User = Depends(get_current_user),
 ) -> MatterResponse:
     require_partner_or_admin(current_user)
+    require_matter_member(db, current_user, matter_id)
     try:
         matter = update_matter(db, matter_id, schema)
     except SQLAlchemyError as exc:
@@ -125,6 +125,7 @@ def remove_matter(
     current_user: User = Depends(get_current_user),
 ) -> None:
     require_partner_or_admin(current_user)
+    require_matter_member(db, current_user, matter_id)
     try:
         deleted = delete_matter(db, matter_id)
     except SQLAlchemyError as exc:
@@ -162,11 +163,14 @@ def post_matter_member(
     _require_membership_manager(db, current_user, matter_id)
     if not get_matter(db, matter_id):
         raise HTTPException(status_code=404, detail="Matter not found")
-    return MatterMemberResponse.model_validate(
-        add_matter_member(
-            db, matter_id=matter_id, granted_by=current_user.id, schema=schema,
+    try:
+        return MatterMemberResponse.model_validate(
+            add_matter_member(
+                db, matter_id=matter_id, granted_by=current_user.id, schema=schema,
+            )
         )
-    )
+    except ClassAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.delete("/matters/{matter_id}/members/{user_id}")

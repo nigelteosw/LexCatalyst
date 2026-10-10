@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models import ReviewAnnotation, ReviewHandoff, ReviewLesson, User
 from app.services.llm_service import get_llm
+from app.services.mentorship_class_service import ClassAccessError, require_active_class_id
 from app.services.review_handoff_service import lock_handoff
 
 FEEDBACK_STATUSES = ("returned", "completed")
@@ -73,7 +74,15 @@ def _handoff_date(handoff: ReviewHandoff) -> datetime:
     return handoff.completed_at or handoff.updated_at
 
 
-def _rounds_query(user: User):
+def _active_class_id(db: Session, user: User) -> str | None:
+    # Feedback is scoped to the user's active team: rounds from a former team stay invisible.
+    try:
+        return require_active_class_id(db, user.id)
+    except ClassAccessError:
+        return None
+
+
+def _rounds_query(user: User, class_id: str):
     return (
         select(ReviewHandoff)
         .options(
@@ -83,13 +92,17 @@ def _rounds_query(user: User):
         )
         .where(
             ReviewHandoff.submitted_by == user.id,
+            ReviewHandoff.class_id == class_id,
             ReviewHandoff.status.in_(FEEDBACK_STATUSES),
         )
     )
 
 
 def list_feedback_rounds(db: Session, *, user: User, limit: int = 10) -> list[FeedbackRound]:
-    handoffs = list(db.scalars(_rounds_query(user)).unique())
+    class_id = _active_class_id(db, user)
+    if class_id is None:
+        return []
+    handoffs = list(db.scalars(_rounds_query(user, class_id)).unique())
     handoffs.sort(key=_handoff_date, reverse=True)
 
     rounds: list[FeedbackRound] = []
@@ -175,7 +188,10 @@ def _distill_messages(document_name: str, annotations: list[ReviewAnnotation]) -
 
 
 async def distill_lessons(db: Session, *, user: User, handoff_id: str) -> list[ReviewLesson]:
-    handoff = db.scalar(_rounds_query(user).where(ReviewHandoff.id == handoff_id))
+    class_id = _active_class_id(db, user)
+    handoff = None
+    if class_id is not None:
+        handoff = db.scalar(_rounds_query(user, class_id).where(ReviewHandoff.id == handoff_id))
     if handoff is None:
         raise LessonNotFound("No feedback found for this review round")
     annotations = [a for a in handoff.annotations if is_feedback(a, handoff)]

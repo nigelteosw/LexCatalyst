@@ -18,18 +18,20 @@ def _user(uid="u-1", admin=False, role="associate"):
 
 class FolderAccessTests(unittest.TestCase):
     def test_general_folder_is_private_to_creator(self) -> None:
-        folder = SimpleNamespace(matter_id=None, created_by="u-1")
-        require_folder_access(MagicMock(), _user("u-1"), folder)
-        with self.assertRaises(HTTPException) as raised:
-            require_folder_access(MagicMock(), _user("u-2"), folder)
+        folder = SimpleNamespace(class_id="class-1", matter_id=None, created_by="u-1")
+        with patch("app.services.document_folder_service.require_active_class_id", return_value="class-1"):
+            require_folder_access(MagicMock(), _user("u-1"), folder)
+            with self.assertRaises(HTTPException) as raised:
+                require_folder_access(MagicMock(), _user("u-2"), folder)
         self.assertEqual(raised.exception.status_code, 404)
 
     def test_matter_folder_requires_membership(self) -> None:
         db = MagicMock()
         db.scalar.return_value = None  # not a member
-        folder = SimpleNamespace(matter_id="m-1", created_by="u-1")
-        with self.assertRaises(HTTPException) as raised:
-            require_folder_access(db, _user("u-2"), folder)
+        folder = SimpleNamespace(class_id="class-1", matter_id="m-1", created_by="u-1")
+        with patch("app.services.document_folder_service.require_active_class_id", return_value="class-1"):
+            with self.assertRaises(HTTPException) as raised:
+                require_folder_access(db, _user("u-2"), folder)
         self.assertEqual(raised.exception.status_code, 403)
 
     def test_manage_is_creator_or_partner(self) -> None:

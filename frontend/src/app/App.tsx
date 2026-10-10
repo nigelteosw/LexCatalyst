@@ -14,9 +14,12 @@ import birdieLogo from '../assets/Birdie.png'
 import { DemoBar } from '../features/demo/DemoBar'
 import { DemoSwitcher } from '../features/demo/DemoSwitcher'
 import { LoginPage } from '../features/auth/LoginPage'
+import { ClassOnboarding } from '../features/classes/ClassOnboarding'
+import { isWorkspaceReady } from '../features/classes/classState'
 import {
   deleteChatMessage,
   getCurrentUser,
+  getClassStatus,
   listChatThreads,
   listMatters,
   moveChatThread,
@@ -63,6 +66,9 @@ const BirdiePanel = lazy(() =>
 const SettingsPanel = lazy(() =>
   import('../features/settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })),
 )
+const TeamManagementPage = lazy(() =>
+  import('../features/classes/TeamManagementPage').then((module) => ({ default: module.TeamManagementPage })),
+)
 const HomePanel = lazy(() =>
   import('../features/home/HomePanel').then((module) => ({ default: module.HomePanel })),
 )
@@ -106,6 +112,16 @@ function App() {
   })
   const currentUser = currentUserQuery.data ?? null
 
+  const classStatusQuery = useQuery({
+    queryKey: ['classStatus', user?.id],
+    queryFn: getClassStatus,
+    enabled: isAuthenticated && !!user?.id,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  })
+  const classStatus = classStatusQuery.data ?? null
+  const hasActiveClass = isWorkspaceReady(classStatus)
+
   const queryClient = useQueryClient()
   const {
     current,
@@ -127,7 +143,7 @@ function App() {
   const threadsQuery = useQuery({
     queryKey: ['threads', 'all'],
     queryFn: () => listChatThreads(),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && hasActiveClass,
   })
   const threads = useMemo(() => threadsQuery.data ?? [], [threadsQuery.data])
   // Keep the selected matter in step with the open thread.
@@ -139,14 +155,14 @@ function App() {
   const mattersQuery = useQuery({
     queryKey: ['matters'],
     queryFn: () => listMatters('active'),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && hasActiveClass,
   })
   const matters = useMemo(() => mattersQuery.data ?? [], [mattersQuery.data])
 
   const messagesQuery = useQuery({
     queryKey: ['messages', threadId],
     queryFn: () => listThreadMessages(threadId!),
-    enabled: !!threadId && isAuthenticated,
+    enabled: !!threadId && isAuthenticated && hasActiveClass,
   })
   const serverMessages = useMemo(
     () => messagesQuery.data ?? [],
@@ -182,6 +198,22 @@ function App() {
   }, [mattersQuery.isSuccess, matters, selectedMatterId])
   const streamAbortRef = useRef<AbortController | null>(null)
   const streamAbortReasonRef = useRef<'stop' | 'navigation' | null>(null)
+  const previousClassKey = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!classStatus) return
+    const nextKey = classStatus.status === 'active' ? classStatus.classId : classStatus.status
+    if (previousClassKey.current !== null && previousClassKey.current !== nextKey) {
+      streamAbortRef.current?.abort()
+      streamAbortRef.current = null
+      setActiveStream(null)
+      setIsResponding(false)
+      setSelectedMatterId(null)
+      localStorage.removeItem('selectedMatterId')
+      queryClient.removeQueries({ predicate: (query) => !['classStatus', 'currentUser'].includes(String(query.queryKey[0])) })
+    }
+    previousClassKey.current = nextKey
+  }, [classStatus, queryClient])
 
   useEffect(() => {
     if (!isKnownRoute) selectHome({ replace: true })
@@ -580,6 +612,27 @@ function App() {
     )
   }
 
+  if (classStatusQuery.isError) {
+    return (
+      <main className="grid h-dvh place-items-center bg-surface px-5 text-ink">
+        <div className="w-full max-w-md rounded-2xl border border-line bg-card p-7 text-center shadow-sm">
+          <h1 className="font-serif text-2xl">Your class could not be loaded</h1>
+          <p className="mt-2 text-sm text-ink-secondary">Check your connection and try again.</p>
+          <button type="button" onClick={() => void classStatusQuery.refetch()} className="mt-5 rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-hover">Try again</button>
+          <button type="button" onClick={handleLogout} className="ml-3 rounded-xl px-4 py-2.5 text-sm text-ink-secondary hover:bg-fill">Sign out</button>
+        </div>
+      </main>
+    )
+  }
+
+  if (!classStatus) {
+    return <div className="grid h-dvh place-items-center bg-surface text-sm text-ink-secondary" role="status">Opening your workspace…</div>
+  }
+
+  if (classStatus.status !== 'active') {
+    return <ClassOnboarding status={classStatus} onChanged={() => classStatusQuery.refetch()} onLogout={handleLogout} />
+  }
+
   return (
     <div className="flex h-dvh min-h-0 w-full overflow-hidden overscroll-none bg-surface text-neutral-900">
       <Sidebar
@@ -693,6 +746,8 @@ function App() {
                 <ActionsPanel matters={matters} currentUser={currentUser} onFocusMatterChange={setWorkboardMatterId} />
               ) : current.view === 'settings' ? (
                 <SettingsPanel currentUser={currentUser} />
+              ) : current.view === 'team' ? (
+                <TeamManagementPage status={classStatus} currentUserId={currentUser?.id ?? user?.id ?? ''} />
               ) : (
                 <>
               <ChatHeader
@@ -778,6 +833,7 @@ function mobileViewTitle(view: import('./routes').AppView['view']) {
     knowledge_bank: 'Knowledge Bank',
     memories: 'Memories',
     settings: 'Settings',
+    team: 'Team Management',
   }
   return labels[view] ?? 'LexCatalyst'
 }

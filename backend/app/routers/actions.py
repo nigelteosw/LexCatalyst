@@ -13,6 +13,7 @@ from app.services.action_service import (
     list_action_items,
     update_action_item,
 )
+from app.services.mentorship_class_service import ClassAccessError
 
 router = APIRouter(tags=["actions"])
 
@@ -22,7 +23,7 @@ def get_actions(
     matter_id: str | None = None,
     item_status: str | None = None,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[ActionItemResponse]:
     """Firm-wide board. Bounded to the most recent 500 tickets.
 
@@ -30,7 +31,7 @@ def get_actions(
     frontend applies them in memory off the cached page so filter chips
     don't trigger a roundtrip.
     """
-    items = list_action_items(db, matter_id=matter_id, status=item_status)
+    items = list_action_items(db, user=current_user, matter_id=matter_id, status=item_status)
     return [ActionItemResponse.model_validate(item) for item in items]
 
 
@@ -45,7 +46,10 @@ def post_action(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Partner or senior associate access required",
         )
-    item = create_action_item(db, user=current_user, schema=schema)
+    try:
+        item = create_action_item(db, user=current_user, schema=schema)
+    except ClassAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return ActionItemResponse.model_validate(item)
 
 
@@ -56,7 +60,10 @@ def patch_action(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ActionItemResponse:
-    item = update_action_item(db, user=current_user, item_id=item_id, schema=schema)
+    try:
+        item = update_action_item(db, user=current_user, item_id=item_id, schema=schema)
+    except ClassAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     if not item:
         raise HTTPException(status_code=404, detail="Action item not found or access denied")
     return ActionItemResponse.model_validate(item)

@@ -17,14 +17,18 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models import (
     ActionItem,
+    ClassMembership,
     Document,
+    Matter,
     MatterMember,
+    MentorshipClass,
     ReviewAnnotation,
     ReviewAnnotationReply,
     ReviewHandoff,
     User,
 )
 from app.models import new_uuid as _new_uuid
+from app.services.mentorship_class_service import require_active_class_id
 from app.schemas import ReviewHandoffCreate
 from app.services.resource_metadata_service import (
     RESOURCE_REVIEW_HANDOFF,
@@ -61,9 +65,15 @@ def get_handoff(db: Session, handoff_id: str) -> ReviewHandoff | None:
 
 
 def _handoff_access_filter(user: User):
-    if user.is_admin:
-        return ReviewHandoff.id.is_not(None)
-    return or_(
+    team_access = exists(
+        select(ClassMembership.id).join(MentorshipClass).where(
+            ClassMembership.class_id == ReviewHandoff.class_id,
+            ClassMembership.user_id == user.id,
+            ClassMembership.status == "active",
+            MentorshipClass.status == "active",
+        )
+    )
+    return team_access & or_(
         ReviewHandoff.submitted_by == user.id,
         ReviewHandoff.reviewer_id == user.id,
         ReviewHandoff.document.has(Document.user_id == user.id),
@@ -102,10 +112,14 @@ def has_handoff_access(db: Session, *, user: User, handoff: ReviewHandoff) -> bo
 
 def can_view_handoff_document(db: Session, *, user: User, document_id: str) -> bool:
     """Whether the user can open a document through a review round they can see."""
+    from app.services.mentorship_class_service import require_active_class_id
+
+    class_id = require_active_class_id(db, user.id)
     return db.scalar(
         select(ReviewHandoff.id)
         .where(
             ReviewHandoff.document_id == document_id,
+            ReviewHandoff.class_id == class_id,
             _handoff_access_filter(user),
         )
         .limit(1)
@@ -215,9 +229,9 @@ def can_review_handoff(db: Session, *, user: User, handoff: ReviewHandoff) -> bo
 
 def can_remove_handoff(db: Session, *, user: User, handoff: ReviewHandoff) -> bool:
     """The submitter may withdraw their own handoff; designated reviewers may remove any."""
-    return handoff.submitted_by == user.id or _is_designated_reviewer(
+    return has_handoff_access(db, user=user, handoff=handoff) and (handoff.submitted_by == user.id or _is_designated_reviewer(
         db, user=user, handoff=handoff
-    )
+    ))
 
 
 def require_reviewer(db: Session, *, user: User, handoff: ReviewHandoff) -> None:
@@ -274,8 +288,9 @@ def create_handoff(
     so it surfaces in the senior's Review column immediately — no extraction
     phase.
     """
+    class_id = require_active_class_id(db, user.id)
     document = db.get(Document, schema.document_id)
-    if not document:
+    if not document or document.class_id != class_id:
         raise ReviewHandoffError("Document not found")
     if document.user_id != user.id:
         raise ReviewHandoffError("Document not found")
@@ -294,19 +309,22 @@ def create_handoff(
         raise ReviewHandoffError("Document belongs to a different matter")
 
     matter_id = schema.matter_id or document.matter_id
+    if matter_id:
+        matter = db.get(Matter, matter_id)
+        if not matter or matter.class_id != class_id:
+            raise ReviewHandoffError("Matter not found")
     action: ActionItem | None = None
     action_participant = False
     reviewer_id = schema.reviewer_id
     if schema.action_id:
         action = db.get(ActionItem, schema.action_id)
-        if not action:
+        if not action or action.class_id != class_id:
             raise ReviewHandoffError("Action not found")
         action_participant = (
             action.assignee_id == user.id or action.assigner_id == user.id
         )
         action_access = (
-            user.is_admin
-            or action_participant
+            action_participant
             or (
                 action.matter_id
                 and db.scalar(
@@ -333,21 +351,24 @@ def create_handoff(
                 raise ReviewHandoffError(
                     "A review round is already in progress for this action"
                 )
-    if matter_id and not user.is_admin:
+    if reviewer_id and not db.scalar(select(ClassMembership.id).where(
+        ClassMembership.class_id == class_id,
+        ClassMembership.user_id == reviewer_id,
+        ClassMembership.status == "active",
+    )):
+        raise ReviewHandoffError("Reviewer not found")
+    if matter_id:
         is_member = db.scalar(
             select(MatterMember.id).where(
                 MatterMember.matter_id == matter_id,
                 MatterMember.user_id == user.id,
             )
         )
-        if not is_member and not (
-            action
-            and action.matter_id == matter_id
-            and action_participant
-        ):
+        if not is_member:
             raise ReviewHandoffError("Matter access required")
 
     handoff = ReviewHandoff(
+        class_id=class_id,
         action_id=action.id if action else None,
         matter_id=matter_id,
         document_id=document.id,
@@ -454,6 +475,12 @@ def update_handoff_status(
 
     handoff.status = status
     if reviewer_id is not None:
+        if not db.scalar(select(ClassMembership.id).where(
+            ClassMembership.class_id == handoff.class_id,
+            ClassMembership.user_id == reviewer_id,
+            ClassMembership.status == "active",
+        )):
+            raise ReviewHandoffError("Reviewer not found")
         handoff.reviewer_id = reviewer_id
 
     db.commit()

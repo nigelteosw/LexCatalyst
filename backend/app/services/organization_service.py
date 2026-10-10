@@ -1,9 +1,10 @@
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, joinedload
 
-from app.dependencies import is_partner_or_admin
+from app.dependencies import require_matter_member
 from app.models import (
     KnowledgeBankEntry,
+    ClassMembership,
     Matter,
     MatterMember,
     ResourceMetadata,
@@ -12,19 +13,21 @@ from app.models import (
     User,
 )
 from app.schemas import MatterCreate, MatterMemberCreate, MatterUpdate
+from app.services.mentorship_class_service import require_class_context, ClassAccessError
 
 DEFAULT_TEAM_NAME = "LexCatalyst Legal"
 
 
 def ensure_default_team(db: Session, user: User) -> Team:
+    context = require_class_context(db, user)
     if user.default_team_id:
         team = db.get(Team, user.default_team_id)
-        if team:
+        if team and team.class_id == context.class_id:
             return team
 
-    team = db.scalar(select(Team).where(Team.name == DEFAULT_TEAM_NAME))
+    team = db.scalar(select(Team).where(Team.class_id == context.class_id, Team.name == DEFAULT_TEAM_NAME))
     if not team:
-        team = Team(name=DEFAULT_TEAM_NAME, practice_area="General practice")
+        team = Team(class_id=context.class_id, name=DEFAULT_TEAM_NAME, practice_area="General practice")
         db.add(team)
         db.flush()
 
@@ -44,28 +47,26 @@ def ensure_default_team(db: Session, user: User) -> Team:
 
 
 def list_teams(db: Session, user: User) -> list[Team]:
-    ensure_default_team(db, user)
-    stmt = select(Team).order_by(Team.name)
-    if not is_partner_or_admin(user):
-        stmt = stmt.where(
-            select(TeamMember.id)
-            .where(TeamMember.team_id == Team.id, TeamMember.user_id == user.id)
-            .exists()
-        )
+    context = require_class_context(db, user)
+    stmt = select(Team).where(Team.class_id == context.class_id).order_by(Team.name)
+    stmt = stmt.where(
+        select(TeamMember.id)
+        .where(TeamMember.team_id == Team.id, TeamMember.user_id == user.id)
+        .exists()
+    )
     return list(db.scalars(stmt))
 
 
 def list_matters(db: Session, user: User, status: str | None = None) -> list[Matter]:
-    ensure_default_team(db, user)
-    stmt = select(Matter).options(joinedload(Matter.team))
+    context = require_class_context(db, user)
+    stmt = select(Matter).options(joinedload(Matter.team)).where(Matter.class_id == context.class_id)
     if status:
         stmt = stmt.where(Matter.status == status)
-    if not is_partner_or_admin(user):
-        stmt = stmt.where(
-            select(MatterMember.id)
-            .where(MatterMember.matter_id == Matter.id, MatterMember.user_id == user.id)
-            .exists()
-        )
+    stmt = stmt.where(
+        select(MatterMember.id)
+        .where(MatterMember.matter_id == Matter.id, MatterMember.user_id == user.id)
+        .exists()
+    )
     return list(db.scalars(stmt.order_by(Matter.updated_at.desc())))
 
 
@@ -79,9 +80,14 @@ def get_matter(db: Session, matter_id: str) -> Matter | None:
 
 
 def create_matter(db: Session, user: User, schema: MatterCreate) -> Matter:
+    context = require_class_context(db, user)
     default_team = ensure_default_team(db, user)
     team_id = schema.team_id or default_team.id
+    team = db.get(Team, team_id)
+    if not team or team.class_id != context.class_id:
+        raise ClassAccessError("Team not found", 404)
     matter = Matter(
+        class_id=context.class_id,
         team_id=team_id,
         title=schema.title,
         case_number=schema.case_number,
@@ -132,6 +138,17 @@ def add_matter_member(
     granted_by: str,
     schema: MatterMemberCreate,
 ) -> MatterMember:
+    actor = db.get(User, granted_by)
+    if actor is None:
+        raise ClassAccessError("Matter not found", 404)
+    require_matter_member(db, actor, matter_id)
+    context = require_class_context(db, actor)
+    if not db.scalar(select(ClassMembership.id).where(
+        ClassMembership.class_id == context.class_id,
+        ClassMembership.user_id == schema.user_id,
+        ClassMembership.status == "active",
+    )):
+        raise ClassAccessError("User not found", 404)
     membership = db.scalar(
         select(MatterMember).where(
             MatterMember.matter_id == matter_id,

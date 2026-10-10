@@ -36,6 +36,8 @@ class Settings(BaseModel):
             raise ValueError("JWT_SECRET_KEY must be configured with at least 32 characters")
         self.admin_emails = [e.strip() for e in self.admin_emails if e.strip()]
         if not self.is_development:
+            if len((self.class_invite_secret or "").strip()) < 32:
+                raise ValueError("CLASS_INVITE_SECRET must be set with at least 32 characters outside development")
             if not self.admin_emails:
                 raise ValueError(
                     "ADMIN_EMAILS must be set explicitly outside development"
@@ -68,6 +70,7 @@ class Settings(BaseModel):
     # Auth Settings
     google_client_id: str | None = getenv("GOOGLE_CLIENT_ID")
     jwt_secret_key: str = getenv("JWT_SECRET_KEY", "")
+    class_invite_secret: str | None = getenv("CLASS_INVITE_SECRET")
     jwt_algorithm: str = "HS256"
     # Dedicated key for at-rest field encryption. Kept separate from JWT_SECRET_KEY so that
     # rotating the JWT secret does not destroy every encrypted column.

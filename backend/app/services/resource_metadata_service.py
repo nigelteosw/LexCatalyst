@@ -17,9 +17,11 @@ def sync_metadata_safe(db: Session, sync_fn, *args, **kwargs) -> None:
 
 from app.models import (
     ActionItem,
+    ClassMembership,
     Document,
     KnowledgeBankEntry,
     MatterMember,
+    MentorshipClass,
     ResourceMetadata,
     ReviewHandoff,
     TeamMember,
@@ -33,14 +35,21 @@ RESOURCE_REVIEW_HANDOFF = "review_handoff"
 
 
 def resource_metadata_access_filter(user: User):
-    if user.is_admin:
-        return ResourceMetadata.id.is_not(None)
-    return or_(
+    active_class = exists(
+        select(ClassMembership.id).join(MentorshipClass).where(
+            ClassMembership.user_id == user.id,
+            ClassMembership.class_id == ResourceMetadata.class_id,
+            ClassMembership.status == "active",
+            MentorshipClass.status == "active",
+        )
+    )
+    return active_class & or_(
         ResourceMetadata.scope == "firm_wide",
         ResourceMetadata.owner_user_id == user.id,
         ResourceMetadata.created_by == user.id,
         (
-            (ResourceMetadata.team_id.is_not(None))
+            (ResourceMetadata.scope == "team")
+            & (ResourceMetadata.team_id.is_not(None))
             & exists(
                 select(TeamMember.id).where(
                     TeamMember.team_id == ResourceMetadata.team_id,
@@ -49,7 +58,8 @@ def resource_metadata_access_filter(user: User):
             )
         ),
         (
-            (ResourceMetadata.matter_id.is_not(None))
+            (ResourceMetadata.scope == "matter")
+            & (ResourceMetadata.matter_id.is_not(None))
             & exists(
                 select(MatterMember.id).where(
                     MatterMember.matter_id == ResourceMetadata.matter_id,
@@ -105,6 +115,7 @@ def upsert_resource_metadata(
     *,
     resource_type: str,
     resource_id: str,
+    class_id: str,
     title: str | None,
     owner_user_id: str | None,
     created_by: str | None,
@@ -124,6 +135,7 @@ def upsert_resource_metadata(
     )
     if metadata is None:
         metadata = ResourceMetadata(
+            class_id=class_id,
             resource_type=resource_type,
             resource_id=resource_id,
         )
@@ -131,6 +143,8 @@ def upsert_resource_metadata(
 
     metadata.resource_type = resource_type
     metadata.resource_id = resource_id
+    if metadata.class_id != class_id:
+        raise ValueError("Resource metadata cannot move between teams")
     metadata.title = title
     metadata.owner_user_id = owner_user_id
     metadata.created_by = created_by
@@ -176,6 +190,7 @@ def sync_document_metadata(
         db,
         resource_type=RESOURCE_DOCUMENT,
         resource_id=document.id,
+        class_id=document.class_id,
         title=document.filename,
         owner_user_id=document.user_id,
         created_by=document.user_id,
@@ -198,6 +213,7 @@ def sync_kb_metadata(
         db,
         resource_type=RESOURCE_KB_ENTRY,
         resource_id=entry.id,
+        class_id=entry.class_id,
         title=entry.title,
         owner_user_id=entry.created_by,
         created_by=entry.created_by,
@@ -226,6 +242,7 @@ def sync_action_metadata(
         db,
         resource_type=RESOURCE_ACTION_ITEM,
         resource_id=item.id,
+        class_id=item.class_id,
         title=item.title,
         owner_user_id=item.assigner_id,
         created_by=item.assigner_id,
@@ -258,6 +275,7 @@ def sync_handoff_metadata(
         db,
         resource_type=RESOURCE_REVIEW_HANDOFF,
         resource_id=handoff.id,
+        class_id=handoff.class_id,
         title=title,
         owner_user_id=handoff.submitted_by,
         created_by=handoff.submitted_by,

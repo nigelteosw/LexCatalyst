@@ -19,6 +19,7 @@ class ResourceMetadataTests(unittest.TestCase):
         db.scalar.return_value = None
         document = SimpleNamespace(
             id="doc-1",
+            class_id="class-1",
             filename="Agreement.pdf",
             user_id="user-1",
             team_id="team-1",
@@ -37,10 +38,11 @@ class ResourceMetadataTests(unittest.TestCase):
 
     def test_sync_kb_metadata_updates_existing_row(self) -> None:
         db = MagicMock()
-        existing = SimpleNamespace()
+        existing = SimpleNamespace(class_id="class-1")
         db.scalar.return_value = existing
         entry = SimpleNamespace(
             id="kb-1",
+            class_id="class-1",
             title="Share purchase checklist",
             created_by="user-1",
             team_id=None,
@@ -74,6 +76,7 @@ class ResourceMetadataTests(unittest.TestCase):
         self.assertIn("resource_metadata.owner_user_id = 'user-1'", sql)
         self.assertIn("team_members", sql)
         self.assertIn("matter_members", sql)
+        self.assertIn("class_memberships", sql)
 
 
 if __name__ == "__main__":

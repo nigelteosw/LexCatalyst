@@ -31,10 +31,12 @@ def post_dummy_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
+    if not get_settings().demo_mode:
+        raise HTTPException(status_code=404, detail="Not found")
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    users = create_dummy_users(db, count=count)
+    users = create_dummy_users(db, count=count, actor=current_user)
     return {
         "status": "ok",
         "count": len(users),
@@ -47,8 +49,10 @@ def delete_dummy_users_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
+    if not get_settings().demo_mode:
+        raise HTTPException(status_code=404, detail="Not found")
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    count = delete_dummy_users(db)
+    count = delete_dummy_users(db, actor=current_user)
     return {"status": "ok", "deleted_count": count}

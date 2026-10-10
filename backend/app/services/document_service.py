@@ -9,7 +9,8 @@ from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Document, DocumentChunk, DocumentFolder, KnowledgeBankEntry, MatterMember, User
+from app.models import ClassMembership, Document, DocumentChunk, DocumentFolder, KnowledgeBankEntry, Matter, MatterMember, MentorshipClass, Team, User
+from app.services.mentorship_class_service import ClassAccessError, require_class_context
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
     IngestionError,
@@ -112,15 +113,23 @@ def _extract_text_blocks_with_timeout(
 
 
 def document_access_filter(user_id: str):
-    return or_(
-        Document.user_id == user_id,
-        and_(
-            Document.matter_id.is_not(None),
-            exists(
-                select(MatterMember.id).where(
-                    MatterMember.matter_id == Document.matter_id,
-                    MatterMember.user_id == user_id,
-                )
+    return and_(
+        exists(select(ClassMembership.id).join(MentorshipClass).where(
+            ClassMembership.user_id == user_id,
+            ClassMembership.class_id == Document.class_id,
+            ClassMembership.status == "active",
+            MentorshipClass.status == "active",
+        )),
+        or_(
+            Document.user_id == user_id,
+            and_(
+                Document.matter_id.is_not(None),
+                exists(
+                    select(MatterMember.id).where(
+                        MatterMember.matter_id == Document.matter_id,
+                        MatterMember.user_id == user_id,
+                    )
+                ),
             ),
         ),
     )
@@ -132,6 +141,14 @@ def can_access_document(
     user_id: str,
     document: Document,
 ) -> bool:
+    in_class = db.scalar(select(ClassMembership.id).join(MentorshipClass).where(
+        ClassMembership.user_id == user_id,
+        ClassMembership.class_id == document.class_id,
+        ClassMembership.status == "active",
+        MentorshipClass.status == "active",
+    ))
+    if not in_class:
+        return False
     if document.user_id == user_id:
         return True
     if document.matter_id:
@@ -158,7 +175,25 @@ async def create_pending_document(
     """Store an upload and enqueue durable document processing."""
     validate_supported_document(filename, content_type)
 
+    actor = db.get(User, user_id)
+    if actor is None:
+        raise ClassAccessError("Approved team membership required")
+    context = require_class_context(db, actor)
+    if matter_id:
+        matter = db.get(Matter, matter_id)
+        if not matter or matter.class_id != context.class_id:
+            raise ClassAccessError("Matter not found", 404)
+    if team_id:
+        team = db.get(Team, team_id)
+        if not team or team.class_id != context.class_id:
+            raise ClassAccessError("Team not found", 404)
+    if folder_id:
+        folder = db.get(DocumentFolder, folder_id)
+        if not folder or folder.class_id != context.class_id or folder.matter_id != matter_id:
+            raise ClassAccessError("Folder not found", 404)
+
     document = Document(
+        class_id=context.class_id,
         user_id=user_id,
         filename=filename,
         content_type=content_type,

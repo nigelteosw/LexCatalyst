@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import KnowledgeBankEntry, MatterMember, TeamMember, User
+from app.models import KnowledgeBankEntry, Matter, MatterMember, TeamMember, User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/google")
 
@@ -81,9 +81,15 @@ def _is_matter_member(db: Session, user_id: str, matter_id: str) -> bool:
 
 
 def require_matter_member(db: Session, user: User, matter_id: str) -> None:
-    """Raise 403 unless the user is a matter member or a partner/admin."""
-    if is_partner_or_admin(user):
-        return
+    """Require active class access and explicit matter membership for every role."""
+    from app.services.mentorship_class_service import ClassAccessError, require_class_context
+    try:
+        context = require_class_context(db, user)
+    except ClassAccessError:
+        raise HTTPException(status_code=403, detail="Matter access denied") from None
+    matter = db.get(Matter, matter_id)
+    if not matter or matter.class_id != context.class_id:
+        raise HTTPException(status_code=404, detail="Matter not found")
     if not _is_matter_member(db, user.id, matter_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Matter access denied")
 
@@ -98,8 +104,13 @@ def _is_team_member(db: Session, user_id: str, team_id: str) -> bool:
 
 
 def check_kb_read(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
-    if user.is_admin:
-        return True
+    from app.services.mentorship_class_service import ClassAccessError, require_class_context
+    try:
+        context = require_class_context(db, user)
+    except ClassAccessError:
+        return False
+    if entry.class_id != context.class_id:
+        return False
     if entry.scope == "firm_wide":
         return True
     if entry.scope == "private":
@@ -112,8 +123,13 @@ def check_kb_read(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
 
 
 def check_kb_write(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
-    if user.is_admin:
-        return True
+    from app.services.mentorship_class_service import ClassAccessError, require_class_context
+    try:
+        context = require_class_context(db, user)
+    except ClassAccessError:
+        return False
+    if entry.class_id != context.class_id:
+        return False
     if entry.created_by == user.id:
         return True
     if entry.scope == "firm_wide":

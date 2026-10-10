@@ -24,6 +24,7 @@ from app.services.birdie_workboard_service import WORKBOARD_TOOLS, execute_workb
 from app.services.knowledge_bank_service import get_kb_entry, search_kb_for_chat
 from app.services.memory_service import list_memories
 from app.services.organization_service import list_matters
+from app.services.mentorship_class_service import require_class_context, revalidate_class_access
 from app.services.rag_service import search_documents
 
 MAX_MEMORY_RESULTS = 6
@@ -235,6 +236,7 @@ def build_matter_overview(
 
 def _matter_overview(db: Session, user: User) -> dict:
     now = datetime.now(UTC)
+    context = require_class_context(db, user)
     matters = list_matters(db, user, status="active")
     ticket_rows = db.execute(
         select(
@@ -244,7 +246,7 @@ def _matter_overview(db: Session, user: User) -> dict:
             func.min(ActionItem.due_date),
             func.count(case((ActionItem.priority == "high", 1))),
         )
-        .where(ActionItem.assignee_id == user.id, ActionItem.status != "done")
+        .where(ActionItem.assignee_id == user.id, ActionItem.status != "done", ActionItem.class_id == context.class_id)
         .group_by(ActionItem.matter_id)
     ).all()
     review_rows = db.execute(
@@ -255,6 +257,7 @@ def _matter_overview(db: Session, user: User) -> dict:
         )
         .where(
             ReviewHandoff.status.in_(ACTIVE_REVIEW_STATUSES),
+            ReviewHandoff.class_id == context.class_id,
             or_(ReviewHandoff.reviewer_id == user.id, ReviewHandoff.submitted_by == user.id),
         )
         .group_by(ReviewHandoff.matter_id)
@@ -351,7 +354,9 @@ async def execute_shared_tool(
     matter_id: str | None,
     max_read_chars: int | None = None,
 ) -> dict:
-    """Run one shared tool for `user`. Failures come back as {"error": ...}; they never raise."""
+    """Run one shared tool. Revoked class access aborts the turn; tool errors are data."""
+    context = require_class_context(db, user)
+    revalidate_class_access(db, user_id=user.id, class_id=context.class_id)
     if name in WORKBOARD_TOOL_NAMES:
         return execute_workboard_tool(name, args, db=db, user=user, matter_id=matter_id)
     if name in DOCUMENT_TOOL_NAMES:

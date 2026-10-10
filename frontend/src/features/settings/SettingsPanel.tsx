@@ -43,7 +43,7 @@ const SETTINGS_HELP: HelpContent = {
       abilities: [
         'Change any user\'s firm role',
         'Add and remove demo users',
-        'Access all firm-wide data and settings',
+        'Manage team settings; private content requires its owner’s access',
       ],
     },
     {
@@ -229,7 +229,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                 <h3 className="text-sm font-semibold text-[#0f0f0f]">Firm Roster</h3>
               </div>
               <p className="text-xs leading-5 text-[#6f6f69]">
-                Manage professional roles for every member of the firm.
+                Manage professional roles for members of your current team.
               </p>
 
               <div className="mt-4 overflow-hidden rounded-xl border border-black/10 bg-white divide-y divide-black/5">
@@ -271,14 +271,14 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
             <div className="pt-8 border-t border-black/10">
               <h3 className="text-sm font-semibold text-red-600">Development & Testing</h3>
               <p className="mt-1 text-xs leading-5 text-[#6f6f69]">
-                Use these tools to populate or clean up your firm roster during testing.
+                Populate a team created for testing. These tools add or remove demo users and data only in your current team.
               </p>
               
               {demoMode && (
                 <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
                   <h4 className="text-sm font-medium text-neutral-900">Singapore property Workboard demo</h4>
                   <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Add 12 synthetic tasks across private residential purchase, HDB resale, commercial leasing and a strata dispute. Uses Sarah, Jane and Marcus across all five stages, plus one private sample chat per matter for you and each demo user. Existing work and conversations are kept; repeated clicks add no duplicates.
+                    Add 12 synthetic tasks in your current team across private residential purchase, HDB resale, commercial leasing and a strata dispute. Uses Sarah, Jane and Marcus across all five stages, plus one private sample chat per matter for you and each demo user. Existing work and conversations are kept; repeated clicks add no duplicates.
                   </p>
                   <button type="button" disabled={propertySeedMutation.isPending || seedMutation.isPending}
                     onClick={() => propertySeedMutation.mutate()}
@@ -302,7 +302,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                   className="inline-flex h-9 items-center gap-2 rounded-lg border border-red-100 bg-white px-4 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                   disabled={clearDummyMutation.isPending}
                   onClick={() => {
-                    if (window.confirm('Remove all dummy users? This will affect any tasks assigned to them.')) {
+                    if (window.confirm('Remove demo users in this team? This will affect tasks assigned to them in this team.')) {
                       clearDummyMutation.mutate()
                     }
                   }}
@@ -316,7 +316,7 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
                     className="inline-flex h-9 items-center gap-2 rounded-lg border border-black/10 bg-[#0f0f0f] px-4 text-xs font-medium text-white hover:bg-black disabled:opacity-50"
                     disabled={seedMutation.isPending || propertySeedMutation.isPending}
                     onClick={() => {
-                      if (window.confirm('Load demo data? This resets any previous demo data (Sarah, Jane, Marcus and the Meridian matter).')) {
+                      if (window.confirm('Load demo data in this team? This resets its previous demo data (Sarah, Jane, Marcus and the Meridian matter). Other teams are unaffected.')) {
                         seedMutation.mutate()
                       }
                     }}

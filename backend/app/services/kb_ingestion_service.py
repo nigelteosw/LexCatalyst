@@ -32,6 +32,7 @@ from app.services.knowledge_bank_service import (
     log_kb_access,
 )
 from app.services.resource_metadata_service import sync_kb_metadata, sync_metadata_safe
+from app.services.mentorship_class_service import ClassAccessError, require_active_class_id
 from app.worker_types import WorkerClaim
 
 # Cap raw text sent to the formatter — fits comfortably in Flash's context.
@@ -57,11 +58,14 @@ def create_pending_kb_entry(
     not in a failed state, return that entry. A failed entry is reset to
     `processing` so the user can retry.
     """
+    if document.class_id != require_active_class_id(db, user.id) or document.user_id != user.id:
+        raise ClassAccessError("Document not found", 404)
     existing = db.scalar(
         select(KnowledgeBankEntry)
         .options(defer(KnowledgeBankEntry.embedding))
         .where(
             KnowledgeBankEntry.source_document_id == document.id,
+            KnowledgeBankEntry.class_id == document.class_id,
             KnowledgeBankEntry.created_by == user.id,
         )
     )
@@ -84,6 +88,7 @@ def create_pending_kb_entry(
         return existing
 
     entry = KnowledgeBankEntry(
+        class_id=document.class_id,
         team_id=document.team_id,
         matter_id=document.matter_id,
         source_document_id=document.id,

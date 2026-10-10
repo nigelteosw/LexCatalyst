@@ -111,10 +111,7 @@ class DemoAdminSyncTests(unittest.TestCase):
         existing = SimpleNamespace(is_admin=False, firm_role="associate", email="a@x.test")
         db.query.return_value.filter.return_value.first.return_value = existing
         info = {"sub": "g1", "email": "a@x.test"}
-        with (
-            patch.object(auth, "get_settings", return_value=SimpleNamespace(demo_mode=True, admin_emails=[])),
-            patch.object(auth, "ensure_default_team"),
-        ):
+        with patch.object(auth, "get_settings", return_value=SimpleNamespace(demo_mode=True, admin_emails=[])):
             user = auth.get_or_create_user(db, info)
         self.assertTrue(user.is_admin)
         self.assertEqual(user.firm_role, "partner")
@@ -125,10 +122,7 @@ class DemoAdminSyncTests(unittest.TestCase):
         db = MagicMock()
         existing = SimpleNamespace(is_admin=False, firm_role="associate", email="a@x.test")
         db.query.return_value.filter.return_value.first.return_value = existing
-        with (
-            patch.object(auth, "get_settings", return_value=SimpleNamespace(demo_mode=False, admin_emails=[])),
-            patch.object(auth, "ensure_default_team"),
-        ):
+        with patch.object(auth, "get_settings", return_value=SimpleNamespace(demo_mode=False, admin_emails=[])):
             user = auth.get_or_create_user(db, {"sub": "g1", "email": "a@x.test"})
         self.assertFalse(user.is_admin)
 

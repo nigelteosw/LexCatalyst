@@ -15,7 +15,8 @@ from app.auth import create_access_token
 from app.config import get_settings
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import User
+from app.models import ClassMembership, User
+from app.services.mentorship_class_service import require_class_context
 from app.schemas import FirmRole
 from app.services.demo_seed_service import seed_demo
 from app.services.property_workboard_demo_service import seed_property_workboard
@@ -55,8 +56,13 @@ def demo_users(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_demo_admin),
 ) -> list[dict]:
+    context = require_class_context(db, _admin)
     users = db.scalars(
-        select(User).where(User.google_id.like("dummy:%")).order_by(User.full_name)
+        select(User).join(ClassMembership, ClassMembership.user_id == User.id).where(
+            User.google_id.like("dummy:%"),
+            ClassMembership.class_id == context.class_id,
+            ClassMembership.status == "active",
+        ).order_by(User.full_name)
     )
     return [_public(u) for u in users]
 
@@ -69,6 +75,13 @@ def demo_switch(
 ) -> dict:
     target = db.get(User, body.user_id)
     if target is None or not target.google_id.startswith("dummy:"):
+        raise HTTPException(status_code=404, detail="Not found")
+    context = require_class_context(db, _admin)
+    if not db.scalar(select(ClassMembership.id).where(
+        ClassMembership.user_id == target.id,
+        ClassMembership.class_id == context.class_id,
+        ClassMembership.status == "active",
+    )):
         raise HTTPException(status_code=404, detail="Not found")
     token = create_access_token({"sub": target.id}, expires_delta=SWITCH_TOKEN_TTL)
     return {"access_token": token, "token_type": "bearer", "user": _public(target)}

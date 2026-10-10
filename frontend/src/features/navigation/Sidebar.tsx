@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  UsersRound,
   X,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -86,6 +87,7 @@ export function Sidebar({
     selectActions,
     selectMemories,
     selectSettings,
+    selectTeam,
   } = useWorkspaceNavigation()
 
   const [width, setWidth] = useState(DEFAULT_WIDTH)
@@ -286,6 +288,8 @@ export function Sidebar({
             <NavItem icon={CheckSquare} label="Workboard" collapsed={isCollapsed} active={current.view === 'actions'}
               badge={pendingTaskCount} onPrefetch={() => prefetchWorkspace('actions')}
               onClick={() => { selectActions(); closeMobile() }} />
+            <NavItem icon={UsersRound} label="Team Management" collapsed={isCollapsed} active={current.view === 'team'}
+              onClick={() => { selectTeam(); closeMobile() }} />
           </nav>
 
           {/* Chats by matter: only on the LexChat page */}

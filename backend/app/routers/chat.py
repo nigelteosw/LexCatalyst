@@ -22,6 +22,7 @@ from app.schemas import (
 )
 from app.services.agent_service import run_agent_loop
 from app.services.error_reporting import unexpected_error_detail
+from app.services.mentorship_class_service import ClassAccessError, require_active_class_id, revalidate_class_access
 from app.services.chat_service import (
     create_chat_response,
     delete_message,
@@ -65,6 +66,8 @@ async def chat(
         raise HTTPException(status_code=502, detail=f"Document search is unavailable: {exc}") from exc
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Chat database is unavailable") from exc
+    except ClassAccessError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     return ChatResponse(
         thread_id=thread.id,
@@ -81,6 +84,7 @@ async def chat_stream(
 ) -> StreamingResponse:
     if request.matter_id:
         require_matter_member(db, current_user, request.matter_id)
+    class_id = require_active_class_id(db, current_user.id)
 
     def event(name: str, payload: dict) -> str:
         return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
@@ -96,6 +100,7 @@ async def chat_stream(
                 tier=request.tier,
                 matter_id=request.matter_id,
             )
+            revalidate_class_access(db, user_id=current_user.id, class_id=class_id)
             yield event("thread", {"thread_id": thread.id, "title": thread.title})
 
             chunks: list[str] = []
@@ -110,6 +115,7 @@ async def chat_stream(
                 matter_id=active_matter_id,
                 model=selected_model,
             ):
+                revalidate_class_access(db, user_id=current_user.id, class_id=class_id)
                 if event_type == "token":
                     chunks.append(event_data["content"])
                 elif event_type == "tool_call":
@@ -146,6 +152,7 @@ async def chat_stream(
                 tool_steps=tool_steps if tool_steps else None,
                 sources=sources or None,
             )
+            revalidate_class_access(db, user_id=current_user.id, class_id=class_id)
             yield event(
                 "done",
                 {
@@ -161,6 +168,9 @@ async def chat_stream(
                 assistant_message=assistant_message,
                 user_message=request.message,
             )
+        except ClassAccessError as exc:
+            db.rollback()
+            yield event("error", {"detail": str(exc)})
         except OpenRouterError as exc:
             yield event("error", {"detail": str(exc)})
         except EmbeddingError as exc:

@@ -1,7 +1,8 @@
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.models import MatterMember, TeamMember, User
+from app.models import ClassMembership, MatterMember, TeamMember, User
+from app.services.mentorship_class_service import require_class_context
 
 DUMMY_USERS = (
     {
@@ -48,23 +49,31 @@ def update_user_role(db: Session, *, user: User, firm_role: str) -> User:
     return user
 
 
-def list_firm_users(db: Session) -> list[User]:
-    """Every user in the firm, ordered by name then email.
+def list_firm_users(db: Session, *, user: User) -> list[User]:
+    """Only active members of the caller's mentorship team."""
+    from app.models import ClassMembership
+    from app.services.mentorship_class_service import require_class_context
 
-    Used to populate assignee pickers and members views. No RBAC — anyone
-    authenticated can see the firm roster, the same way they would in a
-    real firm's internal directory.
-    """
-    stmt = select(User).order_by(User.full_name, User.email)
+    context = require_class_context(db, user)
+    stmt = (
+        select(User)
+        .join(ClassMembership, ClassMembership.user_id == User.id)
+        .where(ClassMembership.class_id == context.class_id, ClassMembership.status == "active")
+        .order_by(User.full_name, User.email)
+    )
     return list(db.scalars(stmt))
 
 
-def create_dummy_users(db: Session, count: int = len(DUMMY_USERS)) -> list[User]:
-    """Create or refresh the named demo users without producing duplicates."""
+def create_dummy_users(db: Session, count: int = len(DUMMY_USERS), *, actor: User) -> list[User]:
+    """Create separate synthetic accounts inside the actor's approved class."""
     from app.services.organization_service import ensure_default_team
 
     users: list[User] = []
-    for seed in DUMMY_USERS[: max(0, min(count, len(DUMMY_USERS)))]:
+    context = require_class_context(db, actor)
+    for template in DUMMY_USERS[: max(0, min(count, len(DUMMY_USERS)))]:
+        local, domain = template["email"].split("@", 1)
+        seed = {**template, "email": f"{local}.{context.class_id}@{domain}",
+                "google_id": f"{template['google_id']}:{context.class_id}"}
         user = db.scalar(
             select(User).where(
                 (User.google_id == seed["google_id"]) | (User.email == seed["email"])
@@ -84,15 +93,26 @@ def create_dummy_users(db: Session, count: int = len(DUMMY_USERS)) -> list[User]
             db.commit()
             db.refresh(user)
 
+        membership = db.scalar(select(ClassMembership).where(
+            ClassMembership.class_id == context.class_id, ClassMembership.user_id == user.id,
+        ))
+        if membership is None:
+            db.add(ClassMembership(class_id=context.class_id, user_id=user.id, role="member", status="active"))
+        else:
+            membership.status = "active"
+            membership.role = "member"
+            membership.removed_at = None
+        db.commit()
         ensure_default_team(db, user)
         users.append(user)
 
     return users
 
 
-def delete_dummy_users(db: Session) -> int:
-    """Delete all users with the 'dummy:' google_id prefix."""
-    stmt = delete(User).where(User.google_id.like("dummy:%"))
+def delete_dummy_users(db: Session, *, actor: User) -> int:
+    """Delete only synthetic users created for the actor's class."""
+    context = require_class_context(db, actor)
+    stmt = delete(User).where(User.google_id.like(f"dummy:%:{context.class_id}"))
     result = db.execute(stmt)
     db.commit()
     return result.rowcount

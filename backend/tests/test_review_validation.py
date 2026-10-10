@@ -1,7 +1,7 @@
 import math
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from pydantic import ValidationError
 
@@ -97,20 +97,22 @@ class HandoffEligibilityTests(unittest.TestCase):
 
     def test_docx_cannot_enter_review(self) -> None:
         doc = SimpleNamespace(
-            id="doc", user_id="u", matter_id=None, filename="draft.docx",
+            id="doc", class_id="class-a", user_id="u", matter_id=None, filename="draft.docx",
             content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             storage_key="k", status="ready",
         )
-        with self.assertRaises(ReviewHandoffError):
-            create_handoff(self._db(doc), user=SimpleNamespace(id="u", is_admin=False), schema=self._schema())
+        with patch("app.services.review_handoff_service.require_active_class_id", return_value="class-a"):
+            with self.assertRaises(ReviewHandoffError):
+                create_handoff(self._db(doc), user=SimpleNamespace(id="u", is_admin=False), schema=self._schema())
 
     def test_pdf_without_stored_file_cannot_enter_review(self) -> None:
         doc = SimpleNamespace(
-            id="doc", user_id="u", matter_id=None, filename="draft.pdf",
+            id="doc", class_id="class-a", user_id="u", matter_id=None, filename="draft.pdf",
             content_type="application/pdf", storage_key=None, status="uploaded",
         )
-        with self.assertRaises(ReviewHandoffError):
-            create_handoff(self._db(doc), user=SimpleNamespace(id="u", is_admin=False), schema=self._schema())
+        with patch("app.services.review_handoff_service.require_active_class_id", return_value="class-a"):
+            with self.assertRaises(ReviewHandoffError):
+                create_handoff(self._db(doc), user=SimpleNamespace(id="u", is_admin=False), schema=self._schema())
 
     def test_pdf_still_extracting_is_allowed(self) -> None:
         from unittest.mock import patch
@@ -118,10 +120,10 @@ class HandoffEligibilityTests(unittest.TestCase):
         from app.services import review_handoff_service as rhs
 
         doc = SimpleNamespace(
-            id="doc", user_id="u", matter_id=None, filename="draft.pdf",
+            id="doc", class_id="class-a", user_id="u", matter_id=None, filename="draft.pdf",
             content_type="application/pdf", storage_key="k", status="processing",
         )
-        with patch.object(rhs, "sync_metadata_safe"):
+        with patch.object(rhs, "sync_metadata_safe"), patch.object(rhs, "require_active_class_id", return_value="class-a"):
             handoff = create_handoff(self._db(doc), user=SimpleNamespace(id="u", is_admin=False), schema=self._schema())
         self.assertEqual(handoff.document_id, "doc")
 

@@ -3,6 +3,7 @@
 from sqlalchemy.orm import Session
 
 from app.models import RetrievalAuditEvent
+from app.services.mentorship_class_service import require_active_class_id
 
 MAX_QUERY_CHARS = 2000
 
@@ -16,6 +17,7 @@ def record_retrieval(
     returned_ids: list[str],
 ) -> RetrievalAuditEvent:
     event = RetrievalAuditEvent(
+        class_id=require_active_class_id(db, user_id),
         user_id=user_id,
         kind=kind,
         query=query[:MAX_QUERY_CHARS],

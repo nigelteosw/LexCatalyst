@@ -35,7 +35,7 @@ def _response(folder: DocumentFolder, user: User) -> DocumentFolderResponse:
 
 
 def _load_manageable(db: Session, user: User, folder_id: str) -> DocumentFolder:
-    folder = get_folder(db, folder_id)
+    folder = get_folder(db, user, folder_id)
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
     require_folder_access(db, user, folder)

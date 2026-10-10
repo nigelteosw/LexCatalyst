@@ -1,5 +1,8 @@
 import type {
   ActionItem,
+  ClassStatus,
+  ClassMember,
+  ClassJoinRequest,
   ActionPriority,
   ActionStatus,
   MessageSource,
@@ -1230,6 +1233,72 @@ export async function getCurrentUser(): Promise<CurrentUser> {
     defaultTeamId: u.default_team_id,
     createdAt: u.created_at,
   }
+}
+
+export async function getClassStatus(): Promise<ClassStatus> {
+  const response = await request<
+    { status: 'none' | 'pending' } |
+    { status: 'active'; class_id: string; name: string; role: 'owner' | 'mentor' | 'member' }
+  >('/classes/status')
+  if (response.status !== 'active') return response
+  return { status: 'active', classId: response.class_id, name: response.name, role: response.role }
+}
+
+export async function createMentorshipClass(name: string): Promise<void> {
+  await request('/classes', { method: 'POST', body: JSON.stringify({ name }) })
+}
+
+export async function joinMentorshipClass(code: string): Promise<void> {
+  await request('/classes/join', { method: 'POST', body: JSON.stringify({ code }) })
+}
+
+export async function rotateClassCode(): Promise<{ code: string; expiresInSeconds: number }> {
+  const response = await request<{ code: string; expires_in_seconds: number }>('/classes/current/invite', { method: 'POST' })
+  return { code: response.code, expiresInSeconds: response.expires_in_seconds }
+}
+
+export async function listClassMembers(): Promise<ClassMember[]> {
+  const response = await request<Array<{ id: string; full_name: string | null; role: ClassMember['role'] }>>('/classes/current/members')
+  return response.map((member) => ({ id: member.id, fullName: member.full_name, role: member.role }))
+}
+
+export async function listClassJoinRequests(): Promise<ClassJoinRequest[]> {
+  const response = await request<Array<{ id: string; full_name: string | null; requested_at: string }>>('/classes/current/requests')
+  return response.map((member) => ({ id: member.id, fullName: member.full_name, requestedAt: member.requested_at }))
+}
+
+export async function approveClassMember(userId: string): Promise<void> {
+  await request(`/classes/current/members/${encodeURIComponent(userId)}/approve`, { method: 'POST' })
+}
+
+export async function rejectClassMember(userId: string): Promise<void> {
+  await request(`/classes/current/members/${encodeURIComponent(userId)}/reject`, { method: 'POST' })
+}
+
+export async function setClassMemberRole({ userId, role }: { userId: string; role: 'member' | 'mentor' }): Promise<void> {
+  await request(`/classes/current/members/${encodeURIComponent(userId)}/role`, {
+    method: 'PATCH', body: JSON.stringify({ role }),
+  })
+}
+
+export async function disableClassCode(): Promise<void> {
+  await request('/classes/current/invite', { method: 'DELETE' })
+}
+
+export async function archiveMentorshipClass(): Promise<void> {
+  await request('/classes/current/archive', { method: 'POST' })
+}
+
+export async function removeClassMember(userId: string): Promise<void> {
+  await request(`/classes/current/members/${encodeURIComponent(userId)}`, { method: 'DELETE' })
+}
+
+export async function leaveMentorshipClass(): Promise<void> {
+  await request('/classes/current/leave', { method: 'POST' })
+}
+
+export async function transferClassOwnership(userId: string): Promise<void> {
+  await request('/classes/current/transfer-owner', { method: 'POST', body: JSON.stringify({ user_id: userId }) })
 }
 
 export async function updateOtherUserRole(userId: string, firmRole: FirmRole): Promise<FirmUser> {

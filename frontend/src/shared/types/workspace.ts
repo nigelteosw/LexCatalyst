@@ -182,6 +182,18 @@ export type Matter = {
 
 export type FirmRole = 'partner' | 'senior_associate' | 'associate' | 'admin'
 
+export type ClassStatus =
+  | { status: 'none' | 'pending' }
+  | { status: 'active'; classId: string; name: string; role: 'owner' | 'mentor' | 'member' }
+
+export type ClassMember = {
+  id: string
+  fullName: string | null
+  role: 'owner' | 'mentor' | 'member'
+}
+
+export type ClassJoinRequest = { id: string; fullName: string | null; requestedAt: string }
+
 export type CurrentUser = {
   id: string
   email: string

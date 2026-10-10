@@ -13,6 +13,7 @@ from app.models import (
     Matter,
     MatterMember,
     PiiRedaction,
+    Team,
     TeamMember,
     User,
 )
@@ -36,6 +37,7 @@ from app.services.resource_metadata_service import (
     sync_kb_metadata,
     sync_metadata_safe,
 )
+from app.services.mentorship_class_service import require_active_class_id
 
 MAX_EMBEDDING_TEXT_CHARS = 30_000
 
@@ -56,6 +58,7 @@ def _resolve_scope_targets(
     team_id: str | None,
     matter_id: str | None,
 ) -> tuple[str | None, str | None]:
+    class_id = require_active_class_id(db, user.id)
     if scope in {"firm_wide", "private"}:
         return None, None
 
@@ -63,6 +66,9 @@ def _resolve_scope_targets(
         resolved_team_id = team_id or user.default_team_id
         if not resolved_team_id:
             raise KnowledgeBankScopeError("Select a team for team access")
+        team = db.get(Team, resolved_team_id)
+        if not team or team.class_id != class_id:
+            raise KnowledgeBankScopeError("You do not have access to that team")
         is_member = db.scalar(
             select(TeamMember.id).where(
                 TeamMember.team_id == resolved_team_id,
@@ -77,7 +83,7 @@ def _resolve_scope_targets(
         if not matter_id:
             raise KnowledgeBankScopeError("Select a matter for matter access")
         matter = db.get(Matter, matter_id)
-        if not matter:
+        if not matter or matter.class_id != class_id:
             raise KnowledgeBankScopeError("Matter not found")
         is_member = db.scalar(
             select(MatterMember.id).where(
@@ -236,9 +242,10 @@ def _entry_query():
     )
 
 
-def _user_kb_scope_filter(user: User):
+def _user_kb_scope_filter(db: Session, user: User):
     """Build a WHERE clause that limits results to entries the user can read."""
-    return or_(
+    class_id = require_active_class_id(db, user.id)
+    return (KnowledgeBankEntry.class_id == class_id) & or_(
         KnowledgeBankEntry.scope == "firm_wide",
         (KnowledgeBankEntry.scope == "team")
         & exists(
@@ -262,6 +269,7 @@ def _user_kb_scope_filter(user: User):
 def _apply_kb_filters(
     stmt,
     *,
+    db: Session,
     user: User,
     scope: str | None,
     entry_type: str | None,
@@ -271,7 +279,7 @@ def _apply_kb_filters(
     pii_status: str | None,
     query: str | None,
 ):
-    scope_filter = _user_kb_scope_filter(user)
+    scope_filter = _user_kb_scope_filter(db, user)
     if scope_filter is not None:
         stmt = stmt.where(scope_filter)
     if scope:
@@ -338,6 +346,7 @@ def list_kb_entries(
     )
     stmt = _apply_kb_filters(
         stmt,
+        db=db,
         user=user,
         scope=scope,
         entry_type=entry_type,
@@ -373,7 +382,7 @@ def get_kb_entry_statuses(
         KnowledgeBankEntry.version,
         KnowledgeBankEntry.updated_at,
     ).where(KnowledgeBankEntry.id.in_(entry_ids[:100]))
-    scope_filter = _user_kb_scope_filter(user)
+    scope_filter = _user_kb_scope_filter(db, user)
     if scope_filter is not None:
         stmt = stmt.where(scope_filter)
     return [dict(row) for row in db.execute(stmt).mappings()]
@@ -397,6 +406,7 @@ async def create_kb_entry(
         matter_id=schema.matter_id,
     )
     entry = KnowledgeBankEntry(
+        class_id=require_active_class_id(db, user.id),
         team_id=team_id,
         matter_id=matter_id,
         scope=schema.scope,
@@ -629,6 +639,7 @@ async def create_pending_review_entry(
     )
     redacted_fields, redacted_content = await _propose_redactions(db, user.id, schema.body_markdown)
     entry = KnowledgeBankEntry(
+        class_id=require_active_class_id(db, user.id),
         team_id=team_id,
         matter_id=matter_id,
         source_entry_id=source_entry_id,
@@ -779,7 +790,7 @@ async def search_kb_for_chat(
         KnowledgeBankEntry.embedding.is_not(None),
         KnowledgeBankEntry.embedding_content_hash.is_not(None),
     )
-    scope_filter = _user_kb_scope_filter(user)
+    scope_filter = _user_kb_scope_filter(db, user)
     if scope_filter is not None:
         base = base.where(scope_filter)
 

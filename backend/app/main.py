@@ -24,6 +24,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
+from app.class_gate import install_class_gate
 from app.log_filters import install_secret_redaction
 from app.database import SessionLocal, create_db_tables
 from app.models import Document, DreamJob, KnowledgeBankEntry
@@ -120,6 +121,7 @@ async def lifespan(_app: FastAPI):
 
 install_secret_redaction()
 app = FastAPI(title="LexCatalyst API", lifespan=lifespan)
+install_class_gate(app)
 
 app.add_middleware(
     CORSMiddleware,

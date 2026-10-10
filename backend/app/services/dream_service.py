@@ -29,6 +29,7 @@ from app.schemas import (
 )
 from app.worker_types import WorkerClaim
 from app.services.memory_service import list_memories
+from app.services.mentorship_class_service import require_active_class_id
 
 RECENT_MESSAGE_LIMIT = 50
 RECENT_MESSAGE_CHAR_BUDGET = 30_000
@@ -70,11 +71,11 @@ Output shape:
 """
 
 
-def _check_rate_limit(db: Session, user_id: str) -> None:
+def _check_rate_limit(db: Session, user_id: str, class_id: str) -> None:
     cutoff = datetime.now(UTC) - RATE_LIMIT_WINDOW
     last_job = db.scalar(
         select(DreamJob)
-        .where(DreamJob.user_id == user_id, DreamJob.created_at >= cutoff)
+        .where(DreamJob.user_id == user_id, DreamJob.class_id == class_id, DreamJob.created_at >= cutoff)
         .order_by(desc(DreamJob.created_at))
         .limit(1)
     )
@@ -87,11 +88,12 @@ def _check_rate_limit(db: Session, user_id: str) -> None:
         )
 
 
-def _load_recent_messages(db: Session, *, user_id: str) -> list[ChatMessage]:
+def _load_recent_messages(db: Session, *, user_id: str, class_id: str | None = None) -> list[ChatMessage]:
+    class_id = class_id or require_active_class_id(db, user_id)
     stmt = (
         select(ChatMessage)
         .join(ChatThread, ChatMessage.thread_id == ChatThread.id)
-        .where(ChatThread.user_id == user_id)
+        .where(ChatThread.user_id == user_id, ChatThread.class_id == class_id)
         .order_by(desc(ChatMessage.created_at))
         .limit(RECENT_MESSAGE_LIMIT)
     )
@@ -224,13 +226,15 @@ def _parse_dream_proposal(
     )
 
 
-async def _run_dream_consolidation(*, user_id: str) -> DreamProposal:
+async def _run_dream_consolidation(*, user_id: str, class_id: str) -> DreamProposal:
     """Run consolidation with a fresh DB session — for use inside a
     background task."""
     db = SessionLocal()
     try:
+        if require_active_class_id(db, user_id) != class_id:
+            raise RuntimeError("Team membership changed while Dream was running")
         memories = list_memories(db, user_id=user_id)
-        recent_messages = _load_recent_messages(db, user_id=user_id)
+        recent_messages = _load_recent_messages(db, user_id=user_id, class_id=class_id)
 
         if not memories and not recent_messages:
             return DreamProposal(reviewed_message_count=0)
@@ -334,6 +338,7 @@ def _apply_dream_proposal(
     db: Session,
     *,
     user_id: str,
+    class_id: str,
     proposal: DreamProposal,
 ) -> None:
     """Apply the validated proposal in the caller's transaction."""
@@ -351,7 +356,7 @@ def _apply_dream_proposal(
             memory.id: memory
             for memory in db.scalars(
                 select(Memory)
-                .where(Memory.id.in_(referenced_ids), Memory.user_id == user_id)
+                .where(Memory.id.in_(referenced_ids), Memory.user_id == user_id, Memory.class_id == class_id)
                 .with_for_update()
             )
         }
@@ -369,6 +374,7 @@ def _apply_dream_proposal(
     for merge in proposal.merges:
         db.add(
             Memory(
+                class_id=class_id,
                 user_id=user_id,
                 category=merge.category,
                 content=merge.content,
@@ -385,6 +391,7 @@ def _apply_dream_proposal(
     for addition in proposal.additions:
         db.add(
             Memory(
+                class_id=class_id,
                 user_id=user_id,
                 category=addition.category,
                 content=addition.content,
@@ -407,12 +414,13 @@ async def process_dream_job(claim: WorkerClaim) -> None:
         ):
             return
         user_id = job.user_id
+        class_id = job.class_id
         claim_started_at = claim.started_at
     finally:
         metadata_db.close()
 
     try:
-        proposal = await _run_dream_consolidation(user_id=user_id)
+        proposal = await _run_dream_consolidation(user_id=user_id, class_id=class_id)
     except OpenRouterError as exc:
         _mark_dream_failed(job_id, claim_started_at, str(exc))
         return
@@ -439,7 +447,9 @@ async def process_dream_job(claim: WorkerClaim) -> None:
         ):
             return
 
-        _apply_dream_proposal(db, user_id=user_id, proposal=proposal)
+        if require_active_class_id(db, user_id) != class_id or job.class_id != class_id:
+            raise RuntimeError("Team membership changed while Dream was running")
+        _apply_dream_proposal(db, user_id=user_id, class_id=class_id, proposal=proposal)
         job.status = "completed"
         job.proposal_json = proposal.model_dump_json()
         job.error_message = None
@@ -453,11 +463,12 @@ async def process_dream_job(claim: WorkerClaim) -> None:
 
 
 def start_dream_job(db: Session, *, user: User) -> DreamJobStatus:
+    class_id = require_active_class_id(db, user.id)
     _gc_dream_jobs(db)
-    _check_rate_limit(db, user.id)
+    _check_rate_limit(db, user.id, class_id)
 
     job_id = uuid.uuid4().hex
-    job = DreamJob(id=job_id, user_id=user.id, status="processing")
+    job = DreamJob(id=job_id, class_id=class_id, user_id=user.id, status="processing")
     db.add(job)
     db.commit()
 
@@ -465,8 +476,9 @@ def start_dream_job(db: Session, *, user: User) -> DreamJobStatus:
 
 
 def get_dream_job(db: Session, *, user: User, job_id: str) -> DreamJobStatus:
+    class_id = require_active_class_id(db, user.id)
     job = db.scalar(
-        select(DreamJob).where(DreamJob.id == job_id, DreamJob.user_id == user.id)
+        select(DreamJob).where(DreamJob.id == job_id, DreamJob.user_id == user.id, DreamJob.class_id == class_id)
     )
     if job is None:
         raise HTTPException(status_code=404, detail="Dream job not found")

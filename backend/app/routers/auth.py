@@ -8,6 +8,9 @@ from app.auth import create_access_token, get_or_create_user, verify_google_toke
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
+from app.models import ClassMembership
+from sqlalchemy import select
+from app.services.mentorship_class_service import require_class_context
 from app.schemas import FirmUserResponse, UserResponse, UserSettingsUpdate
 from app.services.user_service import list_firm_users, update_user_role
 
@@ -51,10 +54,10 @@ def me(current_user: User = Depends(get_current_user)) -> UserResponse:
 @router.get("/users", response_model=list[FirmUserResponse])
 def firm_users(
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[FirmUserResponse]:
-    """Roster of everyone in the firm. Powers assignee pickers."""
-    return [FirmUserResponse.model_validate(u) for u in list_firm_users(db)]
+    """Roster of active members in the caller's team."""
+    return [FirmUserResponse.model_validate(u) for u in list_firm_users(db, user=current_user)]
 
 
 @router.patch("/users/{user_id}/role", response_model=FirmUserResponse)
@@ -68,7 +71,13 @@ def update_other_user_role(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     target_user = db.get(User, user_id)
-    if not target_user:
+    context = require_class_context(db, current_user)
+    target_membership = db.scalar(select(ClassMembership.id).where(
+        ClassMembership.user_id == user_id,
+        ClassMembership.class_id == context.class_id,
+        ClassMembership.status == "active",
+    ))
+    if not target_user or not target_membership:
         raise HTTPException(status_code=404, detail="User not found")
         
     user = update_user_role(db, user=target_user, firm_role=schema.firm_role)

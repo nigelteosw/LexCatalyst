@@ -9,6 +9,7 @@ type KnowledgeBankView = { view: 'knowledge_bank'; entryId: string | null }
 type ActionsView = { view: 'actions'; actionId: string | null }
 type HandoffReviewView = { view: 'handoff_review'; actionId: string }
 type SettingsView = { view: 'settings' }
+type TeamView = { view: 'team' }
 type MatterView = { view: 'matter'; matterId: string }
 
 export type AppView =
@@ -20,6 +21,7 @@ export type AppView =
   | ActionsView
   | HandoffReviewView
   | SettingsView
+  | TeamView
   | MatterView
 
 type NavigationOptions = {
@@ -35,7 +37,7 @@ function decodeSegment(value: string | undefined): string | null {
   }
 }
 
-function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute: boolean } {
+export function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute: boolean } {
   const segments = pathname.split('/').filter(Boolean)
   const [section, rawId] = segments
   const id = decodeSegment(rawId)
@@ -82,6 +84,9 @@ function parseWorkspacePath(pathname: string): { current: AppView; isKnownRoute:
   }
   if (section === 'settings' && !id) {
     return { current: { view: 'settings' }, isKnownRoute: true }
+  }
+  if (section === 'team' && !id) {
+    return { current: { view: 'team' }, isKnownRoute: true }
   }
   return { current: { view: 'home' }, isKnownRoute: false }
 }
@@ -162,6 +167,10 @@ export function useWorkspaceNavigation() {
     ),
     selectSettings: useCallback(
       (options?: NavigationOptions) => go('/settings', options),
+      [go],
+    ),
+    selectTeam: useCallback(
+      (options?: NavigationOptions) => go('/team', options),
       [go],
     ),
   }

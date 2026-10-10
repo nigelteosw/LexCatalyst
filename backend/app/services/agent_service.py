@@ -23,6 +23,7 @@ from app.services.memory_service import list_memories
 from app.services.rag_service import search_documents
 from app.services.case_law_service import search_case_sources
 from app.services.elitigation_service import ElitigationError
+from app.services.mentorship_class_service import require_active_class_id, revalidate_class_access
 
 class SourceRegistry:
     """Numbers the sources a turn consults so the answer can cite them as [n] footnotes."""
@@ -290,6 +291,8 @@ async def run_agent_loop(
         in a row, the loop short-circuits to the final answer round to
         prevent runaway loops on hallucinated queries.
     """
+    class_id = require_active_class_id(db, user.id)
+    revalidate_class_access(db, user_id=user.id, class_id=class_id)
     provider = get_llm(db, user.id, feature="lexchat", model=model)
     current_messages = list(messages)
     previous_fingerprints: set[str] = set()
@@ -299,6 +302,7 @@ async def run_agent_loop(
     mutation_results: dict[str, dict] = {}
 
     for round_num in range(MAX_TOOL_ROUNDS + 1):
+        revalidate_class_access(db, user_id=user.id, class_id=class_id)
         is_final_round = round_num == MAX_TOOL_ROUNDS
         tools = [] if is_final_round else TOOLS
 
@@ -319,6 +323,7 @@ async def run_agent_loop(
         async for event_type, event_data in provider.stream_with_tools(
             current_messages, tools,
         ):
+            revalidate_class_access(db, user_id=user.id, class_id=class_id)
             if event_type == "token":
                 yield ("token", {"content": event_data})
             elif event_type == "tool_calls":
@@ -359,6 +364,7 @@ async def run_agent_loop(
 
         # Execute each tool and feed results back.
         for tool_call in accumulated_tool_calls:
+            revalidate_class_access(db, user_id=user.id, class_id=class_id)
             name = tool_call["function"]["name"]
             step_id = tool_call["id"]
             try:
@@ -367,6 +373,7 @@ async def run_agent_loop(
                 args = {}
 
             yield ("tool_call", {"step_id": step_id, "tool": name, "args": args})
+            revalidate_class_access(db, user_id=user.id, class_id=class_id)
 
             known_sources = len(registry.sources)
             changed = False
@@ -386,13 +393,16 @@ async def run_agent_loop(
                     name, args, db=db, user=user, matter_id=matter_id, registry=registry,
                 )
 
+            revalidate_class_access(db, user_id=user.id, class_id=class_id)
             yield (
                 "tool_result",
                 {"step_id": step_id, "tool": name, "summary": summary, "changed": changed},
             )
             if changed:
+                revalidate_class_access(db, user_id=user.id, class_id=class_id)
                 yield ("workboard_changed", {"tool": name})
             if len(registry.sources) != known_sources:
+                revalidate_class_access(db, user_id=user.id, class_id=class_id)
                 yield ("sources", {"sources": list(registry.sources)})
 
             current_messages.append({
