@@ -4,9 +4,10 @@ from datetime import UTC, datetime
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.models import ChatMessage, ChatThread
+from app.models import ChatMessage, ChatThread, User
 from app.providers.embedding_provider import EmbeddingError
 from app.services.llm_service import get_llm, resolve_model
+from app.services.lesson_service import format_mentorship_context
 from app.services.memory_service import (
     extract_memory_candidates,
     format_memory_context,
@@ -405,6 +406,9 @@ async def prepare_agent_context(
         )
 
     system_content += format_memory_context(memories)
+    caller = db.get(User, user_id)
+    if caller is not None:
+        system_content += format_mentorship_context(db, user=caller)
 
     if active_matter_id:
         system_content += f"\n\nActive matter ID: {active_matter_id}. Prefer sources scoped to this matter."

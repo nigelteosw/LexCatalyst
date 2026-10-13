@@ -35,7 +35,7 @@ from app.services.case_law_service import (
 from app.services.elitigation_service import ElitigationError
 from app.services.mentorship_class_service import require_class_context, revalidate_class_access
 from app.schemas import PageContext, WebContext
-from app.services.lesson_service import format_feedback_context
+from app.services.lesson_service import format_mentorship_context
 from app.services.knowledge_bank_service import format_kb_context, search_kb_for_chat
 from app.services.memory_service import format_memory_context, list_memories
 from app.services.organization_service import list_matters
@@ -335,7 +335,7 @@ async def build_birdie_messages(
     system_content += format_memory_context(memories)
     system_content += _format_matter_context(db, user, matter_id)
     system_content += _format_workboard_context(db, user, matter_id)
-    system_content += format_feedback_context(db, user=user)
+    system_content += format_mentorship_context(db, user=user)
     system_content += page.prompt
     system_content += _format_web_context(web_context)
     system_content += format_case_sources(case_sources or [])

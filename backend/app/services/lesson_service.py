@@ -35,7 +35,9 @@ from app.services.review_handoff_service import lock_handoff
 FEEDBACK_STATUSES = ("returned", "completed")
 MAX_LESSONS = 4
 MAX_FEEDBACK_PER_DISTIL = 40
-CONTEXT_COMMENT_LIMIT = 10
+LESSON_CONTEXT_LIMIT = 8
+FEEDBACK_CONTEXT_LIMIT = 5
+TEAM_CONTEXT_LIMIT = 5
 THEME_LIMIT = 40
 DEFAULT_THEME = "General"
 THEME_WINDOW_DAYS = 90
@@ -412,21 +414,51 @@ def _stored_lessons(db: Session, handoff_id: str) -> list[ReviewLesson]:
 
 
 
-def format_feedback_context(db: Session, *, user: User) -> str:
-    """Recent reviewer comments for Birdie's system prompt ('why did my reviewer change this?')."""
-    rounds = list_feedback_rounds(db, user=user, limit=5)
-    lines: list[str] = []
-    for r in rounds:
-        for a in r.annotations:
-            if len(lines) >= CONTEXT_COMMENT_LIMIT:
-                break
-            who = r.reviewer_name or "a reviewer"
-            parts = [f'On "{r.document_name}", {who} commented on "{_clip(a.anchor_quote)}"']
-            if a.suggested_text:
-                parts.append(f'suggested "{_clip(a.suggested_text)}"')
-            if a.note:
-                parts.append(f'because: {_clip(a.note)}')
-            lines.append("- " + "; ".join(parts))
-    if not lines:
+def format_mentorship_context(db: Session, *, user: User) -> str:
+    """Mentorship context for Birdie's and LexChat's system prompts: the user's own lessons,
+    recent undistilled feedback on their work, and team guidance. Empty without an active class."""
+    try:
+        context = require_class_context(db, user)
+    except ClassAccessError:
         return ""
-    return "\n\nRecent feedback from the user's reviewers on their drafts:\n" + "\n".join(lines)
+
+    sections: list[str] = []
+    lessons = db.scalars(select(ReviewLesson).where(
+        ReviewLesson.class_id == context.class_id,
+        ReviewLesson.mentee_user_id == user.id,
+    ).order_by(ReviewLesson.created_at.desc()).limit(LESSON_CONTEXT_LIMIT)).all()
+    if lessons:
+        sections.append(
+            "\n\nLessons from the user's mentors:\n"
+            + "\n".join(f"- [{l.theme}] {_clip(l.title)}: {_clip(l.body)}" for l in lessons)
+        )
+
+    cited = _cited_feedback_ids(db, context.class_id, user.id)
+    mentee_rows = [
+        r for r in list_feedback(db, context=context, mentee_user_id=user.id, audience="mentee", limit=20)
+        if r.id not in cited
+    ][:FEEDBACK_CONTEXT_LIMIT]
+    if mentee_rows:
+        sections.append(
+            "\n\nRecent feedback from the user's mentors on their work:\n"
+            + "\n".join(_feedback_context_line(r) for r in mentee_rows)
+        )
+
+    team_rows = list_feedback(db, context=context, audience="team", limit=TEAM_CONTEXT_LIMIT)
+    if team_rows:
+        sections.append(
+            "\n\nTeam guidance:\n" + "\n".join(_feedback_context_line(r) for r in team_rows)
+        )
+    return "".join(sections)
+
+
+def _feedback_context_line(row: MentorFeedback) -> str:
+    who = row.author_name or "a mentor"
+    parts = [f"{who} wrote"]
+    if row.anchor_quote:
+        parts[0] += f' on "{_clip(row.anchor_quote)}"'
+    if row.suggested_text:
+        parts.append(f'suggested "{_clip(row.suggested_text)}"')
+    if row.note:
+        parts.append(f"because: {_clip(row.note)}")
+    return "- " + "; ".join(parts)
