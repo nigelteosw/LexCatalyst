@@ -170,7 +170,7 @@ async def distill_lessons(
 ) -> list[LessonResponse]:
     """Idempotent: returns stored lessons, or distils them once. Submitter only."""
     try:
-        lessons = await lesson_service.distill_lessons(db, user=current_user, handoff_id=handoff_id)
+        lessons = await lesson_service.distill_round_lessons(db, user=current_user, handoff_id=handoff_id)
     except lesson_service.LessonNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except OpenRouterKeyMissing as exc:

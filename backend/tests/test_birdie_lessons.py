@@ -48,10 +48,10 @@ class ParseLessonsTests(unittest.TestCase):
         raw = (
             "```json\n"
             '[{"title": "Cap indemnities", "body": "Cap at fees.", '
-            '"source_annotation_ids": ["a1", "ghost"]}]\n```'
+            '"source_feedback_ids": ["a1", "ghost"]}]\n```'
         )
         lessons = parse_lessons(raw, {"a1"})
-        self.assertEqual(lessons[0]["source_annotation_ids"], ["a1"])
+        self.assertEqual(lessons[0]["source_feedback_ids"], ["a1"])
 
     def test_caps_at_four_lessons(self) -> None:
         raw = (
@@ -76,7 +76,7 @@ class DistillTests(unittest.TestCase):
         db.scalar.return_value = None
         with self.assertRaises(lesson_service.LessonNotFound):
             asyncio.run(
-                lesson_service.distill_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
+                lesson_service.distill_round_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
             )
 
     def test_round_without_feedback_is_not_found(self) -> None:
@@ -89,7 +89,7 @@ class DistillTests(unittest.TestCase):
         db.scalar.return_value = handoff
         with self.assertRaises(lesson_service.LessonNotFound):
             asyncio.run(
-                lesson_service.distill_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
+                lesson_service.distill_round_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
             )
 
     def test_stored_lessons_skip_the_provider(self) -> None:
@@ -105,7 +105,7 @@ class DistillTests(unittest.TestCase):
             lesson_service, "get_llm"
         ) as provider:
             result = asyncio.run(
-                lesson_service.distill_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
+                lesson_service.distill_round_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
             )
         self.assertEqual(result, stored)
         provider.assert_not_called()
@@ -120,7 +120,7 @@ class DistillTests(unittest.TestCase):
         db.scalar.return_value = handoff
         llm = SimpleNamespace(
             complete=AsyncMock(
-                return_value='[{"title": "Cap it", "body": "Always cap.", "source_annotation_ids": ["a1"]}]'
+                return_value='[{"title": "Cap it", "body": "Always cap.", "source_feedback_ids": ["a1"]}]'
             )
         )
         stored_after = [SimpleNamespace(id="l1")]
@@ -129,7 +129,7 @@ class DistillTests(unittest.TestCase):
             lesson_service, "get_llm", return_value=llm
         ), patch.object(lesson_service, "lock_handoff", return_value=handoff):
             result = asyncio.run(
-                lesson_service.distill_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
+                lesson_service.distill_round_lessons(db, user=SimpleNamespace(id="junior"), handoff_id="h")
             )
         self.assertEqual(result, stored_after)
         llm.complete.assert_awaited_once()
