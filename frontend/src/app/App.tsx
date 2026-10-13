@@ -68,6 +68,7 @@ const SettingsPanel = lazy(() =>
 )
 const TeamManagementPage = lazy(() =>
   import('../features/classes/TeamManagementPage').then((module) => ({ default: module.TeamManagementPage })),
+)
 const MentorshipPage = lazy(() =>
   import('../features/mentorship/MentorshipPage').then((module) => ({ default: module.MentorshipPage })),
 )
