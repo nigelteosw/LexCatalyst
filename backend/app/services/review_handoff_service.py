@@ -28,6 +28,7 @@ from app.models import (
     User,
 )
 from app.models import new_uuid as _new_uuid
+from app.services.feedback_service import snapshot_round_feedback
 from app.services.mentorship_class_service import require_active_class_id
 from app.schemas import ReviewHandoffCreate
 from app.services.resource_metadata_service import (
@@ -474,6 +475,8 @@ def update_handoff_status(
             action_to_sync.active_handoff_id = None
 
     handoff.status = status
+    if status in TERMINAL_STATUSES:
+        snapshot_round_feedback(db, handoff)
     if reviewer_id is not None:
         if not db.scalar(select(ClassMembership.id).where(
             ClassMembership.class_id == handoff.class_id,
@@ -502,6 +505,7 @@ def _return_handoff(
         return None
     assert_transition(handoff, "returned")
     handoff.status = "returned"
+    snapshot_round_feedback(db, handoff)
     if reason is not None:
         handoff.return_reason = reason
 

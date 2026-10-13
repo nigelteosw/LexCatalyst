@@ -22,6 +22,7 @@ def _handoff(status: str, *, action_id="action"):
         action_id=action_id,
         reviewer_id="senior",
         completed_at=None,
+        annotations=[],
         return_reason=None,
     )
 

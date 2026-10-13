@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import ReviewAnnotation, ReviewHandoff, ReviewLesson, User
+from app.services.feedback_service import is_feedback
 from app.services.llm_service import get_llm
 from app.services.mentorship_class_service import ClassAccessError, require_active_class_id
 from app.services.review_handoff_service import lock_handoff
@@ -60,14 +61,6 @@ class FeedbackRound:
     date: datetime
     annotations: list[ReviewAnnotation]
     lessons: list[ReviewLesson]
-
-
-def is_feedback(annotation: ReviewAnnotation, handoff: ReviewHandoff) -> bool:
-    if annotation.author_user_id == handoff.submitted_by:
-        return False
-    if annotation.previous_annotation_id:
-        return False
-    return bool((annotation.note or "").strip() or (annotation.suggested_text or "").strip())
 
 
 def _handoff_date(handoff: ReviewHandoff) -> datetime:
