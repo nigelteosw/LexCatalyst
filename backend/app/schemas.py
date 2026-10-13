@@ -719,7 +719,85 @@ class LessonResponse(BaseModel):
     id: str
     title: str
     body: str
-    source_annotation_ids: list[str]
+    theme: str = "General"
+    source_feedback_ids: list[str] = []
+
+
+class PairingCreate(BaseModel):
+    mentor_user_id: str
+    mentee_user_id: str
+
+
+class PairingResponse(BaseModel):
+    id: str
+    mentor_user_id: str
+    mentor_name: str
+    mentee_user_id: str
+    mentee_name: str
+    created_at: datetime
+
+
+class PersonResponse(BaseModel):
+    user_id: str
+    name: str
+
+
+class MentorshipMeResponse(BaseModel):
+    mentors: list[PersonResponse]
+    mentees: list[PersonResponse]
+
+
+class GuidanceCreate(BaseModel):
+    audience: Literal["mentee", "team"]
+    mentee_user_id: str | None = None
+    note: str = Field(min_length=1, max_length=4000)
+    anchor_quote: str | None = Field(default=None, max_length=4000)
+    suggested_text: str | None = Field(default=None, max_length=4000)
+
+
+class FeedbackUpdate(BaseModel):
+    note: str | None = Field(default=None, min_length=1, max_length=4000)
+    anchor_quote: str | None = Field(default=None, max_length=4000)
+    suggested_text: str | None = Field(default=None, max_length=4000)
+
+
+class MentorFeedbackResponse(BaseModel):
+    id: str
+    audience: str
+    mentee_user_id: str | None = None
+    author_user_id: str | None = None
+    author_name: str
+    source: str
+    handoff_id: str | None = None
+    source_url: str | None = None
+    source_title: str | None = None
+    anchor_quote: str | None = None
+    suggested_text: str | None = None
+    note: str
+    created_at: datetime
+
+
+class MentorLessonResponse(BaseModel):
+    id: str
+    title: str
+    body: str
+    theme: str
+    mentee_user_id: str
+    handoff_id: str | None = None
+    source_feedback_ids: list[str]
+    created_at: datetime
+
+
+class DistillRequest(BaseModel):
+    mentee_user_id: str | None = None
+    feedback_ids: list[str] | None = None
+
+
+class ThemeResponse(BaseModel):
+    theme: str
+    count: int
+    latest: datetime
+    titles: list[str]
 
 
 class FeedbackRoundResponse(BaseModel):
