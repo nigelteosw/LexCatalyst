@@ -66,9 +66,9 @@ One row per piece of feedback, whatever its source.
 
 **Review rounds feed this table.** When a round moves to `returned` or `completed`, `review_handoff_service` snapshots every annotation that passes the existing `lesson_service.is_feedback` test into `mentor_feedback` with `source = review_round`. The unique `annotation_id` makes this idempotent. Later edits to the annotation do not rewrite the snapshot. A migration backfills feedback from rounds that are already returned or completed.
 
-### `review_lessons` → `lessons` (altered in place)
+### `review_lessons` (altered in place)
 
-- Rename the table to `lessons`.
+- Keep the table name `review_lessons` and the model `ReviewLesson` (a rename would touch the class-boundary registries and the b5c6 composite keys for no behavioural gain).
 - `handoff_id` becomes nullable.
 - Add `mentee_user_id` (backfilled from the handoff submitter) and `theme` (short label, such as "Defined terms", "Passive voice", "Citation form").
 - Replace `source_annotation_ids` with `source_feedback_ids` (backfilled through the snapshot above).
@@ -93,7 +93,7 @@ When a pairing ends, the mentor loses read access to that mentee's feedback and 
 
 - With no ids, it distils every undistilled `mentee` feedback row for that mentee.
 - The prompt returns `[{title, body, theme, source_feedback_ids}]`. `theme` comes from a short suggested list plus free text, normalised to title case and capped at 40 chars.
-- It runs on the **acting user's** OpenRouter key and Mid tier (feature `mentorship_lessons` in `llm_service.FEATURES`). Feedback text and quoted passages go to OpenRouter (keep the disclosure in the docstring and README).
+- It runs on the **acting user's** OpenRouter key and Mid tier (existing feature key `lessons` in `llm_service.FEATURES`, so stored tier settings keep working). Feedback text and quoted passages go to OpenRouter (keep the disclosure in the docstring and README).
 - The existing per-round behaviour is unchanged: the "distil this round" button calls it with that round's feedback ids.
 
 **Themes view:** `GET /mentorship/mentees/{id}/themes?days=90` groups lessons by `theme` and returns the count, the latest date and up to three lesson titles. It is computed live, with nothing stored.
