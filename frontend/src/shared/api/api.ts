@@ -42,6 +42,11 @@ import type {
   DemoUser,
   FeedbackRound,
   ResourceMetadata,
+  MentorPairing,
+  MentorFeedback,
+  MentorLesson,
+  MentorshipMe,
+  ThemeSummary,
 } from '../types/workspace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
@@ -2155,7 +2160,8 @@ type BackendLesson = {
   id: string
   title: string
   body: string
-  source_annotation_ids: string[]
+  theme: string
+  source_feedback_ids: string[]
 }
 
 type BackendFeedbackRound = {
@@ -2175,7 +2181,7 @@ type BackendFeedbackRound = {
 }
 
 function mapLesson(l: BackendLesson): BirdieLesson {
-  return { id: l.id, title: l.title, body: l.body, sourceAnnotationIds: l.source_annotation_ids }
+  return { id: l.id, title: l.title, body: l.body, theme: l.theme, sourceFeedbackIds: l.source_feedback_ids }
 }
 
 export async function listBirdieLessons(): Promise<FeedbackRound[]> {
@@ -2202,6 +2208,167 @@ export async function distillBirdieLessons(handoffId: string): Promise<BirdieLes
     method: 'POST',
   })
   return lessons.map(mapLesson)
+}
+
+// Mentorship: pairings, mentor feedback, lessons and themes (see routers/mentorship.py)
+
+type BackendPairing = {
+  id: string
+  mentor_user_id: string
+  mentor_name: string
+  mentee_user_id: string
+  mentee_name: string
+  created_at: string
+}
+
+type BackendFeedback = {
+  id: string
+  audience: MentorFeedback['audience']
+  mentee_user_id: string | null
+  author_user_id: string | null
+  author_name: string
+  source: MentorFeedback['source']
+  handoff_id: string | null
+  source_url: string | null
+  source_title: string | null
+  anchor_quote: string | null
+  suggested_text: string | null
+  note: string
+  created_at: string
+}
+
+type BackendMentorLesson = {
+  id: string
+  title: string
+  body: string
+  theme: string
+  mentee_user_id: string
+  handoff_id: string | null
+  source_feedback_ids: string[]
+  created_at: string
+}
+
+function mapPairing(p: BackendPairing): MentorPairing {
+  return {
+    id: p.id,
+    mentorUserId: p.mentor_user_id,
+    mentorName: p.mentor_name,
+    menteeUserId: p.mentee_user_id,
+    menteeName: p.mentee_name,
+    createdAt: p.created_at,
+  }
+}
+
+function mapFeedback(f: BackendFeedback): MentorFeedback {
+  return {
+    id: f.id,
+    audience: f.audience,
+    menteeUserId: f.mentee_user_id,
+    authorUserId: f.author_user_id,
+    authorName: f.author_name,
+    source: f.source,
+    handoffId: f.handoff_id,
+    sourceUrl: f.source_url,
+    sourceTitle: f.source_title,
+    anchorQuote: f.anchor_quote,
+    suggestedText: f.suggested_text,
+    note: f.note,
+    createdAt: f.created_at,
+  }
+}
+
+function mapMentorLesson(l: BackendMentorLesson): MentorLesson {
+  return {
+    id: l.id,
+    title: l.title,
+    body: l.body,
+    theme: l.theme,
+    menteeUserId: l.mentee_user_id,
+    handoffId: l.handoff_id,
+    sourceFeedbackIds: l.source_feedback_ids,
+    createdAt: l.created_at,
+  }
+}
+
+export async function getMentorshipMe(): Promise<MentorshipMe> {
+  const response = await request<{
+    mentors: { user_id: string; name: string }[]
+    mentees: { user_id: string; name: string }[]
+  }>('/mentorship/me')
+  const person = (p: { user_id: string; name: string }) => ({ userId: p.user_id, name: p.name })
+  return { mentors: response.mentors.map(person), mentees: response.mentees.map(person) }
+}
+
+export async function listPairings(): Promise<MentorPairing[]> {
+  const pairings = await request<BackendPairing[]>('/mentorship/pairings')
+  return pairings.map(mapPairing)
+}
+
+export async function createPairing({ mentorUserId, menteeUserId }: { mentorUserId: string; menteeUserId: string }): Promise<MentorPairing> {
+  const pairing = await request<BackendPairing>('/mentorship/pairings', {
+    method: 'POST',
+    body: JSON.stringify({ mentor_user_id: mentorUserId, mentee_user_id: menteeUserId }),
+  })
+  return mapPairing(pairing)
+}
+
+export async function endPairing(pairingId: string): Promise<void> {
+  await request(`/mentorship/pairings/${pairingId}`, { method: 'DELETE' })
+}
+
+export async function listMentorFeedback(filters: { menteeId?: string; source?: string; audience?: string } = {}): Promise<MentorFeedback[]> {
+  const params = new URLSearchParams()
+  if (filters.menteeId) params.set('mentee_id', filters.menteeId)
+  if (filters.source) params.set('source', filters.source)
+  if (filters.audience) params.set('audience', filters.audience)
+  const query = params.toString()
+  const rows = await request<BackendFeedback[]>(`/mentorship/feedback${query ? `?${query}` : ''}`)
+  return rows.map(mapFeedback)
+}
+
+export async function createGuidance(input: {
+  audience: 'mentee' | 'team'
+  menteeUserId?: string
+  note: string
+  anchorQuote?: string
+  suggestedText?: string
+}): Promise<MentorFeedback> {
+  const row = await request<BackendFeedback>('/mentorship/feedback', {
+    method: 'POST',
+    body: JSON.stringify({
+      audience: input.audience,
+      mentee_user_id: input.menteeUserId ?? null,
+      note: input.note,
+      anchor_quote: input.anchorQuote ?? null,
+      suggested_text: input.suggestedText ?? null,
+    }),
+  })
+  return mapFeedback(row)
+}
+
+export async function deleteMentorFeedback(feedbackId: string): Promise<void> {
+  await request(`/mentorship/feedback/${feedbackId}`, { method: 'DELETE' })
+}
+
+export async function listMentorLessons(menteeId?: string): Promise<MentorLesson[]> {
+  const query = menteeId ? `?mentee_id=${encodeURIComponent(menteeId)}` : ''
+  const lessons = await request<BackendMentorLesson[]>(`/mentorship/lessons${query}`)
+  return lessons.map(mapMentorLesson)
+}
+
+export async function distillMentorLessons({ menteeUserId, feedbackIds }: { menteeUserId?: string; feedbackIds?: string[] } = {}): Promise<MentorLesson[]> {
+  const lessons = await request<BackendMentorLesson[]>('/mentorship/lessons/distill', {
+    method: 'POST',
+    body: JSON.stringify({ mentee_user_id: menteeUserId ?? null, feedback_ids: feedbackIds ?? null }),
+  })
+  return lessons.map(mapMentorLesson)
+}
+
+export async function getMenteeThemes(menteeId: string, days = 90): Promise<ThemeSummary[]> {
+  const rows = await request<{ theme: string; count: number; latest: string; titles: string[] }[]>(
+    `/mentorship/mentees/${encodeURIComponent(menteeId)}/themes?days=${days}`,
+  )
+  return rows.map((r) => ({ theme: r.theme, count: r.count, latest: r.latest, titles: r.titles }))
 }
 
 // Demo mode (admin only; the backend returns 404 unless DEMO_MODE is on)

@@ -12,6 +12,7 @@ import {
   Trash2,
   UsersRound,
   X,
+  GraduationCap,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -88,6 +89,7 @@ export function Sidebar({
     selectMemories,
     selectSettings,
     selectTeam,
+    selectMentorship,
   } = useWorkspaceNavigation()
 
   const [width, setWidth] = useState(DEFAULT_WIDTH)
@@ -285,6 +287,8 @@ export function Sidebar({
             <NavItem icon={BookMarked} label="Knowledge Bank" collapsed={isCollapsed} active={kbActive}
               onPrefetch={() => prefetchWorkspace('knowledge_bank')}
               onClick={() => { selectKnowledgeBank(); closeMobile() }} />
+            <NavItem icon={GraduationCap} label="Mentorship" collapsed={isCollapsed} active={current.view === 'mentorship'}
+              onClick={() => { selectMentorship(); closeMobile() }} />
             <NavItem icon={CheckSquare} label="Workboard" collapsed={isCollapsed} active={current.view === 'actions'}
               badge={pendingTaskCount} onPrefetch={() => prefetchWorkspace('actions')}
               onClick={() => { selectActions(); closeMobile() }} />

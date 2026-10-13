@@ -68,6 +68,8 @@ const SettingsPanel = lazy(() =>
 )
 const TeamManagementPage = lazy(() =>
   import('../features/classes/TeamManagementPage').then((module) => ({ default: module.TeamManagementPage })),
+const MentorshipPage = lazy(() =>
+  import('../features/mentorship/MentorshipPage').then((module) => ({ default: module.MentorshipPage })),
 )
 const HomePanel = lazy(() =>
   import('../features/home/HomePanel').then((module) => ({ default: module.HomePanel })),
@@ -748,6 +750,8 @@ function App() {
                 <SettingsPanel currentUser={currentUser} />
               ) : current.view === 'team' ? (
                 <TeamManagementPage status={classStatus} currentUserId={currentUser?.id ?? user?.id ?? ''} />
+              ) : current.view === 'mentorship' ? (
+                <MentorshipPage menteeId={current.menteeId} />
               ) : (
                 <>
               <ChatHeader
@@ -834,6 +838,7 @@ function mobileViewTitle(view: import('./routes').AppView['view']) {
     memories: 'Memories',
     settings: 'Settings',
     team: 'Team Management',
+    mentorship: 'Mentorship',
   }
   return labels[view] ?? 'LexCatalyst'
 }

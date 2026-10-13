@@ -11,6 +11,7 @@ type HandoffReviewView = { view: 'handoff_review'; actionId: string }
 type SettingsView = { view: 'settings' }
 type TeamView = { view: 'team' }
 type MatterView = { view: 'matter'; matterId: string }
+type MentorshipView = { view: 'mentorship'; menteeId: string | null }
 
 export type AppView =
   | HomeView
@@ -23,6 +24,7 @@ export type AppView =
   | SettingsView
   | TeamView
   | MatterView
+  | MentorshipView
 
 type NavigationOptions = {
   replace?: boolean
@@ -87,6 +89,9 @@ export function parseWorkspacePath(pathname: string): { current: AppView; isKnow
   }
   if (section === 'team' && !id) {
     return { current: { view: 'team' }, isKnownRoute: true }
+  }
+  if (section === 'mentorship') {
+    return { current: { view: 'mentorship', menteeId: id }, isKnownRoute: true }
   }
   return { current: { view: 'home' }, isKnownRoute: false }
 }
@@ -171,6 +176,10 @@ export function useWorkspaceNavigation() {
     ),
     selectTeam: useCallback(
       (options?: NavigationOptions) => go('/team', options),
+      [go],
+    ),
+    selectMentorship: useCallback(
+      (menteeId?: string | null, options?: NavigationOptions) => go(routeWithId('/mentorship', menteeId), options),
       [go],
     ),
   }

@@ -421,7 +421,56 @@ export type BirdieLesson = {
   id: string
   title: string
   body: string
-  sourceAnnotationIds: string[]
+  theme: string
+  sourceFeedbackIds: string[]
+}
+
+export type MentorPairing = {
+  id: string
+  mentorUserId: string
+  mentorName: string
+  menteeUserId: string
+  menteeName: string
+  createdAt: string
+}
+
+export type MentorFeedback = {
+  id: string
+  audience: 'mentee' | 'team'
+  menteeUserId: string | null
+  authorUserId: string | null
+  authorName: string
+  source: 'review_round' | 'captured_comment' | 'guidance'
+  handoffId: string | null
+  sourceUrl: string | null
+  sourceTitle: string | null
+  anchorQuote: string | null
+  suggestedText: string | null
+  note: string
+  createdAt: string
+}
+
+export type MentorLesson = {
+  id: string
+  title: string
+  body: string
+  theme: string
+  menteeUserId: string
+  handoffId: string | null
+  sourceFeedbackIds: string[]
+  createdAt: string
+}
+
+export type ThemeSummary = {
+  theme: string
+  count: number
+  latest: string
+  titles: string[]
+}
+
+export type MentorshipMe = {
+  mentors: { userId: string; name: string }[]
+  mentees: { userId: string; name: string }[]
 }
 
 export type FeedbackRound = {
