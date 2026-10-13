@@ -2,6 +2,7 @@ import { UsersRound } from 'lucide-react'
 import type { ClassStatus } from '../../shared/types/workspace'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
 import { ClassSettings } from './ClassSettings'
+import { MentoringSection } from './MentoringSection'
 
 type ActiveTeam = Extract<ClassStatus, { status: 'active' }>
 
@@ -12,6 +13,7 @@ export function TeamManagementPage({ status, currentUserId }: { status: ActiveTe
       <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto px-5 py-7 pb-[max(1.75rem,env(safe-area-inset-bottom))] sm:px-8">
         <div className="mx-auto max-w-3xl">
           <ClassSettings status={status} currentUserId={currentUserId} />
+          <MentoringSection status={status} currentUserId={currentUserId} />
         </div>
       </div>
     </section>

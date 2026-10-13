@@ -143,7 +143,9 @@ app/services/
   birdie_document_service.py # Birdie find_documents / read_document tools
   birdie_review_service.py # Draft review: anchored replace/insert/comment suggestions (extension)
   llm_service.py          # Per-user OpenRouter key + High/Mid tier model resolution; FEATURES list
-  lesson_service.py       # Reviewer feedback → Birdie lessons (submitter-only)
+  lesson_service.py       # Mentee lessons + themes distilled from mentor feedback; round distil stays submitter-only
+  mentorship_service.py   # Mentor ↔ mentee pairings and who may read a mentee's feedback
+  feedback_service.py     # Mentor feedback (review rounds, captured comments, guidance) and its visibility rules
   user_settings_service.py # Per-user settings (OpenRouter key/model, encrypted)
   demo_seed_service.py    # Demo firm seed + reset (DEMO_MODE only); demo_pdfs.py builds the PDFs
   chat_service.py         # Thread + message CRUD, streaming, thread summarisation
@@ -259,6 +261,10 @@ Keep the provider interface minimal:
 generate_chat_response(messages, *, temperature=0.2)
 embed_texts(texts)
 ```
+
+## Mentorship
+
+Within a team, an owner or mentor pairs each mentee with their mentors (`mentor_pairings`). Mentor feedback lives in one table (`mentor_feedback`) whatever its source: review rounds (copied in when a round is returned or completed), captured comments, or guidance written directly. A mentee's feedback is readable only by the mentee, its author, and an active mentor paired to that mentee; team guidance by every active member. Ending a pairing removes the mentor's access at once but keeps feedback they wrote. Lessons distilled from a mentee's feedback carry a theme and are readable by the same people. Distilling runs on the acting user's OpenRouter key and sends the mentor's comments and quoted text to OpenRouter. Birdie and LexChat draw on the user's own lessons, recent feedback on their work, and team guidance; they never see another member's lessons. Routes are in `app/routers/mentorship.py`.
 
 ## Matters
 
