@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import Base, get_db
 from app.dependencies import get_current_user
-from app.models import ClassAuditEvent, ClassInvite, ClassJoinAttempt, ClassMembership, MentorshipClass, Team, User
+from app.models import ClassAuditEvent, ClassInvite, ClassJoinAttempt, ClassMembership, MentorPairing, MentorshipClass, Team, User
 from app.routers.mentorship_classes import router
 
 
@@ -17,7 +17,7 @@ class ClassRouteTests(unittest.TestCase):
     def setUp(self) -> None:
         from sqlalchemy.pool import StaticPool
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        Base.metadata.create_all(self.engine, tables=[User.__table__, MentorshipClass.__table__, ClassMembership.__table__, ClassInvite.__table__, ClassJoinAttempt.__table__, ClassAuditEvent.__table__, Team.__table__])
+        Base.metadata.create_all(self.engine, tables=[User.__table__, MentorshipClass.__table__, ClassMembership.__table__, ClassInvite.__table__, ClassJoinAttempt.__table__, ClassAuditEvent.__table__, Team.__table__, MentorPairing.__table__])
         self.db = Session(self.engine)
         self.owner = User(id="owner", email="owner@example.test", google_id="owner-google")
         self.student = User(id="student", email="student@example.test", google_id="student-google")

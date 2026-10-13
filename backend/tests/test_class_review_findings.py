@@ -11,7 +11,7 @@ from app.database import Base
 from app.dependencies import check_kb_read, check_kb_write, require_matter_member
 from app.models import (
     BirdieReview, BirdieSuggestion, BirdieSuggestionReply, ChatMessage, ChatThread, ClassAuditEvent,
-    ClassInvite, ClassJoinAttempt, ClassMembership, KnowledgeBankEntry, Matter,
+    ClassInvite, ClassJoinAttempt, ClassMembership, KnowledgeBankEntry, Matter, MentorPairing,
     MatterMember, MentorshipClass, ResourceMetadata, RetrievalAuditEvent, Team,
     TeamMember, User,
 )
@@ -32,7 +32,7 @@ class ClassReviewFindingsTests(unittest.TestCase):
         self.engine = create_engine('sqlite://')
         Base.metadata.create_all(self.engine, tables=[model.__table__ for model in (
             User, MentorshipClass, ClassMembership, ClassAuditEvent, ClassInvite,
-            ClassJoinAttempt, Team, TeamMember, Matter, MatterMember,
+            ClassJoinAttempt, Team, TeamMember, MentorPairing, Matter, MatterMember,
             BirdieReview, BirdieSuggestion, BirdieSuggestionReply, RetrievalAuditEvent,
             KnowledgeBankEntry, ResourceMetadata,
             ChatThread, ChatMessage,

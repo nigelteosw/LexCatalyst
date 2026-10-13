@@ -9,6 +9,7 @@ from app.models import (
     ClassInvite,
     ClassJoinAttempt,
     ClassMembership,
+    MentorPairing,
     MentorshipClass,
     Team,
     TeamMember,
@@ -38,7 +39,7 @@ class ClassMembershipTests(unittest.TestCase):
         Base.metadata.create_all(self.engine, tables=[
             User.__table__, MentorshipClass.__table__, ClassMembership.__table__,
             ClassInvite.__table__, ClassJoinAttempt.__table__, ClassAuditEvent.__table__,
-            Team.__table__, TeamMember.__table__,
+            Team.__table__, TeamMember.__table__, MentorPairing.__table__,
         ])
         self.db = Session(self.engine)
         self.owner = User(id="owner", email="owner@example.test", google_id="google-owner")

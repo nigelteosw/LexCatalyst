@@ -7,7 +7,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -15,6 +15,7 @@ from app.models import (
     ClassInvite,
     ClassJoinAttempt,
     ClassMembership,
+    MentorPairing,
     MentorshipClass,
     User,
 )
@@ -87,6 +88,20 @@ def revalidate_class_access(db: Session, *, user_id: str, class_id: str) -> None
         ))
     if active is None:
         raise ClassAccessError("Team access changed. Reopen your workspace")
+
+
+def _end_pairings(db: Session, class_id: str, user_id: str, *, mentor_only: bool = False) -> None:
+    """End active mentor pairings for a departing or demoted member. Caller commits."""
+    clauses = [MentorPairing.mentor_user_id == user_id]
+    if not mentor_only:
+        clauses.append(MentorPairing.mentee_user_id == user_id)
+    now = datetime.now(UTC)
+    for pairing in db.scalars(select(MentorPairing).where(
+        MentorPairing.class_id == class_id,
+        MentorPairing.ended_at.is_(None),
+        or_(*clauses),
+    )):
+        pairing.ended_at = now
 
 
 def require_class_role(context: ClassContext, allowed_roles: set[str]) -> None:
@@ -233,6 +248,7 @@ def remove_member(db: Session, *, context: ClassContext, target_user_id: str) ->
             raise ClassAccessError("Only the owner can remove a mentor")
     target.status = "removed"
     target.removed_at = datetime.now(UTC)
+    _end_pairings(db, context.class_id, target_user_id)
     _audit(db, context.class_id, context.user_id, "member_removed", target_user_id)
     db.commit()
 
@@ -263,6 +279,8 @@ def set_member_role(db: Session, *, context: ClassContext, target_user_id: str, 
     if membership is None or membership.role == "owner":
         raise ClassAccessError("Active team member not found", 404)
     membership.role = role
+    if role == "member":
+        _end_pairings(db, context.class_id, target_user_id, mentor_only=True)
     _audit(db, context.class_id, context.user_id, "member_role_changed", target_user_id)
     db.commit()
 
