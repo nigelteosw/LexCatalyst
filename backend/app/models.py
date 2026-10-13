@@ -968,21 +968,84 @@ class ReviewAnnotationReply(Base):
     author: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
 
 
+class MentorPairing(Base):
+    """A mentor paired with a mentee inside one mentorship class. Ended pairings keep their history."""
+
+    __tablename__ = "mentor_pairings"
+    __table_args__ = (
+        CheckConstraint("mentor_user_id <> mentee_user_id", name="ck_mentor_pairings_distinct"),
+        Index(
+            "uq_mentor_pairings_active",
+            "class_id", "mentor_user_id", "mentee_user_id",
+            unique=True,
+            postgresql_where=text("ended_at IS NULL"),
+            sqlite_where=text("ended_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
+    mentor_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    mentee_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MentorFeedback(Base):
+    """One piece of mentor feedback, whatever its source (review round, captured comment, or guidance)."""
+
+    __tablename__ = "mentor_feedback"
+    __table_args__ = (
+        CheckConstraint("audience IN ('mentee', 'team')", name="ck_mentor_feedback_audience"),
+        CheckConstraint(
+            "source IN ('review_round', 'captured_comment', 'guidance')",
+            name="ck_mentor_feedback_source",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
+    audience: Mapped[str] = mapped_column(String(20), nullable=False)
+    mentee_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
+    author_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    author_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    source: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    handoff_id: Mapped[str | None] = mapped_column(ForeignKey("review_handoffs.id", ondelete="SET NULL"), index=True, nullable=True)
+    annotation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("review_annotations.id", ondelete="SET NULL"),
+        unique=True,
+        nullable=True,
+    )
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_title: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    anchor_quote: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggested_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ReviewLesson(Base):
-    """A general lesson distilled from a returned/completed review round's feedback."""
+    """A general lesson distilled from a mentee's feedback."""
 
     __tablename__ = "review_lessons"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
-    handoff_id: Mapped[str] = mapped_column(
+    mentee_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    handoff_id: Mapped[str | None] = mapped_column(
         ForeignKey("review_handoffs.id", ondelete="CASCADE"),
         index=True,
-        nullable=False,
+        nullable=True,
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    theme: Mapped[str] = mapped_column(String(40), nullable=False, default="General", server_default="General")
+    # Legacy: no new code writes this. Kept until a cleanup migration drops it.
     source_annotation_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    source_feedback_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

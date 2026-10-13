@@ -267,7 +267,7 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
     db.flush()
     for title, body, sources in NOTE_V1_LESSONS:
         db.add(ReviewLesson(
-            class_id=matter.class_id,
+            class_id=matter.class_id, mentee_user_id=jane.id,
             handoff_id=round1.id, title=title, body=body,
             source_annotation_ids=[annotations[i].id for i in sources],
         ))

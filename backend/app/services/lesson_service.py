@@ -217,7 +217,7 @@ async def distill_lessons(db: Session, *, user: User, handoff_id: str) -> list[R
     if existing:
         db.rollback()
         return existing
-    created = [ReviewLesson(handoff_id=handoff_id, **item) for item in parsed]
+    created = [ReviewLesson(handoff_id=handoff_id, mentee_user_id=user.id, **item) for item in parsed]
     db.add_all(created)
     db.commit()
     return _stored_lessons(db, handoff_id)
