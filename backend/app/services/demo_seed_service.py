@@ -177,10 +177,6 @@ JANE_MEMORIES = [
 ]
 
 
-class DemoSeedError(RuntimeError):
-    pass
-
-
 def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> None:
     """Delete previously seeded demo content. Keeps the dummy users themselves."""
     class_id = require_class_context(db, presenter).class_id

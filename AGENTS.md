@@ -41,7 +41,7 @@ backend/
     routers/          # thin HTTP handlers — one file per domain
     services/         # business logic — keep route handlers thin
     providers/        # LLM and embedding adapters (openrouter, embeddings)
-  migrations/         # Alembic; current head: c6d7e8f9a0b1
+  migrations/         # Alembic; current head: 00a55a720011
   Makefile
   requirements.txt
 
@@ -57,12 +57,12 @@ frontend/
       documents/      # MatterDocuments (folders, upload, rename, delete; used on each matter page); DocumentsPanel is the single-document review page at /knowledge/documents/:id
       knowledge-bank/ # KB panel + filters + dialogs; per-matter page (MatterPage)
       home/           # Home: matters list (CRUD), needs-attention, recent documents
-      memories/       # Memories panel + async Dream consolidation
+      memories/       # Memories panel (CRUD)
       navigation/     # Collapsible sidebar; chats grouped by matter (chat page only)
       settings/       # Settings panel
     shared/
       api/api.ts      # All fetch calls; snake_case↔camelCase mapping here
-      lib/            # errors.ts, async.ts
+      lib/            # errors.ts, dates.ts, llm.ts
       types/workspace.ts
       ui/             # Button, Dialog, ErrorBanner, MarkdownContent, MatterSelect, StatusBadge
 
@@ -150,7 +150,6 @@ app/services/
   demo_seed_service.py    # Demo firm seed + reset (DEMO_MODE only); demo_pdfs.py builds the PDFs
   chat_service.py         # Thread + message CRUD, streaming, thread summarisation
   document_service.py     # Upload, worker claim, processing lifecycle
-  dream_service.py        # Memory consolidation agent (DB-backed async jobs)
   field_encryption.py     # AES encryption for PII fields (client_name etc.)
   ingestion_service.py    # Text extraction (PDF/DOCX) and chunking
   kb_ingestion_service.py # KB entry generation from documents
@@ -181,7 +180,7 @@ Do not add a tool registry unless it removes real duplication.
 
 All schema changes go through Alembic (`backend/migrations/`). Never add new tables or indexes only to `create_db_tables()` — that path runs only when `AUTO_CREATE_TABLES=true`, which is not the case in production.
 
-Current head: `c6d7e8f9a0b1`
+Current head: `00a55a720011`
 
 ```sh
 cd backend && source .venv/bin/activate
@@ -210,7 +209,6 @@ The following items from the original plan are complete:
 - Knowledge Bank (scoped RBAC, PII redaction, audit log, promotion flow)
 - Action board (kanban)
 - Birdie AI mentor (streaming)
-- Dream memory consolidation (DB-backed async jobs, durable across restarts)
 - Thread summarisation for long chats
 - Deployment wiring (Railway)
 

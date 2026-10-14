@@ -17,7 +17,6 @@ from app.services.error_reporting import unexpected_error_detail
 from app.services.mentorship_class_service import ClassAccessError, require_class_context, revalidate_class_access
 from app.schemas import FeedbackRoundResponse, LessonResponse, LlmTier, PageContext, WebContext
 from app.services import lesson_service
-from app.services.llm_service import get_llm
 from app.services.case_law_service import (
     page_case_source,
     validate_case_citations,

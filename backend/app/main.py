@@ -27,7 +27,7 @@ from app.config import get_settings
 from app.class_gate import install_class_gate
 from app.log_filters import install_secret_redaction
 from app.database import SessionLocal, create_db_tables
-from app.models import Document, DreamJob, KnowledgeBankEntry
+from app.models import Document, KnowledgeBankEntry
 from app.routers import all_routers
 from app.worker import run_worker
 
@@ -72,12 +72,6 @@ def _release_active_claims() -> None:
             update(KnowledgeBankEntry)
             .where(KnowledgeBankEntry.status == "processing")
             .values(processing_started_at=None, updated_at=now)
-        )
-        # DreamJob has no updated_at column.
-        db.execute(
-            update(DreamJob)
-            .where(DreamJob.status == "processing")
-            .values(processing_started_at=None)
         )
         db.commit()
         print("Shutdown: released active claims for immediate reclaim by next deployment")

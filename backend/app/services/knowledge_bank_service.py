@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import json
 import re
@@ -19,7 +18,6 @@ from app.models import (
 )
 from app.services.catalogue_service import MAX_SUMMARY, normalise_tags
 from app.services.entry_metadata_service import (
-    entry_summary,
     generate_note_metadata,
     mark_note_fields_edited,
     set_note_summary,
@@ -845,43 +843,3 @@ def format_kb_context(entries: list[KnowledgeBankEntry]) -> str:
         f"{entry.title} ({entry.entry_type}, {entry.scope})\n{entry.body_markdown}"
         for entry in entries
     )
-
-
-async def backfill_note_metadata(db: Session, *, limit: int = 10) -> dict[str, int]:
-    """Tag manual notes that have no tags or summary yet. Caller checks admin.
-
-    Uses each note creator's own key. Notes that cannot be tagged (no key, flagged
-    for PII, empty) stay in `remaining`, so callers should stop when a batch makes
-    no progress.
-    """
-    base_filter = (
-        KnowledgeBankEntry.source_document_id.is_(None),
-        KnowledgeBankEntry.status == "ready",
-        KnowledgeBankEntry.pii_status != "flagged",
-        func.coalesce(func.json_array_length(KnowledgeBankEntry.tags), 0) == 0,
-        func.coalesce(KnowledgeBankEntry.catalogue_fields["summary"].as_string(), "") == "",
-    )
-    pending = list(
-        db.scalars(
-            select(KnowledgeBankEntry)
-            .where(*base_filter)
-            .order_by(KnowledgeBankEntry.created_at)
-            .limit(limit)
-        )
-    )
-    updated = 0
-    for entry in pending:
-        await generate_note_metadata(db, entry)
-        if not entry.tags and not entry_summary(entry):
-            continue
-        entry.version += 1
-        try:
-            await _embed_entry(entry)
-            db.commit()
-        except KnowledgeBankError:
-            db.rollback()
-            continue
-        sync_metadata_safe(db, sync_kb_metadata, entry)
-        updated += 1
-    remaining = db.scalar(select(func.count()).select_from(KnowledgeBankEntry).where(*base_filter)) or 0
-    return {"updated": updated, "skipped": len(pending) - updated, "remaining": remaining}

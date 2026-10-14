@@ -45,7 +45,6 @@ from app.services.knowledge_bank_service import (
     list_kb_entries,
     promote_kb_entry,
     update_kb_entry,
-    backfill_note_metadata,
     update_note_metadata,
 )
 
@@ -403,14 +402,3 @@ async def note_metadata_update(
     except KnowledgeBankError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return note_metadata_dict(saved, saved.matter.title if saved.matter else None)
-
-
-@router.post("/kb/backfill-note-metadata")
-async def note_metadata_backfill(
-    limit: int = Query(default=10, ge=1, le=25),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> dict[str, int]:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return await backfill_note_metadata(db, limit=limit)

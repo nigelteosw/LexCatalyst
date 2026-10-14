@@ -8,14 +8,9 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
 from app.schemas import (
-    DreamJobStatus,
     MemoryCreate,
     MemoryResponse,
     MemoryUpdate,
-)
-from app.services.dream_service import (
-    get_dream_job,
-    start_dream_job,
 )
 from app.services.memory_service import (
     create_memory,
@@ -67,23 +62,6 @@ def patch_memory(
         return MemoryResponse.model_validate(memory)
     except SQLAlchemyError:
         raise HTTPException(status_code=503, detail="Database is unavailable")
-
-
-@router.post("/memories/dream", response_model=DreamJobStatus)
-async def dream_memories(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> DreamJobStatus:
-    return start_dream_job(db, user=current_user)
-
-
-@router.get("/memories/dream/{job_id}", response_model=DreamJobStatus)
-def get_dream_status(
-    job_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> DreamJobStatus:
-    return get_dream_job(db, user=current_user, job_id=job_id)
 
 
 @router.delete("/memories/{memory_id}")

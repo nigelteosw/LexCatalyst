@@ -65,13 +65,13 @@ class ResolveModelTests(unittest.TestCase):
         self.assertEqual(_resolve(setting, feature="memory"), "a/high")
 
     def test_feature_default_tier_and_env_defaults(self) -> None:
-        self.assertEqual(_resolve(_setting(), feature="dream"), llm_service.DEFAULT_HIGH_MODEL)
+        self.assertEqual(_resolve(_setting(), feature="birdie_review"), llm_service.DEFAULT_HIGH_MODEL)
         self.assertEqual(_resolve(_setting(), feature="lexchat"), DEFAULT_OPENROUTER_MODEL)
         self.assertEqual(_resolve(None, feature="lexchat"), DEFAULT_OPENROUTER_MODEL)
 
     def test_unknown_stored_tier_falls_back_to_default(self) -> None:
-        setting = _setting(feature_tiers={"dream": "bogus"})
-        self.assertEqual(_resolve(setting, feature="dream"), llm_service.DEFAULT_HIGH_MODEL)
+        setting = _setting(feature_tiers={"birdie_review": "bogus"})
+        self.assertEqual(_resolve(setting, feature="birdie_review"), llm_service.DEFAULT_HIGH_MODEL)
 
 
 class GetLlmTests(unittest.TestCase):
@@ -116,7 +116,7 @@ class SettingsPayloadTests(unittest.TestCase):
             payload = llm_settings_payload(None)
         self.assertFalse(payload["has_key"])
         self.assertIsNone(payload["key_source"])
-        self.assertEqual(payload["feature_tiers"]["dream"], "high")
+        self.assertEqual(payload["feature_tiers"]["birdie_review"], "high")
         self.assertEqual(len(payload["features"]), len(llm_service.FEATURES))
 
 

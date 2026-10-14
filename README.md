@@ -12,11 +12,10 @@ LexCatalyst is an AI-powered legal workspace designed to reduce cognitive load f
 - **Responsive interface:** Geist for UI text and Newsreader for headings, with shared type tokens that scale modestly with screen width. The sidebar uses smaller labels, evenly spaced icon slots, and reduced-motion support. Collapse it with the header control; click the logo in the collapsed rail to expand it. The account menu includes profile settings, sign-out, and demo user switching when enabled.
 
 ### Knowledge & Documents
-- **Async document, Knowledge Bank, and Dream jobs**: The FastAPI service runs an embedded worker thread that claims durable Postgres jobs for extraction, OCR, embeddings, OpenRouter-based KB formatting, and automatic memory consolidation.
-- **Auditable memory consolidation**: Dream applies conservative memory additions, merges, updates, and drops without a manual approval step. Automated memories retain the agent's justification.
+- **Async document and Knowledge Bank jobs**: The FastAPI service runs an embedded worker thread that claims durable Postgres jobs for extraction, OCR, embeddings, and OpenRouter-based KB formatting.
 - **3-category Knowledge Bank**: `knowledge_bank` (playbooks, precedents, templates), `style_guide` (writing standards, partner prefs), `action` (soft-skill / wellness guides).
 - **Drag-and-drop uploads**: Upload PDF/DOCX from a matter’s documents section or attach a document in LexChat. OCR fallback via Tesseract for scanned PDFs.
-- **Document and note metadata**: every uploaded document and every manual Knowledge Bank note gets LLM-generated tags and a short summary (documents also get a type, status and execution date). People can edit all of it, and edited fields are kept when metadata is regenerated. The metadata is searchable, shown on matter document rows, and lets Birdie find documents. Notes flagged for PII are never sent for tagging. Existing documents and notes are tagged with `POST /kb/backfill-document-metadata` and `POST /kb/backfill-note-metadata` (admin, batches of up to 25; repeat until `remaining` stops falling).
+- **Document and note metadata**: every uploaded document and every manual Knowledge Bank note gets LLM-generated tags and a short summary (documents also get a type, status and execution date). People can edit all of it, and edited fields are kept when metadata is regenerated. The metadata is searchable, shown on matter document rows, and lets Birdie find documents. Notes flagged for PII are never sent for tagging.
 - **Semantic search**: pgvector cosine similarity over document chunks AND KB entries. Embeddings fingerprinted by content hash so they auto-refresh when content changes.
 - **Source citations**: LexChat shows numbered citations with a source panel for the supporting passage and a link to the document, Knowledge Bank entry, or public judgment.
 
@@ -86,8 +85,8 @@ Settings → Development & Testing → **Load property Workboard demo** adds 12 
 - **Google OAuth2** + **JWT** auth; field-level Fernet encryption for `client_name`
 
 ### AI & Search
-- **OpenRouter, bring your own key** for every LLM call (LexChat, Birdie, Dream, KB, memory, summaries). Each user saves their key and picks any model for two tiers, **High** and **Mid**, then chooses which tier each feature uses (Settings → Models). LexChat and Birdie also have a High/Mid pill in the composer.
-- **No firm LLM key.** `DEMO_OPENROUTER_KEY` is used only when `DEMO_MODE=true` and the user has no key of their own. Background jobs (KB formatting, Dream) run on the key of the user who started them.
+- **OpenRouter, bring your own key** for every LLM call (LexChat, Birdie, KB, memory, summaries). Each user saves their key and picks any model for two tiers, **High** and **Mid**, then chooses which tier each feature uses (Settings → Models). LexChat and Birdie also have a High/Mid pill in the composer.
+- **No firm LLM key.** `DEMO_OPENROUTER_KEY` is used only when `DEMO_MODE=true` and the user has no key of their own. Background jobs (KB formatting) run on the key of the user who started them.
 - **OpenAI `text-embedding-3-small`** (1536 dim) for both document chunks and KB entries
 - **Cloudflare R2** for original document storage
 
@@ -148,7 +147,7 @@ Editable high-level architecture diagrams:
 │   │   │   ├── knowledge-bank/                # KB browser, filters, reader, forms
 │   │   │   ├── documents/                     # Upload and ingestion status
 │   │   │   ├── actions/                       # Kanban task board
-│   │   │   ├── memories/                      # Memory CRUD and async Dream results
+│   │   │   ├── memories/                      # Memory CRUD
 │   │   │   └── ...                            # Auth, Birdie, settings
 │   │   └── shared/
 │   │       ├── api/api.ts                     # API client and SSE handling
@@ -160,7 +159,7 @@ Editable high-level architecture diagrams:
 └── docs/
     ├── architecture-system-context.drawio     # Services and external dependencies
     ├── architecture-chat-retrieval.drawio     # ReAct chat and scoped retrieval
-    ├── architecture-async-processing.drawio   # Durable document, KB, and Dream jobs
+    ├── architecture-async-processing.drawio   # Durable document and KB jobs
     ├── architecture-authorization-boundaries.drawio
     │                                          # Legal data access boundaries
     ├── product-requirement.md                 # Whiteboard notes
@@ -195,11 +194,6 @@ make dev
 `make dev` starts both FastAPI and the embedded durable worker. Do not start
 `make worker` in a second terminal because that would add duplicate worker
 capacity.
-
-Authenticated Dream endpoints:
-
-- `POST /memories/dream` queues consolidation and returns immediately with a job ID.
-- `GET /memories/dream/{job_id}` returns `processing`, `completed`, or `failed`; completed responses include the updated memories and applied justifications.
 
 You also need **Tesseract** and **Poppler** on the system PATH for OCR / PDF→image conversion (already installed in the Railway image via `nixpacks.toml`):
 ```bash
@@ -376,7 +370,6 @@ Optimized KB read routes, all requiring Bearer authentication:
 - `GET /kb/entries/status?ids=...` returns polling state only and does not write audit rows.
 - `GET /kb/entries/{id}` returns one full entry without creating an audit event.
 - `GET|PATCH /kb/entries/{id}/metadata` reads or edits a manual note's tags and summary (`{tags?, summary?}`). Read and write follow the entry's Knowledge Bank access; document-backed entries return `409` and use the document route below.
-- `POST /kb/backfill-note-metadata?limit=10` and `POST /kb/backfill-document-metadata?limit=10` tag existing notes and documents that have none (admin only; `403` otherwise).
 - `GET /resources/metadata` returns cross-resource metadata using the same owner/team/matter/firm-wide visibility rules.
 
 ---
@@ -529,6 +522,7 @@ The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`.
 | `r3a4b5c6d7e8` | Adds durable review-handoff worker claim fields | No |
 | `u6d7e8f9a0b1` | Adds explicit reverse scoring for positively worded survey questions | No |
 | `a7b8c9d0e1f2` | Drops `survey_responses` and `survey_questions` (wellbeing questionnaire removed); downgrade recreates empty tables | Yes, deletes all survey responses |
+| `00a55a720011` | Drops `dream_jobs` (Dream memory consolidation removed); memories and their justifications stay; downgrade recreates an empty table | Yes, deletes Dream job history |
 
 `h5c6d7e8f9a0` intentionally removes historical read/share/redaction audit rows.
 Knowledge and document records are unaffected.
@@ -564,9 +558,8 @@ Authenticated Workboard and review-handoff routes:
 3. The backend service logs `LexCatalyst worker started`.
 4. Uploading a new PDF returns with `processing`, then flips to `ready` after extraction and embedding.
 5. Clicking "Add to Knowledge Bank" shows a "Summarising..." badge that flips to "Ready".
-6. Clicking "Dream" returns immediately; the worker applies changes and the Memories panel shows the justifications.
-7. The bottom-right Birdie button opens the panel on every signed-in page. Test header dragging, corner resizing, copy/paste, and closing with either the X or the button. Ask for current-matter progress, rename/move your ticket, then reassign it and verify Birdie can no longer edit it. Repeat a Workboard request in the extension.
-8. In demo mode, Settings → View as lets you mimic roles; KB write buttons should hide/show accordingly. Outside demo mode, role changes require admin access.
+6. The bottom-right Birdie button opens the panel on every signed-in page. Test header dragging, corner resizing, copy/paste, and closing with either the X or the button. Ask for current-matter progress, rename/move your ticket, then reassign it and verify Birdie can no longer edit it. Repeat a Workboard request in the extension.
+7. In demo mode, Settings → View as lets you mimic roles; KB write buttons should hide/show accordingly. Outside demo mode, role changes require admin access.
 
 ---
 

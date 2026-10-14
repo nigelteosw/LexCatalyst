@@ -137,23 +137,6 @@ class OpenRouterProvider:
         content, _usage = await self.chat(messages)
         return content
 
-    async def stream_chat(self, messages: list[dict[str, str]]):
-        try:
-            stream = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=TEMPERATURE,
-                stream=True,
-            )
-            async for chunk in stream:
-                if not chunk.choices:
-                    continue
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield content
-        except OpenAIError as exc:
-            raise _translate(exc) from exc
-
     async def stream_with_tools(self, messages: list[dict], tools: list[dict]):
         """Async generator yielding ("token", str) and ("tool_calls", dict) tuples."""
         kwargs: dict = {

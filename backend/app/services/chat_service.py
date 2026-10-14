@@ -313,47 +313,6 @@ async def create_chat_response(
     return thread, assistant_message
 
 
-async def create_chat_request(
-    db: Session,
-    *,
-    user_message: str,
-    user_id: str,
-    thread_id: str | None = None,
-    matter_id: str | None = None,
-    model: str | None = None,
-    tier: str | None = None,
-) -> tuple[ChatThread, list[dict[str, str]], str]:
-    selected_model = resolve_model(db, user_id, feature="lexchat", tier=tier, model=model)
-    thread = get_or_create_thread(db, thread_id, user_message, user_id)
-    if matter_id is not None:
-        thread.matter_id = matter_id
-    active_matter_id = matter_id if matter_id is not None else thread.matter_id
-    history = get_recent_messages(db, thread.id)
-    memories = list_memories(db, user_id=user_id, limit=_MAX_MEMORIES_IN_PROMPT)
-    kb_entries, document_results = await asyncio.gather(
-        search_kb_for_chat(db, user_id=user_id, query=user_message, matter_id=active_matter_id),
-        safe_search_documents(db, query=user_message, user_id=user_id, matter_id=active_matter_id),
-    )
-
-    add_message(db, thread_id=thread.id, role="user", content=user_message)
-    thread.updated_at = datetime.now(UTC)
-    db.commit()
-    db.refresh(thread)
-
-    return (
-        thread,
-        build_provider_messages(
-            history,
-            user_message,
-            memories=memories,
-            document_results=document_results,
-            kb_entries=kb_entries,
-            thread_summary=thread.summary,
-        ),
-        selected_model,
-    )
-
-
 AGENT_SYSTEM_PROMPT = """You are LexCatalyst, a legal workflow assistant for junior lawyers.
 Use your tools to search for relevant documents, knowledge bank entries, and memories before answering. You also have the same Workboard, matter and document tools as Birdie, so you can see what the user needs to do and which documents they have.
 For Singapore case-law research or any request for eLitigation judgments, use search_elitigation before answering. Internal document searches do not search eLitigation.
@@ -467,26 +426,6 @@ async def run_post_save_tasks(
         revalidate_class_access(db, user_id=user_id, class_id=thread.class_id)
         save_memory_candidates(db, user_id, thread.id, assistant_message.id, candidates)
     await _maybe_refresh_summary(db, thread, user_id)
-
-
-async def save_assistant_response(
-    db: Session,
-    *,
-    user_id: str,
-    thread: ChatThread,
-    content: str,
-    user_message: str | None = None,
-    model: str | None = None,
-    tool_steps: list | None = None,
-) -> ChatMessage:
-    assistant_message = await persist_assistant_message(
-        db, thread=thread, content=content, model=model, tool_steps=tool_steps,
-    )
-    await run_post_save_tasks(
-        db, user_id=user_id, thread=thread,
-        assistant_message=assistant_message, user_message=user_message,
-    )
-    return assistant_message
 
 
 GENERAL = "general"

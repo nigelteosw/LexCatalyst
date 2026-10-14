@@ -9,7 +9,6 @@ Access is checked against the document itself (owner or matter member), not the
 entry's KB scope, so metadata never reveals a document the user cannot open.
 """
 
-import logging
 import re
 from datetime import date
 from typing import Any
@@ -24,7 +23,6 @@ from app.services.catalogue_service import (
     DOCUMENT_STATUSES,
     DOCUMENT_TYPES,
     MAX_SUMMARY,
-    apply_catalogue,
     normalise_tags,
 )
 from app.services.document_service import can_access_document, document_access_filter
@@ -36,8 +34,6 @@ from app.services.knowledge_bank_service import (
 )
 from app.services.resource_metadata_service import sync_kb_metadata, sync_metadata_safe
 
-
-_log = logging.getLogger(__name__)
 
 
 class DocumentMetadataError(Exception):
@@ -231,90 +227,3 @@ async def search_document_catalogue(
         rows = db.execute(stmt.order_by(desc(Document.created_at)).limit(limit)).all()
 
     return [metadata_to_dict(entry, document, matter_name) for entry, document, matter_name in rows]
-
-
-
-MAX_INGEST_CHARS_BACKFILL = 60_000
-
-# Entries made before metadata existed have the placeholder tag "from document", so the
-# marker for "not catalogued yet" is a missing summary, not empty tags.
-_NO_SUMMARY = func.coalesce(KnowledgeBankEntry.catalogue_fields["summary"].as_string(), "") == ""
-
-
-async def backfill_document_metadata(db: Session, *, limit: int = 10) -> dict[str, int]:
-    """Re-run only the catalogue pass for document entries that have no summary yet.
-
-    Leaves the entry body and title alone (unlike the KB worker), so text a person
-    has edited is not rewritten. Runs on each entry creator's own key. Returns
-    counts. Entries that cannot be catalogued stay in `remaining`, so callers should
-    stop when a batch makes no progress.
-    """
-    from app.models import DocumentChunk
-    from app.services.catalogue_service import extract_catalogue
-    from app.services.llm_service import get_llm
-    from app.services.kb_ingestion_service import FORMAT_TIMEOUT_SECONDS
-
-    pending = list(
-        db.scalars(
-            select(KnowledgeBankEntry)
-            .where(
-                KnowledgeBankEntry.status == "ready",
-                KnowledgeBankEntry.source_document_id.is_not(None),
-                _NO_SUMMARY,
-            )
-            .order_by(KnowledgeBankEntry.created_at)
-            .limit(limit)
-        )
-    )
-    updated = skipped = 0
-    for entry in pending:
-        document = db.get(Document, entry.source_document_id)
-        chunks = list(
-            db.scalars(
-                select(DocumentChunk.text)
-                .where(DocumentChunk.document_id == entry.source_document_id)
-                .order_by(DocumentChunk.chunk_index)
-            )
-        )
-        raw_text = "\n\n".join(chunks)
-        if not document or not raw_text:
-            skipped += 1
-            continue
-        try:
-            provider = get_llm(db, entry.created_by, feature="kb_format")
-        except Exception as exc:  # noqa: BLE001 - no usable key for this owner
-            _log.warning("Metadata backfill skipped for %s: %s", entry.id, exc)
-            skipped += 1
-            continue
-        catalogue = await extract_catalogue(
-            provider,
-            filename=document.filename,
-            raw_text=raw_text,
-            max_chars=MAX_INGEST_CHARS_BACKFILL,
-            timeout=FORMAT_TIMEOUT_SECONDS,
-        )
-        if not catalogue:
-            skipped += 1
-            continue
-        apply_catalogue(entry, catalogue)
-        entry.embedding_content_hash = None  # re-embed with the new tags and summary
-        try:
-            if _embedding_is_stale(entry):
-                await _embed_entry(entry)
-        except KnowledgeBankError:
-            pass  # stays stale; the regular backfill retries
-        entry.version += 1
-        db.commit()
-        sync_metadata_safe(db, sync_kb_metadata, entry)
-        updated += 1
-
-    remaining = db.scalar(
-        select(func.count())
-        .select_from(KnowledgeBankEntry)
-        .where(
-            KnowledgeBankEntry.status == "ready",
-            KnowledgeBankEntry.source_document_id.is_not(None),
-            _NO_SUMMARY,
-        )
-    ) or 0
-    return {"updated": updated, "skipped": skipped, "remaining": remaining}

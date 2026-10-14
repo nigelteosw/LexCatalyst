@@ -3,7 +3,7 @@ from typing import Any
 
 from google.auth.transport import requests
 from google.oauth2 import id_token
-from jose import JWTError, jwt
+from jose import jwt
 from sqlalchemy.orm import Session
 
 from app.config import get_settings

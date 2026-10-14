@@ -15,7 +15,6 @@ from app.services.document_catalogue_service import (
     DocumentMetadataError,
     get_document_metadata,
     list_document_tags,
-    backfill_document_metadata,
     search_document_catalogue,
     update_document_metadata,
 )
@@ -87,14 +86,3 @@ async def metadata_update(
     if not metadata:
         raise _not_found()
     return metadata
-
-
-@router.post("/kb/backfill-document-metadata")
-async def metadata_backfill(
-    limit: int = Query(default=10, ge=1, le=25),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> dict[str, int]:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return await backfill_document_metadata(db, limit=limit)

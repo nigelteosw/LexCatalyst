@@ -10,8 +10,6 @@ import type {
   ChatThread,
   CurrentUser,
   DocumentFolder,
-  DreamJobStatus,
-  DreamProposal,
   DocumentComment,
   FirmRole,
   FirmUser,
@@ -23,7 +21,6 @@ import type {
   Memory,
   MemoryCategory,
   Message,
-  RedactionProposal,
   ReviewAnnotation,
   ReviewAnnotationKind,
   ReviewAnnotationReply,
@@ -232,12 +229,6 @@ type BackendKnowledgeBankEntryStatus = {
   updated_at: string
 }
 
-type BackendRedactionProposal = {
-  entry: BackendKnowledgeBankEntry
-  redacted_fields: Record<string, string>
-  original_content: string
-  redacted_content: string
-}
 
 type BackendKnowledgeBankAccessLog = {
   id: string
@@ -489,14 +480,6 @@ function mapKnowledgeBankEntrySummary(
   }
 }
 
-function mapRedactionProposal(proposal: BackendRedactionProposal): RedactionProposal {
-  return {
-    entry: mapKnowledgeBankEntry(proposal.entry),
-    redactedFields: proposal.redacted_fields,
-    originalContent: proposal.original_content,
-    redactedContent: proposal.redacted_content,
-  }
-}
 
 function mapMemory(memory: BackendMemory): Memory {
   return {
@@ -787,23 +770,6 @@ export async function deleteDocumentComment(commentId: string): Promise<void> {
   await request(`/documents/comments/${commentId}`, { method: 'DELETE' })
 }
 
-export async function sendChatMessage(message: string, threadId: string | null, model: ModelChoice) {
-  const response = await request<BackendChatResponse>('/chat', {
-    method: 'POST',
-    body: JSON.stringify({
-      message,
-      thread_id: threadId,
-      ...model,
-    }),
-  })
-
-  return {
-    threadId: response.thread_id,
-    message: mapMessage(response.message),
-    model: response.model,
-  }
-}
-
 export async function streamChatMessage({
   message,
   model,
@@ -873,11 +839,6 @@ export async function streamChatMessage({
         'done' || completed
   }
   if (!completed) throw new Error('The response stream ended before completion. Please try again.')
-}
-
-export async function listTeams(): Promise<Team[]> {
-  const teams = await request<BackendTeam[]>('/teams')
-  return teams.map(mapTeam)
 }
 
 export async function listMatters(status?: Matter['status']): Promise<Matter[]> {
@@ -1061,42 +1022,6 @@ export async function updateKnowledgeBankEntry(
 
 export async function deleteKnowledgeBankEntry(id: string): Promise<void> {
   await request(`/kb/entries/${id}`, { method: 'DELETE' })
-}
-
-export async function promoteKnowledgeBankEntry(
-  id: string,
-  targetScope: 'team' | 'firm_wide',
-): Promise<RedactionProposal> {
-  return mapRedactionProposal(
-    await request<BackendRedactionProposal>(`/kb/entries/${id}/promote`, {
-      method: 'POST',
-      body: JSON.stringify({ target_scope: targetScope }),
-    }),
-  )
-}
-
-export async function getRedactionProposal(id: string): Promise<RedactionProposal> {
-  return mapRedactionProposal(
-    await request<BackendRedactionProposal>(`/kb/entries/${id}/redaction`),
-  )
-}
-
-export async function approveKnowledgeBankRedaction(
-  id: string,
-  payload: {
-    redactedContent: string
-    redactedFields?: Record<string, string>
-  },
-): Promise<KnowledgeBankEntry> {
-  return mapKnowledgeBankEntry(
-    await request<BackendKnowledgeBankEntry>(`/kb/entries/${id}/approve-redaction`, {
-      method: 'POST',
-      body: JSON.stringify({
-        redacted_content: payload.redactedContent,
-        redacted_fields: payload.redactedFields,
-      }),
-    }),
-  )
 }
 
 export async function listKnowledgeBankAuditLog(): Promise<KnowledgeBankAccessLog[]> {
@@ -1629,76 +1554,6 @@ export async function deleteMemory(id: string): Promise<void> {
   })
 }
 
-type BackendDreamAddition = { category: MemoryCategory; content: string; reason: string }
-type BackendDreamMerge = {
-  replace_ids: string[]
-  category: MemoryCategory
-  content: string
-  reason: string
-}
-type BackendDreamUpdate = { memory_id: string; content: string; reason: string }
-type BackendDreamDrop = { memory_id: string; reason: string }
-type BackendDreamProposal = {
-  additions: BackendDreamAddition[]
-  merges: BackendDreamMerge[]
-  updates: BackendDreamUpdate[]
-  drops: BackendDreamDrop[]
-  reviewed_message_count: number
-}
-type BackendDreamJobStatus = {
-  job_id: string
-  status: 'processing' | 'completed' | 'failed'
-  proposal: BackendDreamProposal | null
-  memories: BackendMemory[] | null
-  error_message: string | null
-}
-
-function mapDreamProposal(proposal: BackendDreamProposal): DreamProposal {
-  return {
-    additions: proposal.additions.map((a) => ({
-      category: a.category,
-      content: a.content,
-      reason: a.reason,
-    })),
-    merges: proposal.merges.map((m) => ({
-      replaceIds: m.replace_ids,
-      category: m.category,
-      content: m.content,
-      reason: m.reason,
-    })),
-    updates: proposal.updates.map((u) => ({
-      memoryId: u.memory_id,
-      content: u.content,
-      reason: u.reason,
-    })),
-    drops: proposal.drops.map((d) => ({ memoryId: d.memory_id, reason: d.reason })),
-    reviewedMessageCount: proposal.reviewed_message_count,
-  }
-}
-
-function mapDreamJobStatus(status: BackendDreamJobStatus): DreamJobStatus {
-  return {
-    jobId: status.job_id,
-    status: status.status,
-    proposal: status.proposal ? mapDreamProposal(status.proposal) : null,
-    memories: status.memories?.map(mapMemory) ?? null,
-    errorMessage: status.error_message,
-  }
-}
-
-export async function startDreamJob(): Promise<DreamJobStatus> {
-  const status = await request<BackendDreamJobStatus>('/memories/dream', {
-    method: 'POST',
-    body: JSON.stringify({}),
-  })
-  return mapDreamJobStatus(status)
-}
-
-export async function getDreamJob(jobId: string): Promise<DreamJobStatus> {
-  const status = await request<BackendDreamJobStatus>(`/memories/dream/${jobId}`)
-  return mapDreamJobStatus(status)
-}
-
 // Review handoffs + annotations
 
 type BackendAnnotationReply = {
@@ -1866,13 +1721,6 @@ export async function deleteReviewHandoff(handoffId: string): Promise<void> {
   await request(`/handoffs/${handoffId}`, { method: 'DELETE' })
 }
 
-export async function listReviewAnnotations(handoffId: string): Promise<ReviewAnnotation[]> {
-  const items = await request<BackendReviewAnnotation[]>(
-    `/handoffs/${handoffId}/annotations`,
-  )
-  return items.map(mapAnnotation)
-}
-
 /** Earlier rounds of a carried-forward annotation (with replies), newest first. */
 export async function getReviewAnnotationHistory(
   handoffId: string,
@@ -1941,16 +1789,6 @@ export async function deleteReviewAnnotation(
   annotationId: string,
 ): Promise<void> {
   await request(`/handoffs/${handoffId}/annotations/${annotationId}`, { method: 'DELETE' })
-}
-
-export async function listAnnotationReplies(
-  handoffId: string,
-  annotationId: string,
-): Promise<ReviewAnnotationReply[]> {
-  const items = await request<BackendAnnotationReply[]>(
-    `/handoffs/${handoffId}/annotations/${annotationId}/replies`,
-  )
-  return items.map(mapReply)
 }
 
 export async function postAnnotationReply(
@@ -2032,11 +1870,6 @@ export async function exportAnnotatedPdf(handoffId: string): Promise<Blob> {
   return res.blob()
 }
 
-export async function getReviewsWaitingCount(): Promise<number> {
-  const res = await request<{ count: number }>('/handoffs/reviews/waiting')
-  return res.count ?? 0
-}
-
 export async function createDummyUsers(count: number = 2): Promise<void> {
   await request(`/system/dummy-users?count=${count}`, {
     method: 'POST',
@@ -2046,7 +1879,6 @@ export async function createDummyUsers(count: number = 2): Promise<void> {
 export async function deleteDummyUsers(): Promise<void> {
   await request('/system/dummy-users', { method: 'DELETE' })
 }
-
 
 // LLM settings (personal OpenRouter key, High/Mid tier models, per-feature tiers)
 
@@ -2344,10 +2176,6 @@ export async function createGuidance(input: {
     }),
   })
   return mapFeedback(row)
-}
-
-export async function deleteMentorFeedback(feedbackId: string): Promise<void> {
-  await request(`/mentorship/feedback/${feedbackId}`, { method: 'DELETE' })
 }
 
 export async function listMentorLessons(menteeId?: string): Promise<MentorLesson[]> {

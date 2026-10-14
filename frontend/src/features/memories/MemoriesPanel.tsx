@@ -1,19 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Brain, Trash2, Plus, Edit2, Check, X, Shield, Settings, Activity, Moon } from 'lucide-react'
+import { Brain, Trash2, Plus, Edit2, Check, X, Shield, Settings, Activity } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '../../shared/ui/Button'
 import {
   createMemory,
   deleteMemory,
-  getDreamJob,
   listMemories,
-  startDreamJob,
   updateMemory,
 } from '../../shared/api/api'
-import type { DreamProposal, MemoryCategory } from '../../shared/types/workspace'
-import { waitForDelay } from '../../shared/lib/async'
-import { getErrorMessage, isAbortError } from '../../shared/lib/errors'
+import type { MemoryCategory } from '../../shared/types/workspace'
+import { getErrorMessage } from '../../shared/lib/errors'
 import { ErrorBanner } from '../../shared/ui/ErrorBanner'
 import { PanelHeader } from '../../shared/ui/PanelHeader'
 import type { HelpContent } from '../../shared/ui/FeatureHelp'
@@ -26,11 +23,6 @@ const MEMORY_HELP: HelpContent = {
       emoji: '🧠',
       title: 'Memories are built automatically',
       body: 'After each chat session, the AI reviews the conversation and saves any new facts, preferences, or context it learned about you — your role, how you like drafts structured, matters you\'re working on.',
-    },
-    {
-      emoji: '💤',
-      title: 'Dream reviews your recent activity',
-      body: 'Click "Dream" to run a one-off memory review right now. Dream merges duplicates, drops stale facts, and proposes updates for you to approve before anything changes.',
     },
     {
       emoji: '✏️',
@@ -50,9 +42,6 @@ const MEMORY_HELP: HelpContent = {
   ],
 }
 
-const DREAM_POLL_INTERVAL_MS = 1000
-const DREAM_POLL_TIMEOUT_MS = 120_000
-
 export function MemoriesPanel() {
   const queryClient = useQueryClient()
   const memoriesQuery = useQuery({
@@ -69,16 +58,6 @@ export function MemoriesPanel() {
   const [newContent, setNewContent] = useState('')
   const [newCategory, setNewCategory] = useState<MemoryCategory>('semantic')
   const [editContent, setEditContent] = useState('')
-
-  // Dream state
-  const [isDreaming, setIsDreaming] = useState(false)
-  const [dreamResult, setDreamResult] = useState<DreamProposal | null>(null)
-  const dreamAbortRef = useRef<AbortController | null>(null)
-
-  useEffect(() => () => {
-    dreamAbortRef.current?.abort()
-    dreamAbortRef.current = null
-  }, [])
 
   const handleAdd = async () => {
     if (!newContent.trim()) return
@@ -108,44 +87,6 @@ export function MemoriesPanel() {
       setError(err instanceof Error ? err.message : 'Failed to update memory')
     } finally {
       setIsMutating(false)
-    }
-  }
-
-  const handleDream = async () => {
-    if (isDreaming) return
-    setIsDreaming(true)
-    setDreamResult(null)
-    setError(null)
-    const controller = new AbortController()
-    dreamAbortRef.current = controller
-    try {
-      const { jobId } = await startDreamJob()
-      const startedAt = Date.now()
-      while (true) {
-        await waitForDelay(DREAM_POLL_INTERVAL_MS, controller.signal)
-        const status = await getDreamJob(jobId)
-        controller.signal.throwIfAborted()
-        if (status.status === 'completed' && status.proposal && status.memories) {
-          queryClient.setQueryData(['memories'], status.memories)
-          setDreamResult(status.proposal)
-          break
-        }
-        if (status.status === 'failed') {
-          throw new Error(status.errorMessage ?? 'Dream failed')
-        }
-        if (Date.now() - startedAt > DREAM_POLL_TIMEOUT_MS) {
-          throw new Error('Dream timed out — try again')
-        }
-      }
-    } catch (err) {
-      if (!isAbortError(err)) {
-        setError(getErrorMessage(err, 'Dream failed'))
-      }
-    } finally {
-      if (dreamAbortRef.current === controller) {
-        dreamAbortRef.current = null
-        setIsDreaming(false)
-      }
     }
   }
 
@@ -197,70 +138,16 @@ export function MemoriesPanel() {
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface lg:my-2 lg:mr-2 lg:rounded-tl-2xl lg:border-l lg:border-t lg:border-neutral-200 lg:shadow-sm">
       <PanelHeader
         actions={
-          <>
-            <Button
-              disabled={isDreaming}
-              onClick={handleDream}
-              size="sm"
-              title="Review and refine your memories based on recent activity"
-              variant="secondary"
-            >
-              <Moon size={14} />
-              {isDreaming ? 'Dreaming…' : 'Dream'}
-            </Button>
-            <Button onClick={() => setIsAdding(true)} size="sm" variant="primary">
-              <Plus size={14} />
-              Add Memory
-            </Button>
-          </>
+          <Button onClick={() => setIsAdding(true)} size="sm" variant="primary">
+            <Plus size={14} />
+            Add Memory
+          </Button>
         }
         description="Review facts, working preferences, and session context."
         helpContent={MEMORY_HELP}
         icon={Brain}
         title="User Memory"
       />
-      {isDreaming && (
-        <div className="flex items-center gap-3 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 bg-[length:200%_100%] px-6 py-2 text-xs text-indigo-700 animate-pulse">
-          <Moon size={14} />
-          Reviewing your recent conversations…
-        </div>
-      )}
-      {dreamResult && (
-        <div className="border-b border-emerald-100 bg-emerald-50/70 px-6 py-3 text-xs text-emerald-900">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-semibold">
-                Dream applied {dreamChangeCount(dreamResult)} change
-                {dreamChangeCount(dreamResult) === 1 ? '' : 's'} automatically.
-              </p>
-              <p className="mt-1 text-emerald-700">
-                Reviewed {dreamResult.reviewedMessageCount} recent messages. Automated
-                memories include the reason for the change.
-              </p>
-              {dreamChangeCount(dreamResult) > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer font-semibold">View justifications</summary>
-                  <ul className="mt-2 space-y-1 text-emerald-800">
-                    {dreamReasons(dreamResult).map((item, index) => (
-                      <li key={`${item.label}-${index}`}>
-                        <span className="font-semibold">{item.label}:</span> {item.reason}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-            <Button
-              aria-label="Dismiss Dream result"
-              onClick={() => setDreamResult(null)}
-              size="icon"
-              variant="ghost"
-            >
-              <X size={16} />
-            </Button>
-          </div>
-        </div>
-      )}
 
       <div className="app-scroll-region min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6 lg:p-8">
         <div className="mx-auto max-w-4xl space-y-10">
@@ -420,7 +307,7 @@ export function MemoriesPanel() {
                               </div>
                               {memory.justification && (
                                 <div className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
-                                  <span className="font-semibold">Dream justification:</span>{' '}
+                                  <span className="font-semibold">Why this changed:</span>{' '}
                                   {memory.justification}
                                 </div>
                               )}
@@ -443,22 +330,4 @@ export function MemoriesPanel() {
       </div>
     </section>
   )
-}
-
-function dreamChangeCount(proposal: DreamProposal): number {
-  return (
-    proposal.additions.length +
-    proposal.merges.length +
-    proposal.updates.length +
-    proposal.drops.length
-  )
-}
-
-function dreamReasons(proposal: DreamProposal): Array<{ label: string; reason: string }> {
-  return [
-    ...proposal.additions.map((item) => ({ label: 'Added', reason: item.reason })),
-    ...proposal.merges.map((item) => ({ label: 'Merged', reason: item.reason })),
-    ...proposal.updates.map((item) => ({ label: 'Updated', reason: item.reason })),
-    ...proposal.drops.map((item) => ({ label: 'Dropped', reason: item.reason })),
-  ]
 }

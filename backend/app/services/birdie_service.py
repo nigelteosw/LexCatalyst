@@ -13,7 +13,6 @@ from app.models import ActionItem, ChatThread, Document, Matter, ReviewHandoff, 
 from app.services.llm_service import get_llm
 from app.services.birdie_workboard_service import execute_workboard_tool
 from app.services.agent_tools import (
-    ELITIGATION_TOOL,
     MUTATION_TOOL_NAMES,
     SHARED_TOOL_NAMES,
     TASK_AWARENESS_GUIDANCE,

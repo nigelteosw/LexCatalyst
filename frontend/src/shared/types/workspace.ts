@@ -119,46 +119,6 @@ export type Memory = {
   updatedAt: string
 }
 
-export type DreamAddition = {
-  category: MemoryCategory
-  content: string
-  reason: string
-}
-
-export type DreamMerge = {
-  replaceIds: string[]
-  category: MemoryCategory
-  content: string
-  reason: string
-}
-
-export type DreamUpdate = {
-  memoryId: string
-  content: string
-  reason: string
-}
-
-export type DreamDrop = {
-  memoryId: string
-  reason: string
-}
-
-export type DreamProposal = {
-  additions: DreamAddition[]
-  merges: DreamMerge[]
-  updates: DreamUpdate[]
-  drops: DreamDrop[]
-  reviewedMessageCount: number
-}
-
-export type DreamJobStatus = {
-  jobId: string
-  status: 'processing' | 'completed' | 'failed'
-  proposal: DreamProposal | null
-  memories: Memory[] | null
-  errorMessage: string | null
-}
-
 export type Team = {
   id: string
   name: string
@@ -352,12 +312,6 @@ export type KnowledgeBankEntry = {
   matter?: Matter | null
 }
 
-export type RedactionProposal = {
-  entry: KnowledgeBankEntry
-  redactedFields: Record<string, string>
-  originalContent: string
-  redactedContent: string
-}
 
 // The audit log is edits-only (DB CHECK constraint enforces this).
 // Every row implicitly represents an edit, so there's no `action` field.

@@ -34,7 +34,6 @@ from app.services.chat_service import (
     prepare_agent_context,
     update_thread,
     run_post_save_tasks,
-    save_assistant_response,
 )
 
 router = APIRouter(tags=["chat"])

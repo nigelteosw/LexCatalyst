@@ -12,7 +12,7 @@ class ClassSchemaTests(unittest.TestCase):
     def test_class_migration_is_current_head(self) -> None:
         backend_dir = Path(__file__).resolve().parents[1]
         script = ScriptDirectory.from_config(Config(str(backend_dir / "alembic.ini")))
-        self.assertEqual(script.get_current_head(), "c6d7e8f9a0b1")
+        self.assertEqual(script.get_current_head(), "00a55a720011")
 
     def test_class_membership_invite_and_content_roots_have_class_boundary(self) -> None:
         for table_name in (
@@ -37,7 +37,6 @@ class ClassSchemaTests(unittest.TestCase):
             "review_handoffs",
             "review_lessons",
             "birdie_reviews",
-            "dream_jobs",
             "retrieval_audit_events",
         ):
             with self.subTest(table=table_name):

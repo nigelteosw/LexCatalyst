@@ -15,7 +15,6 @@ from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
     IngestionError,
     TextBlock,
-    UnsupportedDocumentError,
     chunk_text_blocks,
     extract_text_blocks,
     make_citation_label,

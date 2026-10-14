@@ -1,4 +1,4 @@
-"""Database-backed document, Knowledge Bank, and Dream worker.
+"""Database-backed document and Knowledge Bank worker.
 
 Each queue has one claim slot, while a fixed global capacity limits total
 work across all queues. Slots use ``SELECT ... FOR UPDATE SKIP LOCKED`` to
@@ -17,16 +17,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.sql import func
 
 from app.database import SessionLocal
-from app.models import Document, DreamJob, KnowledgeBankEntry
+from app.models import Document, KnowledgeBankEntry
 from app.services.document_service import (
     STALE_CLAIM_AFTER as DOC_STALE_AFTER,
     claim_pending_document,
     process_document,
-)
-from app.services.dream_service import (
-    STALE_CLAIM_AFTER as DREAM_STALE_AFTER,
-    claim_pending_dream_job,
-    process_dream_job,
 )
 from app.services.kb_ingestion_service import (
     STALE_CLAIM_AFTER as KB_STALE_AFTER,
@@ -39,7 +34,6 @@ POLL_INTERVAL_SECONDS = 2.0
 GLOBAL_CONCURRENCY = 2
 DOC_CONCURRENCY = 1
 KB_CONCURRENCY = 1
-DREAM_CONCURRENCY = 1
 HEARTBEAT_INTERVAL_SECONDS = 30.0
 
 
@@ -140,15 +134,12 @@ async def _heartbeat_loop(stop_requested: threading.Event | None) -> None:
         try:
             doc_depth = _claimable_count(Document, DOC_STALE_AFTER)
             kb_depth = _claimable_count(KnowledgeBankEntry, KB_STALE_AFTER)
-            dream_depth = _claimable_count(DreamJob, DREAM_STALE_AFTER)
             print(
                 f"Worker heartbeat: doc_slots={DOC_CONCURRENCY} "
                 f"global_capacity={GLOBAL_CONCURRENCY} "
                 f"doc_queue_depth={doc_depth} "
                 f"kb_slots={KB_CONCURRENCY} "
-                f"kb_queue_depth={kb_depth} "
-                f"dream_slots={DREAM_CONCURRENCY} "
-                f"dream_queue_depth={dream_depth}"
+                f"kb_queue_depth={kb_depth}"
             )
         except Exception as exc:  # noqa: BLE001 - never let heartbeat kill the worker
             print(f"Worker heartbeat failed: {exc!r}")
@@ -162,7 +153,6 @@ async def run_worker(stop_requested: threading.Event | None = None) -> None:
         f"LexCatalyst worker started "
         f"(global_concurrency={GLOBAL_CONCURRENCY}, "
         f"doc_concurrency={DOC_CONCURRENCY}, kb_concurrency={KB_CONCURRENCY}, "
-        f"dream_concurrency={DREAM_CONCURRENCY}, "
         f"heartbeat={HEARTBEAT_INTERVAL_SECONDS}s)"
     )
     await asyncio.gather(
@@ -179,14 +169,6 @@ async def run_worker(stop_requested: threading.Event | None = None) -> None:
             claim_pending_kb_entry,
             process_kb_summary,
             KB_CONCURRENCY,
-            capacity,
-            stop_requested,
-        ),
-        _run_queue(
-            "Dream",
-            claim_pending_dream_job,
-            process_dream_job,
-            DREAM_CONCURRENCY,
             capacity,
             stop_requested,
         ),

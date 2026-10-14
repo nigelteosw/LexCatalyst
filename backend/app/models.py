@@ -735,33 +735,6 @@ class PiiRedaction(Base):
         self._original_content = encrypt_text(value) or ""
 
 
-class DreamJob(Base):
-    __tablename__ = "dream_jobs"
-
-    id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="processing")
-    proposal_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    processing_started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-    processing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    user: Mapped[User] = relationship()
-
-
 class ActionItem(Base):
     __tablename__ = "action_items"
 
