@@ -3,19 +3,19 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from app.models import ClassMembership, MentorshipClass, ActionItem, Matter, MatterMember, ResourceMetadata, Team, User
+from app.models import ClassMembership, MentorshipClass, ActionItem, Matter, MatterMember, ResourceMetadata, User
 from app.services.birdie_workboard_service import execute_workboard_tool
 
 @pytest.fixture
 def board():
     engine = create_engine('sqlite://')
-    for model in (MentorshipClass, ClassMembership, Team, User, Matter, MatterMember, ActionItem, ResourceMetadata):
+    for model in (MentorshipClass, ClassMembership, User, Matter, MatterMember, ActionItem, ResourceMetadata):
         model.__table__.create(engine)
     with Session(engine) as db:
         user = User(id='me', email='me@example.test', google_id='me', firm_role='associate')
-        db.add_all([user, User(id='other', email='other@example.test', full_name='Jane', google_id='other'), Team(id='team', class_id='class', name='Firm'), MentorshipClass(id='class', name='Test team', status='active')])
+        db.add_all([user, User(id='other', email='other@example.test', full_name='Jane', google_id='other'), MentorshipClass(id='class', name='Test team', status='active')])
         db.flush()
-        db.add_all([Matter(class_id='class', id='matter', team_id='team', title='Matter', case_number='M1'), Matter(class_id='class', id='private', team_id='team', title='Private', case_number='M2')])
+        db.add_all([Matter(class_id='class', id='matter', title='Matter', case_number='M1'), Matter(class_id='class', id='private', title='Private', case_number='M2')])
         db.flush()
         db.add_all([MatterMember(matter_id='matter', user_id='me', role='associate'), MatterMember(matter_id='matter', user_id='other', role='associate')])
         db.add_all([

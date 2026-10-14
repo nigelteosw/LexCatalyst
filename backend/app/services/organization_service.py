@@ -1,65 +1,22 @@
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.dependencies import require_matter_member
 from app.models import (
-    KnowledgeBankEntry,
     ClassMembership,
+    KnowledgeBankEntry,
     Matter,
     MatterMember,
     ResourceMetadata,
-    Team,
-    TeamMember,
     User,
 )
 from app.schemas import MatterCreate, MatterMemberCreate, MatterUpdate
-from app.services.mentorship_class_service import require_class_context, ClassAccessError
-
-DEFAULT_TEAM_NAME = "LexCatalyst Legal"
-
-
-def ensure_default_team(db: Session, user: User) -> Team:
-    context = require_class_context(db, user)
-    if user.default_team_id:
-        team = db.get(Team, user.default_team_id)
-        if team and team.class_id == context.class_id:
-            return team
-
-    team = db.scalar(select(Team).where(Team.class_id == context.class_id, Team.name == DEFAULT_TEAM_NAME))
-    if not team:
-        team = Team(class_id=context.class_id, name=DEFAULT_TEAM_NAME, practice_area="General practice")
-        db.add(team)
-        db.flush()
-
-    membership = db.scalar(
-        select(TeamMember).where(
-            TeamMember.team_id == team.id,
-            TeamMember.user_id == user.id,
-        )
-    )
-    if not membership:
-        db.add(TeamMember(team_id=team.id, user_id=user.id, role=user.firm_role))
-
-    user.default_team_id = team.id
-    db.commit()
-    db.refresh(team)
-    return team
-
-
-def list_teams(db: Session, user: User) -> list[Team]:
-    context = require_class_context(db, user)
-    stmt = select(Team).where(Team.class_id == context.class_id).order_by(Team.name)
-    stmt = stmt.where(
-        select(TeamMember.id)
-        .where(TeamMember.team_id == Team.id, TeamMember.user_id == user.id)
-        .exists()
-    )
-    return list(db.scalars(stmt))
+from app.services.mentorship_class_service import ClassAccessError, require_class_context
 
 
 def list_matters(db: Session, user: User, status: str | None = None) -> list[Matter]:
     context = require_class_context(db, user)
-    stmt = select(Matter).options(joinedload(Matter.team)).where(Matter.class_id == context.class_id)
+    stmt = select(Matter).where(Matter.class_id == context.class_id)
     if status:
         stmt = stmt.where(Matter.status == status)
     stmt = stmt.where(
@@ -71,24 +28,13 @@ def list_matters(db: Session, user: User, status: str | None = None) -> list[Mat
 
 
 def get_matter(db: Session, matter_id: str) -> Matter | None:
-    stmt = (
-        select(Matter)
-        .options(joinedload(Matter.team))
-        .where(Matter.id == matter_id)
-    )
-    return db.scalar(stmt)
+    return db.scalar(select(Matter).where(Matter.id == matter_id))
 
 
 def create_matter(db: Session, user: User, schema: MatterCreate) -> Matter:
     context = require_class_context(db, user)
-    default_team = ensure_default_team(db, user)
-    team_id = schema.team_id or default_team.id
-    team = db.get(Team, team_id)
-    if not team or team.class_id != context.class_id:
-        raise ClassAccessError("Team not found", 404)
     matter = Matter(
         class_id=context.class_id,
-        team_id=team_id,
         title=schema.title,
         case_number=schema.case_number,
         client_name=schema.client_name,

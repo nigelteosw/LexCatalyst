@@ -7,7 +7,7 @@ LlmTier = Literal["high", "mid"]
 DocumentStatus = Literal["uploaded", "processing", "ready", "failed"]
 FirmRole = Literal["partner", "senior_associate", "associate", "admin"]
 MatterStatus = Literal["active", "closed", "archived"]
-KnowledgeBankScope = Literal["firm_wide", "team", "matter", "private"]
+KnowledgeBankScope = Literal["team", "matter", "private"]
 ResourceMetadataType = Literal[
     "document",
     "knowledge_bank_entry",
@@ -71,33 +71,10 @@ class DocumentResponse(BaseModel):
     status: DocumentStatus | str
     error_message: str | None = None
     matter_id: str | None = None
-    folder_id: str | None = None
-    team_id: str | None = None
     created_at: datetime
     updated_at: datetime
     chunk_count: int = 0
     can_manage: bool = False
-
-    model_config = {"from_attributes": True}
-
-
-class DocumentFolderCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-    matter_id: str | None = None
-
-
-class DocumentFolderUpdate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-
-
-class DocumentFolderResponse(BaseModel):
-    id: str
-    matter_id: str | None = None
-    name: str
-    created_by: str
-    can_manage: bool = False
-    created_at: datetime
-    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -107,7 +84,6 @@ class DocumentUpdate(BaseModel):
 
     filename: str | None = Field(default=None, min_length=1, max_length=255)
     matter_id: str | None = None
-    folder_id: str | None = None
 
 
 class ResourceMetadataResponse(BaseModel):
@@ -117,7 +93,6 @@ class ResourceMetadataResponse(BaseModel):
     title: str | None = None
     owner_user_id: str | None = None
     created_by: str | None = None
-    team_id: str | None = None
     matter_id: str | None = None
     scope: str | None = None
     source_document_id: str | None = None
@@ -198,7 +173,6 @@ class MemoryResponse(BaseModel):
     confidence: float
     scope: str = "personal"
     matter_id: str | None = None
-    team_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -215,17 +189,7 @@ class MemoryExtractionResult(BaseModel):
     memories: list[MemoryExtractionCandidate]
 
 
-class TeamResponse(BaseModel):
-    id: str
-    name: str
-    practice_area: str | None = None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 class MatterCreate(BaseModel):
-    team_id: str | None = None
     title: str = Field(min_length=1, max_length=200)
     case_number: str = Field(min_length=1, max_length=120)
     client_name: str | None = Field(default=None, max_length=255)
@@ -240,14 +204,12 @@ class MatterUpdate(BaseModel):
 
 class MatterResponse(BaseModel):
     id: str
-    team_id: str
     title: str
     case_number: str
     client_name: str | None = None
     status: str
     created_at: datetime
     updated_at: datetime
-    team: TeamResponse | None = None
 
     model_config = {"from_attributes": True}
 
@@ -269,7 +231,6 @@ class MatterMemberResponse(BaseModel):
 
 
 class KnowledgeBankEntryCreate(BaseModel):
-    team_id: str | None = None
     matter_id: str | None = None
     scope: KnowledgeBankScope
     entry_type: KnowledgeBankEntryType
@@ -279,7 +240,6 @@ class KnowledgeBankEntryCreate(BaseModel):
 
 
 class KnowledgeBankEntryUpdate(BaseModel):
-    team_id: str | None = None
     matter_id: str | None = None
     scope: KnowledgeBankScope | None = None
     entry_type: KnowledgeBankEntryType | None = None
@@ -290,7 +250,6 @@ class KnowledgeBankEntryUpdate(BaseModel):
 
 class KnowledgeBankEntryResponse(BaseModel):
     id: str
-    team_id: str | None = None
     matter_id: str | None = None
     source_entry_id: str | None = None
     source_document_id: str | None = None
@@ -311,7 +270,6 @@ class KnowledgeBankEntryResponse(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
-    team: TeamResponse | None = None
     matter: MatterResponse | None = None
 
     model_config = {"from_attributes": True}
@@ -319,7 +277,6 @@ class KnowledgeBankEntryResponse(BaseModel):
 
 class KnowledgeBankEntrySummaryResponse(BaseModel):
     id: str
-    team_id: str | None = None
     matter_id: str | None = None
     source_entry_id: str | None = None
     source_document_id: str | None = None
@@ -363,7 +320,7 @@ class KnowledgeBankBackfillResponse(BaseModel):
 
 
 class KnowledgeBankPromoteRequest(BaseModel):
-    target_scope: Literal["team", "firm_wide"]
+    target_scope: Literal["team"]
 
 
 class RedactionApprovalRequest(BaseModel):
@@ -399,7 +356,6 @@ class UserResponse(BaseModel):
     full_name: str | None = None
     firm_role: str
     is_admin: bool
-    default_team_id: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

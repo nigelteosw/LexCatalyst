@@ -80,7 +80,6 @@ def create_pending_kb_entry(
         existing.processing_started_at = None
         existing.processing_attempts = 0
         existing.matter_id = document.matter_id
-        existing.team_id = document.team_id
         existing.scope = "matter" if document.matter_id else "private"
         db.commit()
         db.refresh(existing)
@@ -89,7 +88,6 @@ def create_pending_kb_entry(
 
     entry = KnowledgeBankEntry(
         class_id=document.class_id,
-        team_id=document.team_id,
         matter_id=document.matter_id,
         source_document_id=document.id,
         scope="matter" if document.matter_id else "private",

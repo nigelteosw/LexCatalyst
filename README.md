@@ -58,12 +58,12 @@ Settings → Development & Testing → **Load property Workboard demo** adds 12 
 
 ### Role-Based Access Control
 - Three lawyer roles: **partner**, **senior_associate**, **associate**. Plus an `is_admin` flag for firm IT/ops (super-user bypass).
-- KB read/write enforced per-scope: `firm_wide` (partners only write), `team` (team members), `matter` (matter members), `private` (creator).
+- KB read/write enforced per-scope: `team` (everyone in the mentorship team reads; partners write), `matter` (matter members), `private` (creator).
 - Settings shows the current role read-only; admins manage user roles.
 
-### Matters & Teams
+### Matters & Team
 - Matter-scoped chat with encrypted `client_name` fields.
-- Team and matter memberships drive KB visibility.
+- The mentorship team is the only grouping. Matter memberships drive matter-scoped visibility; team membership drives team-scoped visibility.
 
 ---
 
@@ -94,7 +94,7 @@ Settings → Development & Testing → **Load property Workboard demo** adds 12 
 - **Docker Compose** for local PostgreSQL
 - **Railway** for the static frontend, FastAPI web service with its embedded worker, and managed PostgreSQL
 - **Cloudflare R2** as the S3-compatible object store
-- **Alembic head:** `a7b8c9d0e1f2`
+- **Alembic head:** `b2e4c6d8f0a1`
 
 Editable high-level architecture diagrams:
 
@@ -328,7 +328,7 @@ cd backend && source .venv/bin/activate
 make seed-demo PRESENTER=you@example.com   # or Settings → Development & Testing → Load demo data
 ```
 
-The seed creates a Corporate team, the *Meridian Capital — Share Purchase* matter, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), and memories. Re-running resets previous demo data and preserves other teams and your non-demo work.
+The seed creates the *Meridian Capital — Share Purchase* matter in your current team, three synthetic PDFs (uploaded through the normal pipeline, so R2, the worker and OpenAI embeddings must be configured), Knowledge Bank entries, Workboard tickets, two review rounds (one already returned with Sarah's comments), and memories. Re-running resets previous demo data and preserves other teams and your non-demo work.
 
 With demo mode on, admins get a **Switch user** picker in the sidebar to act as Sarah Chen (senior associate), Jane Pereira (associate) or Marcus Webb without Google. Switching works only into seeded `dummy:` users in your current team, never real accounts, and a banner shows who you are acting as. See `docs/demo-script.md` for the full walkthrough.
 
@@ -347,7 +347,7 @@ The first three routes return 404 unless demo mode is on and the caller is an ad
 
 ## Roles & Permissions
 
-| Role | Manage any firm-wide entry | Create matters | Create actions |
+| Role | Manage any team-wide entry | Create matters | Create actions |
 |---|---|---|---|
 | `admin` (firm IT/ops) | ✅ | ✅ | ✅ |
 | `partner` | ✅ | ✅ | ✅ |
@@ -355,8 +355,7 @@ The first three routes return 404 unless demo mode is on and the caller is an ad
 | `associate` | — | ✅ | — |
 
 KB scope visibility (read access):
-- `firm_wide` — every authenticated user
-- `team` — team members only
+- `team` — everyone in the mentorship team
 - `matter` — matter members only
 - `private` — creator only
 
@@ -370,7 +369,7 @@ Optimized KB read routes, all requiring Bearer authentication:
 - `GET /kb/entries/status?ids=...` returns polling state only and does not write audit rows.
 - `GET /kb/entries/{id}` returns one full entry without creating an audit event.
 - `GET|PATCH /kb/entries/{id}/metadata` reads or edits a manual note's tags and summary (`{tags?, summary?}`). Read and write follow the entry's Knowledge Bank access; document-backed entries return `409` and use the document route below.
-- `GET /resources/metadata` returns cross-resource metadata using the same owner/team/matter/firm-wide visibility rules.
+- `GET /resources/metadata` returns cross-resource metadata using the same owner/team/matter visibility rules.
 
 ---
 
@@ -523,6 +522,7 @@ The frontend uses `bun.lock` exclusively. Do not commit `package-lock.json`.
 | `u6d7e8f9a0b1` | Adds explicit reverse scoring for positively worded survey questions | No |
 | `a7b8c9d0e1f2` | Drops `survey_responses` and `survey_questions` (wellbeing questionnaire removed); downgrade recreates empty tables | Yes, deletes all survey responses |
 | `00a55a720011` | Drops `dream_jobs` (Dream memory consolidation removed); memories and their justifications stay; downgrade recreates an empty table | Yes, deletes Dream job history |
+| `b2e4c6d8f0a1` | Folds practice-group teams into the mentorship team. Class-wide `firm_wide` KB entries become `team`. A practice-team entry stays class-wide only when its class has one practice team covering every active member; otherwise it becomes `private` with a `kb_scope_narrowed:<id>` audit event. Drops `teams`, `team_members`, `document_folders`, and the `team_id`, `folder_id` and `default_team_id` columns. Never widens an audience. | Yes, drops practice-team and folder data; downgrade restores the shape only |
 
 `h5c6d7e8f9a0` intentionally removes historical read/share/redaction audit rows.
 Knowledge and document records are unaffected.
@@ -532,8 +532,7 @@ Authenticated document review routes:
 Team enrollment is available to any signed-in user through `GET /classes/status`, `POST /classes` (`{name}`), and `POST /classes/join` (`{code: "123-456"}`). Joining creates a pending request; it does not grant workspace access. Approved members use `GET /classes/current` and `/classes/current/members`. Owners and mentors use `/classes/current/requests`, `POST /classes/current/invite`, `DELETE /classes/current/invite`, and `POST /classes/current/members/{user_id}/approve|reject`; owners also use `PATCH /classes/current/members/{user_id}/role`, `POST /classes/current/transfer-owner`, and `POST /classes/current/archive`. Members can leave with `POST /classes/current/leave`; managers remove a member with `DELETE /classes/current/members/{user_id}`. Workspace routes require an active team membership in addition to their existing resource permissions. Team codes expire after 24 hours and require `CLASS_INVITE_SECRET` on the backend. Archived teams deny content access. Archiving retires active and pending memberships, so members can join or create another team. Returning members receive the member role; mentor permissions require a new owner promotion. Admin status and professional titles do not bypass private content or matter membership. LexChat and Birdie recheck live membership in the original team before tool dispatch and output delivery.
 
 - `PATCH /documents/{id}` renames and/or moves an uploaded document (`{filename?, matter_id?}`; `matter_id: null` moves it to General); uploader only, and the target matter must be one the caller belongs to.
-- `GET /document-folders?matter_id=<id|general>` lists folders in a matter (members only) or the caller's own General folders. `POST /document-folders` (`{name, matter_id?}`), `PATCH /document-folders/{id}` (`{name}`) and `DELETE /document-folders/{id}` manage them; creator or partner/admin only. Deleting a folder moves its documents back to the matter root.
-- `POST /documents/upload` also accepts optional `matter_id` and `folder_id` form fields; `PATCH /documents/{id}` accepts `folder_id` (`null` = matter root).
+- `POST /documents/upload` accepts an optional `matter_id` form field. Documents are a flat list per matter; document folders were removed.
 - `DELETE /matters/{id}` hard-deletes a matter (partner/admin). Its chats and documents move to General; matter-scoped Knowledge Bank entries become private.
 - `POST /chat/stream` also emits a `sources` event (numbered `{n, kind, id, title, locator, matter_id}`) as the agent consults documents and Knowledge Bank entries; the answer cites them as `[n]` and the list is stored on the assistant message (`sources`).
 - `GET /chat/threads?matter_id=<id|general>` lists the caller's threads for one matter (members only) or for General; omit it for all threads.

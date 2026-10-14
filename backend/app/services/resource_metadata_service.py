@@ -24,7 +24,6 @@ from app.models import (
     MentorshipClass,
     ResourceMetadata,
     ReviewHandoff,
-    TeamMember,
     User,
 )
 
@@ -44,19 +43,9 @@ def resource_metadata_access_filter(user: User):
         )
     )
     return active_class & or_(
-        ResourceMetadata.scope == "firm_wide",
+        ResourceMetadata.scope == "team",
         ResourceMetadata.owner_user_id == user.id,
         ResourceMetadata.created_by == user.id,
-        (
-            (ResourceMetadata.scope == "team")
-            & (ResourceMetadata.team_id.is_not(None))
-            & exists(
-                select(TeamMember.id).where(
-                    TeamMember.team_id == ResourceMetadata.team_id,
-                    TeamMember.user_id == user.id,
-                )
-            )
-        ),
         (
             (ResourceMetadata.scope == "matter")
             & (ResourceMetadata.matter_id.is_not(None))
@@ -76,7 +65,6 @@ def list_resource_metadata(
     user: User,
     resource_type: str | None = None,
     matter_id: str | None = None,
-    team_id: str | None = None,
     scope: str | None = None,
     limit: int = 100,
     offset: int = 0,
@@ -86,8 +74,6 @@ def list_resource_metadata(
         stmt = stmt.where(ResourceMetadata.resource_type == resource_type)
     if matter_id:
         stmt = stmt.where(ResourceMetadata.matter_id == matter_id)
-    if team_id:
-        stmt = stmt.where(ResourceMetadata.team_id == team_id)
     if scope:
         stmt = stmt.where(ResourceMetadata.scope == scope)
     stmt = stmt.order_by(ResourceMetadata.updated_at.desc()).offset(offset).limit(limit)
@@ -119,7 +105,6 @@ def upsert_resource_metadata(
     title: str | None,
     owner_user_id: str | None,
     created_by: str | None,
-    team_id: str | None,
     matter_id: str | None,
     scope: str | None,
     source_document_id: str | None,
@@ -144,11 +129,10 @@ def upsert_resource_metadata(
     metadata.resource_type = resource_type
     metadata.resource_id = resource_id
     if metadata.class_id != class_id:
-        raise ValueError("Resource metadata cannot move between teams")
+        raise ValueError("Resource metadata cannot move between classes")
     metadata.title = title
     metadata.owner_user_id = owner_user_id
     metadata.created_by = created_by
-    metadata.team_id = team_id
     metadata.matter_id = matter_id
     metadata.scope = scope
     metadata.source_document_id = source_document_id
@@ -194,7 +178,6 @@ def sync_document_metadata(
         title=document.filename,
         owner_user_id=document.user_id,
         created_by=document.user_id,
-        team_id=document.team_id,
         matter_id=document.matter_id,
         scope="matter" if document.matter_id else "private",
         source_document_id=document.id,
@@ -217,7 +200,6 @@ def sync_kb_metadata(
         title=entry.title,
         owner_user_id=entry.created_by,
         created_by=entry.created_by,
-        team_id=entry.team_id,
         matter_id=entry.matter_id,
         scope=entry.scope,
         source_document_id=entry.source_document_id,
@@ -229,7 +211,6 @@ def sync_kb_metadata(
         },
         commit=commit,
     )
-
 
 
 def sync_action_metadata(
@@ -246,9 +227,8 @@ def sync_action_metadata(
         title=item.title,
         owner_user_id=item.assigner_id,
         created_by=item.assigner_id,
-        team_id=None,
         matter_id=item.matter_id,
-        scope="matter" if item.matter_id else "firm_wide",
+        scope="matter" if item.matter_id else "team",
         source_document_id=None,
         status=item.status,
         metadata_json={
@@ -279,7 +259,6 @@ def sync_handoff_metadata(
         title=title,
         owner_user_id=handoff.submitted_by,
         created_by=handoff.submitted_by,
-        team_id=None,
         matter_id=handoff.matter_id,
         scope="matter" if handoff.matter_id else "private",
         source_document_id=handoff.document_id,

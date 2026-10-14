@@ -9,7 +9,7 @@ from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import ClassMembership, Document, DocumentChunk, DocumentFolder, KnowledgeBankEntry, Matter, MatterMember, MentorshipClass, Team, User
+from app.models import ClassMembership, Document, DocumentChunk, KnowledgeBankEntry, Matter, MatterMember, MentorshipClass, User
 from app.services.mentorship_class_service import ClassAccessError, require_class_context
 from app.providers.embedding_provider import EmbeddingError, embed_texts
 from app.services.ingestion_service import (
@@ -168,8 +168,6 @@ async def create_pending_document(
     content_type: str,
     file_bytes: bytes,
     matter_id: str | None = None,
-    folder_id: str | None = None,
-    team_id: str | None = None,
 ) -> Document:
     """Store an upload and enqueue durable document processing."""
     validate_supported_document(filename, content_type)
@@ -182,14 +180,6 @@ async def create_pending_document(
         matter = db.get(Matter, matter_id)
         if not matter or matter.class_id != context.class_id:
             raise ClassAccessError("Matter not found", 404)
-    if team_id:
-        team = db.get(Team, team_id)
-        if not team or team.class_id != context.class_id:
-            raise ClassAccessError("Team not found", 404)
-    if folder_id:
-        folder = db.get(DocumentFolder, folder_id)
-        if not folder or folder.class_id != context.class_id or folder.matter_id != matter_id:
-            raise ClassAccessError("Folder not found", 404)
 
     document = Document(
         class_id=context.class_id,
@@ -198,8 +188,6 @@ async def create_pending_document(
         content_type=content_type,
         status="uploaded",
         matter_id=matter_id,
-        folder_id=folder_id,
-        team_id=team_id,
         file_size=len(file_bytes),
     )
     db.add(document)
@@ -516,15 +504,8 @@ def update_user_document(
     filename: str | None,
     matter_id: str | None,
     set_matter: bool,
-    folder_id: str | None = None,
-    set_folder: bool = False,
 ) -> Document | None:
-    """Rename and/or move a document.
-
-    matter_id=None with set_matter moves it to General; folder_id=None with set_folder
-    moves it to the matter root. Changing matter without naming a folder clears the folder,
-    because folders belong to one matter.
-    """
+    """Rename and/or move a document. matter_id=None with set_matter moves it to General."""
     document = db.scalar(
         select(Document).where(
             Document.id == document_id,
@@ -563,16 +544,6 @@ def update_user_document(
             )
     if set_matter:
         document.matter_id = matter_id
-        if not set_folder:
-            document.folder_id = None
-    if set_folder:
-        if folder_id:
-            folder = db.get(DocumentFolder, folder_id)
-            if not folder or folder.matter_id != document.matter_id:
-                raise ValueError("Folder belongs to a different matter")
-            if folder.matter_id is None and folder.created_by != user_id:
-                raise ValueError("Folder not found")
-        document.folder_id = folder_id
     document.updated_at = datetime.now(UTC)
     catalogue_entries = _sync_catalogue_access(db, document)
     db.commit()
@@ -631,9 +602,8 @@ def _catalogue_ready_document(db: Session, document: Document) -> None:
 def _sync_catalogue_access(db: Session, document: Document) -> list[KnowledgeBankEntry]:
     """Move the document's catalogue entries to its current matter.
 
-    Matter and team always follow the document. Scope follows only while it still
-    mirrors the document (matter or private). Entries promoted to team or firm-wide
-    keep their scope. Caller commits.
+    Matter always follows the document. Scope follows only while it still mirrors
+    the document (matter or private). Entries promoted to team keep their scope. Caller commits.
     """
     entries = list(
         db.scalars(
@@ -642,7 +612,6 @@ def _sync_catalogue_access(db: Session, document: Document) -> list[KnowledgeBan
     )
     for entry in entries:
         entry.matter_id = document.matter_id
-        entry.team_id = document.team_id
         if entry.scope in ("matter", "private"):
             entry.scope = "matter" if document.matter_id else "private"
     return entries

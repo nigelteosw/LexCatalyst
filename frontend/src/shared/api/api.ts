@@ -9,7 +9,6 @@ import type {
   ModelChoice,
   ChatThread,
   CurrentUser,
-  DocumentFolder,
   DocumentComment,
   FirmRole,
   FirmUser,
@@ -28,7 +27,6 @@ import type {
   ReviewHandoff,
   ReviewHandoffStatus,
   SessionUser,
-  Team,
   DocumentMetadata,
   WorkspaceDocument,
   BirdiePageContext,
@@ -107,8 +105,6 @@ type BackendDocument = {
   status: WorkspaceDocument['status']
   error_message: string | null
   matter_id: string | null
-  folder_id: string | null
-  team_id: string | null
   created_at: string
   updated_at: string
   chunk_count: number
@@ -161,28 +157,18 @@ type StreamChatOptions = {
   onDone: (payload: { threadId: string; message: Message; model: string }) => void
 }
 
-type BackendTeam = {
-  id: string
-  name: string
-  practice_area: string | null
-  created_at: string
-}
-
 type BackendMatter = {
   id: string
-  team_id: string
   title: string
   case_number: string
   client_name: string | null
   status: Matter['status']
   created_at: string
   updated_at: string
-  team: BackendTeam | null
 }
 
 type BackendKnowledgeBankEntry = {
   id: string
-  team_id: string | null
   matter_id: string | null
   source_entry_id: string | null
   source_document_id: string | null
@@ -203,13 +189,12 @@ type BackendKnowledgeBankEntry = {
   version: number
   created_at: string
   updated_at: string
-  team: BackendTeam | null
   matter: BackendMatter | null
 }
 
 type BackendKnowledgeBankEntrySummary = Omit<
   BackendKnowledgeBankEntry,
-  'body_markdown' | 'team' | 'matter'
+  'body_markdown' | 'matter'
 > & {
   body_preview: string
 }
@@ -371,8 +356,6 @@ function mapDocument(document: BackendDocument): WorkspaceDocument {
     status: document.status,
     errorMessage: document.error_message,
     matterId: document.matter_id,
-    folderId: document.folder_id ?? null,
-    teamId: document.team_id,
     createdAt: document.created_at,
     updatedAt: document.updated_at,
     chunkCount: document.chunk_count,
@@ -397,33 +380,21 @@ function mapDocumentComment(comment: BackendDocumentComment): DocumentComment {
   }
 }
 
-function mapTeam(team: BackendTeam): Team {
-  return {
-    id: team.id,
-    name: team.name,
-    practiceArea: team.practice_area,
-    createdAt: team.created_at,
-  }
-}
-
 function mapMatter(matter: BackendMatter): Matter {
   return {
     id: matter.id,
-    teamId: matter.team_id,
     title: matter.title,
     caseNumber: matter.case_number,
     clientName: matter.client_name,
     status: matter.status,
     createdAt: matter.created_at,
     updatedAt: matter.updated_at,
-    team: matter.team ? mapTeam(matter.team) : null,
   }
 }
 
 function mapKnowledgeBankEntry(entry: BackendKnowledgeBankEntry): KnowledgeBankEntry {
   return {
     id: entry.id,
-    teamId: entry.team_id,
     matterId: entry.matter_id,
     sourceEntryId: entry.source_entry_id,
     sourceDocumentId: entry.source_document_id,
@@ -444,7 +415,6 @@ function mapKnowledgeBankEntry(entry: BackendKnowledgeBankEntry): KnowledgeBankE
     version: entry.version,
     createdAt: entry.created_at,
     updatedAt: entry.updated_at,
-    team: entry.team ? mapTeam(entry.team) : null,
     matter: entry.matter ? mapMatter(entry.matter) : null,
   }
 }
@@ -454,7 +424,6 @@ function mapKnowledgeBankEntrySummary(
 ): KnowledgeBankEntry {
   return {
     id: entry.id,
-    teamId: entry.team_id,
     matterId: entry.matter_id,
     sourceEntryId: entry.source_entry_id,
     sourceDocumentId: entry.source_document_id,
@@ -475,7 +444,6 @@ function mapKnowledgeBankEntrySummary(
     version: entry.version,
     createdAt: entry.created_at,
     updatedAt: entry.updated_at,
-    team: null,
     matter: null,
   }
 }
@@ -538,13 +506,12 @@ export async function listDocuments(): Promise<WorkspaceDocument[]> {
 
 export async function uploadDocument(
   file: File,
-  target?: { matterId?: string | null; folderId?: string | null },
+  target?: { matterId?: string | null },
 ): Promise<WorkspaceDocument> {
   const token = localStorage.getItem('token')
   const body = new FormData()
   body.append('file', file)
   if (target?.matterId) body.append('matter_id', target.matterId)
-  if (target?.folderId) body.append('folder_id', target.folderId)
 
   const headers = new Headers()
   if (token) {
@@ -565,68 +532,6 @@ export async function uploadDocument(
   }
 
   return mapDocument(await response.json() as BackendDocument)
-}
-
-type BackendDocumentFolder = {
-  id: string
-  matter_id: string | null
-  name: string
-  created_by: string
-  can_manage: boolean
-  created_at: string
-  updated_at: string
-}
-
-function mapDocumentFolder(folder: BackendDocumentFolder): DocumentFolder {
-  return {
-    id: folder.id,
-    matterId: folder.matter_id,
-    name: folder.name,
-    createdBy: folder.created_by,
-    canManage: folder.can_manage,
-    createdAt: folder.created_at,
-    updatedAt: folder.updated_at,
-  }
-}
-
-/** matterId null = the caller's General folders. */
-export async function listDocumentFolders(matterId: string | null): Promise<DocumentFolder[]> {
-  const folders = await request<BackendDocumentFolder[]>(
-    `/document-folders?matter_id=${encodeURIComponent(matterId ?? 'general')}`,
-  )
-  return folders.map(mapDocumentFolder)
-}
-
-export async function createDocumentFolder(name: string, matterId: string | null): Promise<DocumentFolder> {
-  return mapDocumentFolder(
-    await request<BackendDocumentFolder>('/document-folders', {
-      method: 'POST',
-      body: JSON.stringify({ name, matter_id: matterId }),
-    }),
-  )
-}
-
-export async function renameDocumentFolder(id: string, name: string): Promise<DocumentFolder> {
-  return mapDocumentFolder(
-    await request<BackendDocumentFolder>(`/document-folders/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ name }),
-    }),
-  )
-}
-
-export async function deleteDocumentFolder(id: string): Promise<void> {
-  await request<void>(`/document-folders/${id}`, { method: 'DELETE' })
-}
-
-/** folderId null = back to the matter root. */
-export async function moveDocumentToFolder(id: string, folderId: string | null): Promise<WorkspaceDocument> {
-  return mapDocument(
-    await request<BackendDocument>(`/documents/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ folder_id: folderId }),
-    }),
-  )
 }
 
 export async function deleteDocument(id: string): Promise<void> {
@@ -851,7 +756,6 @@ export async function createMatter(payload: {
   title: string
   caseNumber: string
   clientName?: string
-  teamId?: string
 }): Promise<Matter> {
   const matter = await request<BackendMatter>('/matters', {
     method: 'POST',
@@ -859,7 +763,6 @@ export async function createMatter(payload: {
       title: payload.title,
       case_number: payload.caseNumber,
       client_name: payload.clientName,
-      team_id: payload.teamId,
     }),
   })
   return mapMatter(matter)
@@ -888,7 +791,6 @@ export async function listKnowledgeBankEntryPage(params?: {
   entryType?: KnowledgeBankEntryType
   matterId?: string
   contextMatterId?: string
-  teamId?: string
   piiStatus?: KnowledgeBankEntry['piiStatus']
   query?: string
   limit?: number
@@ -902,7 +804,6 @@ export async function listKnowledgeBankEntryPage(params?: {
   if (params?.entryType) search.set('entry_type', params.entryType)
   if (params?.matterId) search.set('matter_id', params.matterId)
   if (params?.contextMatterId) search.set('context_matter_id', params.contextMatterId)
-  if (params?.teamId) search.set('team_id', params.teamId)
   if (params?.piiStatus) search.set('pii_status', params.piiStatus)
   if (params?.query) search.set('query', params.query)
   search.set('limit', String(params?.limit ?? 30))
@@ -961,7 +862,6 @@ export async function createKnowledgeBankEntry(payload: {
   entryType: KnowledgeBankEntryType
   tags: string[]
   matterId?: string | null
-  teamId?: string | null
 }): Promise<KnowledgeBankEntry> {
   return mapKnowledgeBankEntry(
     await request<BackendKnowledgeBankEntry>('/kb/entries', {
@@ -973,7 +873,6 @@ export async function createKnowledgeBankEntry(payload: {
         entry_type: payload.entryType,
         tags: payload.tags,
         matter_id: payload.matterId,
-        team_id: payload.teamId,
       }),
     }),
   )
@@ -1001,7 +900,6 @@ export async function updateKnowledgeBankEntry(
     entryType: KnowledgeBankEntryType
     tags: string[]
     matterId: string | null
-    teamId: string | null
   }>,
 ): Promise<KnowledgeBankEntry> {
   return mapKnowledgeBankEntry(
@@ -1014,7 +912,6 @@ export async function updateKnowledgeBankEntry(
         entry_type: payload.entryType,
         tags: payload.tags,
         matter_id: payload.matterId,
-        team_id: payload.teamId,
       }),
     }),
   )
@@ -1151,7 +1048,6 @@ export async function getCurrentUser(): Promise<CurrentUser> {
     full_name: string | null
     firm_role: FirmRole
     is_admin: boolean
-    default_team_id: string | null
     created_at: string
   }>('/me')
   return {
@@ -1160,7 +1056,6 @@ export async function getCurrentUser(): Promise<CurrentUser> {
     fullName: u.full_name,
     firmRole: u.firm_role,
     isAdmin: u.is_admin,
-    defaultTeamId: u.default_team_id,
     createdAt: u.created_at,
   }
 }
@@ -1380,7 +1275,6 @@ type BackendResourceMetadata = {
   title: string | null
   owner_user_id: string | null
   created_by: string | null
-  team_id: string | null
   matter_id: string | null
   scope: string | null
   source_document_id: string | null
@@ -1393,7 +1287,6 @@ type BackendResourceMetadata = {
 export async function listResourceMetadata(params?: {
   resourceType?: string
   matterId?: string
-  teamId?: string
   scope?: string
   limit?: number
   offset?: number
@@ -1401,7 +1294,6 @@ export async function listResourceMetadata(params?: {
   const qs = new URLSearchParams()
   if (params?.resourceType) qs.set('resource_type', params.resourceType)
   if (params?.matterId) qs.set('matter_id', params.matterId)
-  if (params?.teamId) qs.set('team_id', params.teamId)
   if (params?.scope) qs.set('scope', params.scope)
   if (params?.limit != null) qs.set('limit', String(params.limit))
   if (params?.offset != null) qs.set('offset', String(params.offset))
@@ -1414,7 +1306,6 @@ export async function listResourceMetadata(params?: {
     title: r.title,
     ownerUserId: r.owner_user_id,
     createdBy: r.created_by,
-    teamId: r.team_id,
     matterId: r.matter_id,
     scope: r.scope,
     sourceDocumentId: r.source_document_id,

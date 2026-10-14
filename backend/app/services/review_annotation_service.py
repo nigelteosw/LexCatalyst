@@ -233,7 +233,6 @@ async def promote_annotation_to_kb(
     )
 
     kb_schema = KnowledgeBankEntryCreate(
-        team_id=None,
         matter_id=handoff.matter_id if schema.target_scope == "matter" else None,
         scope=schema.target_scope,
         entry_type=schema.entry_type,

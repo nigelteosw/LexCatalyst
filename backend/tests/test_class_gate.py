@@ -9,13 +9,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.class_gate import install_class_gate
 from app.database import Base
-from app.models import ClassMembership, MentorshipClass, Team, User
+from app.models import ClassMembership, MentorshipClass, User
 
 
 class ClassGateTests(unittest.TestCase):
     def test_pending_user_cannot_reach_workspace_endpoint(self) -> None:
         engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        Base.metadata.create_all(engine, tables=[User.__table__, MentorshipClass.__table__, ClassMembership.__table__, Team.__table__])
+        Base.metadata.create_all(engine, tables=[User.__table__, MentorshipClass.__table__, ClassMembership.__table__, ])
         db_factory = sessionmaker(bind=engine)
         with Session(engine) as db:
             db.add(User(id="student", email="student@example.test", google_id="student"))

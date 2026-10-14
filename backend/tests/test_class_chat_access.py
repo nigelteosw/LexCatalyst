@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.database import Base
-from app.models import ChatThread, ClassMembership, Matter, MentorshipClass, Team, User
+from app.models import ChatThread, ClassMembership, Matter, MentorshipClass, User
 from app.services.chat_service import get_or_create_thread, list_threads
 
 
@@ -13,7 +13,7 @@ class ClassChatAccessTests(unittest.TestCase):
         engine = create_engine("sqlite://")
         Base.metadata.create_all(engine, tables=[
             User.__table__, MentorshipClass.__table__, ClassMembership.__table__,
-            Team.__table__, Matter.__table__, ChatThread.__table__,
+            Matter.__table__, ChatThread.__table__,
         ])
         with Session(engine) as db:
             db.add(User(id="u", email="u@example.test", google_id="u"))

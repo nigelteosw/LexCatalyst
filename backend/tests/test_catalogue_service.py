@@ -85,8 +85,8 @@ class SyncCatalogueAccessTests(unittest.TestCase):
         return db
 
     def test_moving_to_general_makes_mirrored_entries_private(self) -> None:
-        entry = SimpleNamespace(matter_id="m-1", team_id=None, scope="matter")
-        document = SimpleNamespace(id="d-1", matter_id=None, team_id=None)
+        entry = SimpleNamespace(matter_id="m-1", scope="matter")
+        document = SimpleNamespace(id="d-1", matter_id=None)
 
         result = _sync_catalogue_access(self._db_with([entry]), document)
 
@@ -95,8 +95,8 @@ class SyncCatalogueAccessTests(unittest.TestCase):
         self.assertEqual(entry.scope, "private")
 
     def test_moving_into_matter_makes_mirrored_entries_matter_scoped(self) -> None:
-        entry = SimpleNamespace(matter_id=None, team_id=None, scope="private")
-        document = SimpleNamespace(id="d-1", matter_id="m-2", team_id=None)
+        entry = SimpleNamespace(matter_id=None, scope="private")
+        document = SimpleNamespace(id="d-1", matter_id="m-2")
 
         _sync_catalogue_access(self._db_with([entry]), document)
 
@@ -104,12 +104,12 @@ class SyncCatalogueAccessTests(unittest.TestCase):
         self.assertEqual(entry.scope, "matter")
 
     def test_promoted_entries_keep_their_scope(self) -> None:
-        entry = SimpleNamespace(matter_id="m-1", team_id=None, scope="firm_wide")
-        document = SimpleNamespace(id="d-1", matter_id=None, team_id=None)
+        entry = SimpleNamespace(matter_id="m-1", scope="team")
+        document = SimpleNamespace(id="d-1", matter_id=None)
 
         _sync_catalogue_access(self._db_with([entry]), document)
 
-        self.assertEqual(entry.scope, "firm_wide")
+        self.assertEqual(entry.scope, "team")
         self.assertIsNone(entry.matter_id)
 
 

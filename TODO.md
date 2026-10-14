@@ -1,9 +1,46 @@
 # Engineering TODO — Review Findings
 
+## Priority: mentorship pivot
+
+Specs: `docs/superpowers/specs/2026-10-13-*.md`. Sub-project 1 (mentorship core) is done on `main`
+(`4912407`..`89a53df`). Sub-projects 2 and 3 build on its feedback model; 4 can run alongside them.
+
+### 2. Team knowledge from anywhere — `2026-10-13-team-knowledge-anywhere-design.md`
+
+- [ ] Knowledge items carry `source_url`, `source_title` and `saved_via`; add clause, practice note,
+  checklist and case extract types.
+- [ ] "Save to team" from the extension (selection or page), LexChat and Birdie. Birdie suggests title,
+  type and tags; nothing is stored until the user confirms.
+- [ ] PII check blocks team-wide saves, enforced on the server as well as in the UI.
+- [ ] Upload becomes a fallback ("Add source document"), not the main way in.
+
+### 3. Birdie everywhere — `2026-10-13-birdie-everywhere-design.md`
+
+- [ ] "Allow on all sites" with an excluded-sites list; per-site mode stays.
+- [ ] "Check my draft" against the user's lessons and team guidance (on demand only).
+- [ ] Opt-in proactive nudges on Google Docs, Word Online and Outlook: debounced, rate-limited, only
+  when a paragraph matches a known lesson, with a "not helpful" suppression.
+- [ ] Google Docs comment capture into mentor feedback, plus "Capture as feedback" on any page.
+
+### 4. Cut and simplify — `2026-10-13-cut-and-simplify-design.md`
+
+- [ ] Phase A (low risk, do first): remove Dream and the catalogue backfill endpoints.
+- [x] Phase B (after sub-project 1, now unblocked): fold practice-group `teams` into the mentorship team,
+  remapping KB scope without widening any audience; drop document folders; refocus Home on mentorship.
+  Workboard and matters stay.
+
+### Verification still open
+
+- [x] Migration `c6d7e8f9a0b1` on local Postgres: `test_class_migration_postgres.py` 6/6.
+- [ ] Browser check of the Mentorship page and Team Management pairings with owner, mentor and member
+  accounts.
+
+---
+
 ## Demo-first action plan — reviewed 2026-09-21
 
-Start here. The older thematic inventory below is retained for context; this section supersedes
-its priorities and verification claims. This pass explored the review UI, handoff/annotation
+Review findings, reviewed 2026-09-21. This section supersedes the older inventory below on priorities
+and verification claims. Work it after the mentorship priorities above. This pass explored the review UI, handoff/annotation
 services and routes, schemas, KB promotion, document serving, navigation, and local checks.
 Findings below are code-confirmed unless explicitly labelled as needing runtime verification.
 They are **not implemented** unless checked. Use synthetic documents for the demo.
@@ -473,14 +510,3 @@ real-database authorization still need regression coverage; old LOC counts are n
       is the declared source of truth but sits outside it. Move it to `docs/plan.md`.
 
 ---
-
-## Earlier suggested order (superseded by the demo-first plan above)
-
-1. **§1 P0 bugs** — red test, unbounded memory tool. Hours, not days.
-2. **§2 P0 security** — the `JWT_SECRET_KEY`-derived encryption key and the hardcoded admin email.
-   Both are one-line changes with a migration; both are catastrophic if left.
-3. **§5 CI** — lock in 1 and 2 so they can't regress, before touching anything else.
-4. **§3 P1 connection pooling** — the first thing that breaks under real concurrent use.
-5. **§2 P1 tenancy decision** — not necessarily *build* it, but decide and write it down. The cost
-   of retrofitting only goes up.
-6. Everything else, opportunistically.

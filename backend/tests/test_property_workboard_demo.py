@@ -5,16 +5,16 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     ClassMembership, MentorshipClass, ActionItem, ChatMessage, ChatThread, Document, Matter, MatterMember, ResourceMetadata,
-    ReviewAnnotation, ReviewHandoff, ReviewLesson, Team, TeamMember, User,
+    ReviewAnnotation, ReviewHandoff, ReviewLesson, User,
 )
 from app.services import property_workboard_demo_service
 from app.services.property_workboard_demo_service import seed_property_workboard
 
 
 def _fake_upload(monkeypatch):
-    async def create_pending_document(db, *, user_id, filename, content_type, file_bytes, matter_id, team_id):
+    async def create_pending_document(db, *, user_id, filename, content_type, file_bytes, matter_id):
         document = Document(class_id=db.get(Matter, matter_id).class_id, user_id=user_id, filename=filename, content_type=content_type,
-                            status='ready', matter_id=matter_id, team_id=team_id, file_size=len(file_bytes))
+                            status='ready', matter_id=matter_id, file_size=len(file_bytes))
         db.add(document)
         db.commit()
         return document
@@ -28,7 +28,7 @@ def _fake_upload(monkeypatch):
 def test_property_demo_is_additive_repeatable_and_grants_matter_access(monkeypatch):
     _fake_upload(monkeypatch)
     engine = create_engine('sqlite://')
-    for model in (MentorshipClass, ClassMembership, Team, User, TeamMember, Matter, MatterMember, Document, ActionItem, ResourceMetadata,
+    for model in (MentorshipClass, ClassMembership, User, Matter, MatterMember, Document, ActionItem, ResourceMetadata,
                   ChatThread, ChatMessage, ReviewHandoff, ReviewAnnotation, ReviewLesson):
         model.__table__.create(engine)
     with Session(engine) as db:
@@ -102,7 +102,7 @@ def test_property_demo_route_is_hidden_without_demo_admin(monkeypatch):
 def test_property_demo_retries_failed_pdfs_without_duplicate_rounds(monkeypatch):
     _fake_upload(monkeypatch)
     engine = create_engine('sqlite://')
-    for model in (MentorshipClass, ClassMembership, Team, User, TeamMember, Matter, MatterMember, Document, ActionItem, ResourceMetadata,
+    for model in (MentorshipClass, ClassMembership, User, Matter, MatterMember, Document, ActionItem, ResourceMetadata,
                   ChatThread, ChatMessage, ReviewHandoff, ReviewAnnotation, ReviewLesson):
         model.__table__.create(engine)
     with Session(engine) as db:
@@ -133,7 +133,7 @@ def test_property_demo_retries_failed_pdfs_without_duplicate_rounds(monkeypatch)
 def test_property_demo_completes_a_partial_document_seed(monkeypatch):
     _fake_upload(monkeypatch)
     engine = create_engine('sqlite://')
-    for model in (MentorshipClass, ClassMembership, Team, User, TeamMember, Matter, MatterMember, Document, ActionItem, ResourceMetadata,
+    for model in (MentorshipClass, ClassMembership, User, Matter, MatterMember, Document, ActionItem, ResourceMetadata,
                   ChatThread, ChatMessage, ReviewHandoff, ReviewAnnotation, ReviewLesson):
         model.__table__.create(engine)
     original = property_workboard_demo_service.document_service.create_pending_document
@@ -165,7 +165,7 @@ def test_property_demo_completes_a_partial_document_seed(monkeypatch):
 def test_property_demo_is_separate_in_each_testing_team(monkeypatch):
     _fake_upload(monkeypatch)
     engine = create_engine('sqlite://')
-    for model in (MentorshipClass, ClassMembership, Team, User, TeamMember, Matter, MatterMember,
+    for model in (MentorshipClass, ClassMembership, User, Matter, MatterMember,
                   Document, ActionItem, ResourceMetadata, ChatThread, ChatMessage,
                   ReviewHandoff, ReviewAnnotation, ReviewLesson):
         model.__table__.create(engine)
@@ -205,10 +205,10 @@ def test_meridian_demo_reset_preserves_other_testing_team(monkeypatch):
     from app.services.mentorship_class_service import require_active_class_id
     engine = create_engine('sqlite://')
     Base.metadata.create_all(engine)
-    async def upload(db, *, user_id, filename, content_type, file_bytes, matter_id, team_id):
+    async def upload(db, *, user_id, filename, content_type, file_bytes, matter_id):
         document = Document(class_id=require_active_class_id(db, user_id), user_id=user_id,
                             filename=filename, content_type=content_type, storage_key='',
-                            status='ready', matter_id=matter_id, team_id=team_id, file_size=len(file_bytes))
+                            status='ready', matter_id=matter_id, file_size=len(file_bytes))
         db.add(document)
         db.commit()
         return document
@@ -227,7 +227,7 @@ def test_meridian_demo_reset_preserves_other_testing_team(monkeypatch):
             summary = asyncio.run(demo_seed_service.seed_demo(db, presenter=presenter))
             assert summary['documents'] == 3
             assert summary['kb_entries'] == len(demo_seed_service.KB_ENTRIES)
-        roots = (Team, Matter, Document, KnowledgeBankEntry, ActionItem, ReviewHandoff, ChatThread, Memory)
+        roots = (Matter, Document, KnowledgeBankEntry, ActionItem, ReviewHandoff, ChatThread, Memory)
         beta_ids = {model: {row.id for row in db.scalars(select(model).where(model.class_id == 'beta'))} for model in roots}
         asyncio.run(demo_seed_service.seed_demo(db, presenter=presenters[0]))
         for model, ids in beta_ids.items():

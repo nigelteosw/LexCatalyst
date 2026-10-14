@@ -97,7 +97,6 @@ export function MatterPage({
   // null = General; this is the value documents, threads and actions carry.
   const matterKey = isGeneral ? null : matterId
   const [tab, setTab] = useState<Tab>('documents')
-  const [folderId, setFolderId] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -126,7 +125,7 @@ export function MatterPage({
     (a) => (a.matterId ?? null) === matterKey && a.status !== 'done',
   )
 
-  const upload = useDocumentUpload(matterKey, folderId)
+  const upload = useDocumentUpload(matterKey)
 
   if (!isGeneral && !matter) {
     return (
@@ -205,7 +204,7 @@ export function MatterPage({
               onClick={() => fileRef.current?.click()}
               type="button"
             >
-              {upload.isPending ? 'Uploading…' : 'Upload'}
+              {upload.isPending ? 'Uploading…' : 'Add source document'}
             </button>
             <button
               className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
@@ -251,9 +250,7 @@ export function MatterPage({
           <div role="tabpanel">
             {tab === 'documents' && (
               <MatterDocuments
-                folderId={folderId}
                 matterId={matterKey}
-                onFolderChange={setFolderId}
                 onUploadError={setUploadError}
                 search={search}
                 uploadError={uploadError}

@@ -14,7 +14,7 @@ export type MessageSource = {
   title: string
   locator: string | null
   matterId: string | null
-  /** firm_wide | team | matter | private */
+  /** team | matter | private */
   scope: string | null
   /** The passage the answer relied on. */
   excerpt: string | null
@@ -39,16 +39,6 @@ export type ChatThread = {
   updatedAt: string
 }
 
-export type DocumentFolder = {
-  id: string
-  matterId: string | null
-  name: string
-  createdBy: string
-  canManage: boolean
-  createdAt: string
-  updatedAt: string
-}
-
 export type DocumentStatus = 'uploaded' | 'processing' | 'ready' | 'failed'
 
 export type WorkspaceDocument = {
@@ -58,8 +48,6 @@ export type WorkspaceDocument = {
   status: DocumentStatus
   errorMessage?: string | null
   matterId?: string | null
-  folderId?: string | null
-  teamId?: string | null
   createdAt: string
   updatedAt: string
   chunkCount: number
@@ -119,25 +107,16 @@ export type Memory = {
   updatedAt: string
 }
 
-export type Team = {
-  id: string
-  name: string
-  practiceArea?: string | null
-  createdAt: string
-}
-
 export type MatterStatus = 'active' | 'closed' | 'archived'
 
 export type Matter = {
   id: string
-  teamId: string
   title: string
   caseNumber: string
   clientName?: string | null
   status: MatterStatus
   createdAt: string
   updatedAt: string
-  team?: Team | null
 }
 
 export type FirmRole = 'partner' | 'senior_associate' | 'associate' | 'admin'
@@ -160,7 +139,6 @@ export type CurrentUser = {
   fullName?: string | null
   firmRole: FirmRole
   isAdmin: boolean
-  defaultTeamId?: string | null
   createdAt: string
 }
 
@@ -169,7 +147,7 @@ export type SessionUser = Pick<
   'id' | 'email' | 'fullName' | 'firmRole' | 'isAdmin'
 >
 
-export type KnowledgeBankScope = 'firm_wide' | 'team' | 'matter' | 'private'
+export type KnowledgeBankScope = 'team' | 'matter' | 'private'
 export type KnowledgeBankEntryType = 'knowledge_bank' | 'style_guide' | 'action' | 'document'
 export type PiiStatus = 'clean' | 'flagged' | 'pending_review' | 'redacted'
 
@@ -286,7 +264,6 @@ export type KbEntryStatus = 'processing' | 'ready' | 'failed'
 
 export type KnowledgeBankEntry = {
   id: string
-  teamId?: string | null
   matterId?: string | null
   sourceEntryId?: string | null
   sourceDocumentId?: string | null
@@ -308,7 +285,6 @@ export type KnowledgeBankEntry = {
   version: number
   createdAt: string
   updatedAt: string
-  team?: Team | null
   matter?: Matter | null
 }
 
@@ -451,7 +427,6 @@ export type ResourceMetadata = {
   title: string | null
   ownerUserId: string | null
   createdBy: string | null
-  teamId: string | null
   matterId: string | null
   scope: string | null
   sourceDocumentId: string | null

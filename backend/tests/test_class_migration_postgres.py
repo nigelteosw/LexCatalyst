@@ -102,7 +102,6 @@ class ClassMigrationPostgresTests(unittest.TestCase):
         self.migrate(CLASS_HEAD_REVISION)
         self.add_active_classes("class-a", "class-b")
         with self.engine.begin() as conn:
-            conn.execute(text("UPDATE teams SET class_id = 'class-a' WHERE id = 'team-1'"))
             conn.execute(text("UPDATE matters SET class_id = 'class-a' WHERE id = 'matter-1'"))
             conn.execute(text("UPDATE documents SET class_id = 'class-a' WHERE id = 'doc-1'"))
 
@@ -119,7 +118,6 @@ class ClassMigrationPostgresTests(unittest.TestCase):
         self.migrate(CLASS_HEAD_REVISION)
         self.add_active_classes("class-a")
         mapping = {
-            "teams": {"team-1": "class-a"},
             "matters": {"matter-1": "class-a"},
             "documents": {"doc-1": "class-a"},
         }
@@ -129,11 +127,9 @@ class ClassMigrationPostgresTests(unittest.TestCase):
             second = apply_class_backfill(db, mapping=mapping)
             report = build_class_backfill_report(db)
 
-        self.assertEqual(first["moved"], 3)
+        self.assertEqual(first["moved"], 2)
         self.assertEqual(second["moved"], 0)
-        # The seeded firm-wide default team is never mapped by the reviewed backfill, so it stays
-        # quarantined; every row the mapping named has moved out.
-        self.assertEqual(report["quarantined"], {"teams": 1})
+        self.assertEqual(report["quarantined"], {})
 
     def test_every_class_link_has_a_same_class_foreign_key(self) -> None:
         self.migrate(CLASS_HEAD_REVISION)
@@ -156,7 +152,6 @@ class ClassMigrationPostgresTests(unittest.TestCase):
         self.migrate(CLASS_HEAD_REVISION)
         self.add_active_classes("class-a")
         with self.engine.begin() as conn:
-            conn.execute(text("UPDATE teams SET class_id = 'class-a' WHERE id = 'team-1'"))
             conn.execute(text("UPDATE matters SET class_id = 'class-a' WHERE id = 'matter-1'"))
             conn.execute(text("UPDATE documents SET class_id = 'class-a' WHERE id = 'doc-1'"))
         with self.engine.begin() as conn:
@@ -164,6 +159,55 @@ class ClassMigrationPostgresTests(unittest.TestCase):
         with self.engine.connect() as conn:
             row = conn.execute(text("SELECT matter_id, class_id FROM documents WHERE id = 'doc-1'")).one()
         self.assertEqual(row, (None, "class-a"))
+
+    def test_practice_team_scope_remap_never_widens_audience(self) -> None:
+        self.migrate("00a55a720011")
+        with self.engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO users (id, email, google_id) VALUES "
+                "('u1', 'u1@example.test', 'u1'), ('u2', 'u2@example.test', 'u2'), "
+                "('u3', 'u3@example.test', 'u3'), ('u4', 'u4@example.test', 'u4')"
+            ))
+            conn.execute(text(
+                "INSERT INTO mentorship_classes (id, name, status) VALUES "
+                "('class-one', 'One', 'active'), ('class-two', 'Two', 'active')"
+            ))
+            conn.execute(text(
+                "INSERT INTO class_memberships (id, class_id, user_id, role, status) VALUES "
+                "('m1', 'class-one', 'u1', 'member', 'active'), ('m2', 'class-one', 'u2', 'member', 'active'), "
+                "('m3', 'class-two', 'u3', 'member', 'active'), ('m4', 'class-two', 'u4', 'member', 'active')"
+            ))
+            # class-one: one practice team with exactly the class's members, so its entries widen to nothing.
+            conn.execute(text("INSERT INTO teams (id, name, class_id) VALUES ('team-solo', 'Solo', 'class-one')"))
+            conn.execute(text("INSERT INTO team_members (id, team_id, user_id, role) VALUES ('tm1', 'team-solo', 'u1', 'associate'), ('tm2', 'team-solo', 'u2', 'associate')"))
+            # class-two: one practice team that does not cover the class, so its entries must narrow.
+            conn.execute(text("INSERT INTO teams (id, name, class_id) VALUES ('team-part', 'Part', 'class-two')"))
+            conn.execute(text("INSERT INTO team_members (id, team_id, user_id, role) VALUES ('tm3', 'team-part', 'u3', 'associate')"))
+            for entry_id, class_id, team_id, scope, creator in (
+                ("kb-one", "class-one", "team-solo", "team", "u1"),
+                ("kb-two", "class-two", "team-part", "team", "u3"),
+                ("kb-firm", "class-one", None, "firm_wide", "u1"),
+            ):
+                conn.execute(text(
+                    "INSERT INTO kb_entries (id, class_id, team_id, scope, entry_type, title, body_markdown, tags, "
+                    "pii_status, created_by, created_by_role, version) VALUES "
+                    "(:id, :class_id, :team_id, :scope, 'knowledge_bank', 'T', 'B', CAST('[]' AS JSON), "
+                    "'clean', :creator, 'associate', 1)"
+                ), {"id": entry_id, "class_id": class_id, "team_id": team_id, "scope": scope, "creator": creator})
+
+        self.migrate(CLASS_HEAD_REVISION)
+
+        with self.engine.connect() as conn:
+            scopes = dict(conn.execute(text("SELECT id, scope FROM kb_entries")).all())
+            owner = conn.execute(text("SELECT created_by FROM kb_entries WHERE id = 'kb-two'")).scalar_one()
+            audit = conn.execute(text(
+                "SELECT action, subject_id FROM class_audit_events WHERE class_id = 'class-two'"
+            )).all()
+            has_teams = inspect(self.engine).has_table("teams")
+        self.assertEqual(scopes, {"kb-one": "team", "kb-two": "private", "kb-firm": "team"})
+        self.assertEqual(owner, "u3")
+        self.assertEqual([(action, subject) for action, subject in audit], [("kb_scope_narrowed:kb-two", "u3")])
+        self.assertFalse(has_teams)
 
     def run_cli(self, *args: str) -> tuple[int, str]:
         out = io.StringIO()
@@ -190,8 +234,7 @@ class ClassMigrationPostgresTests(unittest.TestCase):
         self.assertEqual(json.loads(report)["quarantined"]["documents"], 1)
 
         bad = self.write_mapping({
-            "teams": {"team-1": "class-a"},
-            "matters": {"matter-1": "class-b"},
+            "matters": {"matter-1": "class-a"},
             "documents": {"doc-1": "class-b"},
         })
         code, _ = self.run_cli("apply", "--mapping", bad)
@@ -200,13 +243,12 @@ class ClassMigrationPostgresTests(unittest.TestCase):
             self.assertEqual(conn.execute(text("SELECT count(*) FROM documents WHERE class_id = :q"), {"q": QUARANTINE_CLASS_ID}).scalar_one(), 1)
 
         good = self.write_mapping({
-            "teams": {"team-1": "class-a"},
             "matters": {"matter-1": "class-a"},
             "documents": {"doc-1": "class-a"},
         })
         code, out = self.run_cli("apply", "--mapping", good)
         self.assertEqual(code, 0)
-        self.assertEqual(json.loads(out)["moved"], 3)
+        self.assertEqual(json.loads(out)["moved"], 2)
 
 
 if __name__ == "__main__":

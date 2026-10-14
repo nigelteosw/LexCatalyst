@@ -58,7 +58,7 @@ const KB_HELP: HelpContent = {
     {
       emoji: '🔒',
       title: 'Choose who can see it',
-      body: 'Private — only you. Matter — everyone on that matter. Team — your practice group. Firm-wide — the whole firm (partners only).',
+      body: 'Private — only you. Matter — everyone on that matter. Team — everyone in your team (partners publish here).',
     },
     {
       emoji: '🤖',
@@ -67,7 +67,7 @@ const KB_HELP: HelpContent = {
     },
     {
       emoji: '📤',
-      title: 'Promote matter knowledge firm-wide',
+      title: 'Promote matter knowledge to the team',
       body: 'Open an entry and click "Promote". The AI proposes redactions to remove client-identifying information before a lawyer approves the clean version.',
     },
   ],
@@ -76,7 +76,7 @@ const KB_HELP: HelpContent = {
       label: 'Partner',
       tier: 'top',
       abilities: [
-        'Create and edit firm-wide entries',
+        'Create and edit team entries',
         'Approve promoted entries from matters',
         'View all entries across all scopes',
       ],
@@ -86,7 +86,7 @@ const KB_HELP: HelpContent = {
       tier: 'mid',
       abilities: [
         'Create team and matter-scoped entries',
-        'Promote matter entries to firm-wide (partner approves)',
+        'Promote matter entries to the team (partner approves)',
         'Edit entries in their team and matters',
       ],
     },
@@ -95,7 +95,7 @@ const KB_HELP: HelpContent = {
       tier: 'base',
       abilities: [
         'Create private and matter-scoped entries',
-        'Read firm-wide, team, and matter entries they have access to',
+        'Read team and matter entries they have access to',
         'Edit their own entries',
       ],
     },
@@ -160,9 +160,9 @@ export function KnowledgeBankPanel({
   currentUser,
 }: KnowledgeBankPanelProps) {
   const isWriter = canWrite(currentUser)
-  const canCreateFirmWide =
+  const isPartner =
     currentUser?.isAdmin === true || currentUser?.firmRole === 'partner'
-  const canViewAudit = canCreateFirmWide
+  const canViewAudit = isPartner
   const queryClient = useQueryClient()
   const { current, selectKnowledgeBank } = useWorkspaceNavigation()
   const selectedEntryId = current.view === 'knowledge_bank' ? current.entryId : null
@@ -938,7 +938,6 @@ function ScopeAccessEditor({
       updateKnowledgeBankEntry(entry.id, {
         scope,
         matterId: scope === 'matter' ? matterId : null,
-        teamId: null,
       }),
     onSuccess: (updated) => {
       queryClient.setQueryData(['kbEntry', entry.id], updated)
@@ -1187,8 +1186,7 @@ function EmptyState({
 }
 
 function scopeTone(scope: KnowledgeBankScope): 'green' | 'blue' | 'purple' | 'neutral' {
-  if (scope === 'firm_wide') return 'green'
-  if (scope === 'team') return 'blue'
+  if (scope === 'team') return 'green'
   if (scope === 'matter') return 'purple'
   return 'neutral'
 }

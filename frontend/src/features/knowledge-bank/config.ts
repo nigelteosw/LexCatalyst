@@ -26,15 +26,13 @@ export const entryTypes: Array<{
 ]
 
 export const scopeLabels: Record<KnowledgeBankScope, string> = {
-  firm_wide: 'Firm-wide',
   team: 'Team',
   matter: 'Matter',
   private: 'Private',
 }
 
 export const scopeDescriptions: Record<KnowledgeBankScope, string> = {
-  firm_wide: 'Visible to everyone in the firm.',
-  team: 'Visible to everyone in the selected team.',
+  team: 'Visible to everyone in your team. Only partners can publish here.',
   matter: 'Visible only to people with access to the selected matter.',
   private: 'Visible only to you.',
 }

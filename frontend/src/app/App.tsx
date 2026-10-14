@@ -650,6 +650,7 @@ function App() {
         userInitials={userInitials}
         onLogout={handleLogout}
         userRole={(currentUser?.firmRole ?? user?.firmRole ?? '').replace('_', ' ')}
+        classRole={classStatus?.status === 'active' ? classStatus.role : null}
         menuExtra={
           <DemoSwitcher
             currentUserId={currentUser?.id ?? user?.id ?? null}

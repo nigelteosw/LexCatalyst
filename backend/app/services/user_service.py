@@ -1,7 +1,7 @@
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.models import ClassMembership, MatterMember, TeamMember, User
+from app.models import ClassMembership, MatterMember, User
 from app.services.mentorship_class_service import require_class_context
 
 DUMMY_USERS = (
@@ -35,11 +35,6 @@ def update_user_role(db: Session, *, user: User, firm_role: str) -> User:
         user.firm_role = firm_role
 
     db.execute(
-        update(TeamMember)
-        .where(TeamMember.user_id == user.id)
-        .values(role=user.firm_role)
-    )
-    db.execute(
         update(MatterMember)
         .where(MatterMember.user_id == user.id)
         .values(role=user.firm_role)
@@ -66,8 +61,6 @@ def list_firm_users(db: Session, *, user: User) -> list[User]:
 
 def create_dummy_users(db: Session, count: int = len(DUMMY_USERS), *, actor: User) -> list[User]:
     """Create separate synthetic accounts inside the actor's approved class."""
-    from app.services.organization_service import ensure_default_team
-
     users: list[User] = []
     context = require_class_context(db, actor)
     for template in DUMMY_USERS[: max(0, min(count, len(DUMMY_USERS)))]:
@@ -103,7 +96,6 @@ def create_dummy_users(db: Session, count: int = len(DUMMY_USERS), *, actor: Use
             membership.role = "member"
             membership.removed_at = None
         db.commit()
-        ensure_default_team(db, user)
         users.append(user)
 
     return users

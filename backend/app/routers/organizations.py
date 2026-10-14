@@ -1,4 +1,4 @@
-"""Teams, matters, and matter memberships."""
+"""Matters and matter memberships."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
@@ -14,7 +14,6 @@ from app.schemas import (
     MatterMemberResponse,
     MatterResponse,
     MatterUpdate,
-    TeamResponse,
 )
 from app.services.organization_service import (
     add_matter_member,
@@ -23,7 +22,6 @@ from app.services.organization_service import (
     get_matter,
     list_matter_members,
     list_matters,
-    list_teams,
     remove_matter_member,
     update_matter,
 )
@@ -42,17 +40,6 @@ def _require_membership_manager(db: Session, user: User, matter_id: str) -> None
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Partner access or senior membership on this matter is required",
     )
-
-
-@router.get("/teams", response_model=list[TeamResponse])
-def teams(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> list[TeamResponse]:
-    try:
-        return [TeamResponse.model_validate(team) for team in list_teams(db, current_user)]
-    except SQLAlchemyError as exc:
-        raise HTTPException(status_code=503, detail="Team database is unavailable") from exc
 
 
 @router.get("/matters", response_model=list[MatterResponse])

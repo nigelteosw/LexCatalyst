@@ -12,8 +12,6 @@ from app.models import (
     Matter,
     MatterMember,
     PiiRedaction,
-    Team,
-    TeamMember,
     User,
 )
 from app.services.catalogue_service import MAX_SUMMARY, normalise_tags
@@ -48,34 +46,17 @@ class KnowledgeBankScopeError(KnowledgeBankError):
     pass
 
 
-def _resolve_scope_targets(
+def _resolve_scope_matter_id(
     db: Session,
     *,
     user: User,
     scope: str,
-    team_id: str | None,
     matter_id: str | None,
-) -> tuple[str | None, str | None]:
+) -> str | None:
+    """Team and private entries have no matter; matter entries need matter membership."""
     class_id = require_active_class_id(db, user.id)
-    if scope in {"firm_wide", "private"}:
-        return None, None
-
-    if scope == "team":
-        resolved_team_id = team_id or user.default_team_id
-        if not resolved_team_id:
-            raise KnowledgeBankScopeError("Select a team for team access")
-        team = db.get(Team, resolved_team_id)
-        if not team or team.class_id != class_id:
-            raise KnowledgeBankScopeError("You do not have access to that team")
-        is_member = db.scalar(
-            select(TeamMember.id).where(
-                TeamMember.team_id == resolved_team_id,
-                TeamMember.user_id == user.id,
-            )
-        )
-        if not is_member:
-            raise KnowledgeBankScopeError("You do not have access to that team")
-        return resolved_team_id, None
+    if scope in {"team", "private"}:
+        return None
 
     if scope == "matter":
         if not matter_id:
@@ -91,7 +72,7 @@ def _resolve_scope_targets(
         )
         if not is_member:
             raise KnowledgeBankScopeError("You do not have access to that matter")
-        return matter.team_id, matter.id
+        return matter.id
 
     raise KnowledgeBankScopeError("Invalid Knowledge Bank scope")
 
@@ -235,8 +216,7 @@ def _entry_query():
     return select(KnowledgeBankEntry).options(
         defer(KnowledgeBankEntry.embedding),
         defer(KnowledgeBankEntry.embedding_content_hash),
-        joinedload(KnowledgeBankEntry.team),
-        joinedload(KnowledgeBankEntry.matter).joinedload(Matter.team),
+        joinedload(KnowledgeBankEntry.matter),
     )
 
 
@@ -244,14 +224,7 @@ def _user_kb_scope_filter(db: Session, user: User):
     """Build a WHERE clause that limits results to entries the user can read."""
     class_id = require_active_class_id(db, user.id)
     return (KnowledgeBankEntry.class_id == class_id) & or_(
-        KnowledgeBankEntry.scope == "firm_wide",
-        (KnowledgeBankEntry.scope == "team")
-        & exists(
-            select(TeamMember.id).where(
-                TeamMember.team_id == KnowledgeBankEntry.team_id,
-                TeamMember.user_id == user.id,
-            )
-        ),
+        KnowledgeBankEntry.scope == "team",
         (KnowledgeBankEntry.scope == "matter")
         & exists(
             select(MatterMember.id).where(
@@ -273,7 +246,6 @@ def _apply_kb_filters(
     entry_type: str | None,
     matter_id: str | None,
     context_matter_id: str | None,
-    team_id: str | None,
     pii_status: str | None,
     query: str | None,
 ):
@@ -293,8 +265,6 @@ def _apply_kb_filters(
                 KnowledgeBankEntry.matter_id == context_matter_id,
             )
         )
-    if team_id:
-        stmt = stmt.where(KnowledgeBankEntry.team_id == team_id)
     if pii_status:
         stmt = stmt.where(KnowledgeBankEntry.pii_status == pii_status)
     if query and query.strip():
@@ -316,7 +286,6 @@ def list_kb_entries(
     entry_type: str | None = None,
     matter_id: str | None = None,
     context_matter_id: str | None = None,
-    team_id: str | None = None,
     pii_status: str | None = None,
     query: str | None = None,
     limit: int = 30,
@@ -324,7 +293,6 @@ def list_kb_entries(
 ) -> tuple[list[dict], int | None]:
     stmt = select(
         KnowledgeBankEntry.id,
-        KnowledgeBankEntry.team_id,
         KnowledgeBankEntry.matter_id,
         KnowledgeBankEntry.source_entry_id,
         KnowledgeBankEntry.source_document_id,
@@ -350,7 +318,6 @@ def list_kb_entries(
         entry_type=entry_type,
         matter_id=matter_id,
         context_matter_id=context_matter_id,
-        team_id=team_id,
         pii_status=pii_status,
         query=query,
     )
@@ -396,16 +363,14 @@ async def create_kb_entry(
     user: User,
     schema: KnowledgeBankEntryCreate,
 ) -> KnowledgeBankEntry:
-    team_id, matter_id = _resolve_scope_targets(
+    matter_id = _resolve_scope_matter_id(
         db,
         user=user,
         scope=schema.scope,
-        team_id=schema.team_id,
         matter_id=schema.matter_id,
     )
     entry = KnowledgeBankEntry(
         class_id=require_active_class_id(db, user.id),
-        team_id=team_id,
         matter_id=matter_id,
         scope=schema.scope,
         entry_type=schema.entry_type,
@@ -449,20 +414,18 @@ async def update_kb_entry(
     if not entry:
         return None
     updates = schema.model_dump(exclude_unset=True)
-    classification_fields = {"scope", "team_id", "matter_id"}
+    classification_fields = {"scope", "matter_id"}
     if classification_fields.intersection(schema.model_fields_set):
         if entry.created_by != user.id:
             raise KnowledgeBankScopeError("Only the entry owner can change its access scope")
         target_scope = updates.get("scope", entry.scope)
-        target_team_id, target_matter_id = _resolve_scope_targets(
+        target_matter_id = _resolve_scope_matter_id(
             db,
             user=user,
             scope=target_scope,
-            team_id=updates.get("team_id", entry.team_id),
             matter_id=updates.get("matter_id", entry.matter_id),
         )
         updates["scope"] = target_scope
-        updates["team_id"] = target_team_id
         updates["matter_id"] = target_matter_id
     changed = any(getattr(entry, field) != value for field, value in updates.items())
     if not changed:
@@ -628,17 +591,15 @@ async def create_pending_review_entry(
     PiiRedaction row until an approver signs it off. Chat search already excludes
     ``pending_review`` entries.
     """
-    team_id, matter_id = _resolve_scope_targets(
+    matter_id = _resolve_scope_matter_id(
         db,
         user=user,
         scope=schema.scope,
-        team_id=schema.team_id,
         matter_id=schema.matter_id,
     )
     redacted_fields, redacted_content = await _propose_redactions(db, user.id, schema.body_markdown)
     entry = KnowledgeBankEntry(
         class_id=require_active_class_id(db, user.id),
-        team_id=team_id,
         matter_id=matter_id,
         source_entry_id=source_entry_id,
         scope=schema.scope,
@@ -689,8 +650,8 @@ async def promote_kb_entry(
     source = get_kb_entry(db, entry_id)
     if not source:
         raise KnowledgeBankError("Knowledge bank entry not found")
-    if source.scope not in {"matter", "team"}:
-        raise KnowledgeBankError("Only matter or team entries can be promoted")
+    if source.scope != "matter":
+        raise KnowledgeBankError("Only matter entries can be promoted")
     if target_scope == source.scope:
         raise KnowledgeBankError("Target scope must be broader than the current scope")
 
@@ -698,7 +659,6 @@ async def promote_kb_entry(
         db,
         user=user,
         schema=KnowledgeBankEntryCreate(
-            team_id=source.team_id,
             matter_id=None if target_scope != "matter" else source.matter_id,
             scope=target_scope,
             entry_type=source.entry_type,

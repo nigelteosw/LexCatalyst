@@ -12,8 +12,7 @@ from app.dependencies import check_kb_read, check_kb_write, require_matter_membe
 from app.models import (
     BirdieReview, BirdieSuggestion, BirdieSuggestionReply, ChatMessage, ChatThread, ClassAuditEvent,
     ClassInvite, ClassJoinAttempt, ClassMembership, KnowledgeBankEntry, Matter, MentorPairing,
-    MatterMember, MentorshipClass, ResourceMetadata, RetrievalAuditEvent, Team,
-    TeamMember, User,
+    MatterMember, MentorshipClass, ResourceMetadata, RetrievalAuditEvent, User,
 )
 from app.services import agent_service, agent_tools, birdie_service, chat_service, birdie_review_service as reviews
 from app.services.audit_service import record_retrieval
@@ -32,7 +31,7 @@ class ClassReviewFindingsTests(unittest.TestCase):
         self.engine = create_engine('sqlite://')
         Base.metadata.create_all(self.engine, tables=[model.__table__ for model in (
             User, MentorshipClass, ClassMembership, ClassAuditEvent, ClassInvite,
-            ClassJoinAttempt, Team, TeamMember, MentorPairing, Matter, MatterMember,
+            ClassJoinAttempt, MentorPairing, Matter, MatterMember,
             BirdieReview, BirdieSuggestion, BirdieSuggestionReply, RetrievalAuditEvent,
             KnowledgeBankEntry, ResourceMetadata,
             ChatThread, ChatMessage,
@@ -71,15 +70,12 @@ class ClassReviewFindingsTests(unittest.TestCase):
         self.assertFalse(check_kb_write(self.db, self.user, entry))
 
     def test_admin_cannot_discover_private_metadata_even_with_team_link(self):
-        self.db.add(Team(id='team', class_id='a', name='Local'))
-        self.db.add(TeamMember(team_id='team', user_id='actor', role='partner'))
-        self.db.add(ResourceMetadata(class_id='a', resource_type='document', resource_id='secret', owner_user_id='other', created_by='other', team_id='team', scope='private', title='Confidential title'))
+        self.db.add(ResourceMetadata(class_id='a', resource_type='document', resource_id='secret', owner_user_id='other', created_by='other', scope='private', title='Confidential title'))
         self.db.commit()
         self.assertEqual(list_resource_metadata(self.db, user=self.user), [])
 
     def test_partner_admin_needs_explicit_matter_membership(self):
-        self.db.add(Team(id='team', class_id='a', name='Local'))
-        self.db.add(Matter(id='matter', class_id='a', team_id='team', case_number='P-1', title='Private matter'))
+        self.db.add(Matter(id='matter', class_id='a', case_number='P-1', title='Private matter'))
         self.db.commit()
         self.assertEqual(list_matters(self.db, self.user), [])
         with self.assertRaises(HTTPException):
@@ -90,8 +86,7 @@ class ClassReviewFindingsTests(unittest.TestCase):
         self.assertEqual(event.class_id, 'a')
 
     def test_matter_mutation_routes_reject_foreign_class_even_for_admin(self):
-        self.db.add(Team(id='foreign-team', class_id='b', name='Foreign'))
-        self.db.add(Matter(id='foreign-matter', class_id='b', team_id='foreign-team', case_number='F-1', title='Foreign matter'))
+        self.db.add(Matter(id='foreign-matter', class_id='b', case_number='F-1', title='Foreign matter'))
         self.db.commit()
         for operation in (
             lambda: patch_matter('foreign-matter', MatterUpdate(title='Changed'), self.db, self.user),
@@ -104,8 +99,7 @@ class ClassReviewFindingsTests(unittest.TestCase):
         self.assertEqual(self.db.get(Matter, 'foreign-matter').title, 'Foreign matter')
 
     def test_matter_cannot_enroll_member_of_another_class(self):
-        self.db.add(Team(id='team', class_id='a', name='Local'))
-        self.db.add(Matter(id='matter', class_id='a', team_id='team', case_number='M-1', title='Local matter'))
+        self.db.add(Matter(id='matter', class_id='a', case_number='M-1', title='Local matter'))
         self.db.add(MatterMember(matter_id='matter', user_id='actor', role='partner'))
         self.db.add(ClassMembership(class_id='b', user_id='other', role='member', status='active'))
         self.db.commit()

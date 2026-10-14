@@ -11,8 +11,6 @@ from app.models import (
     ClassMembership,
     MentorPairing,
     MentorshipClass,
-    Team,
-    TeamMember,
     User,
 )
 from app.services.mentorship_class_service import (
@@ -29,7 +27,6 @@ from app.services.mentorship_class_service import (
     remove_member,
     transfer_ownership,
 )
-from app.services.organization_service import ensure_default_team
 from app.services.user_service import list_firm_users
 
 
@@ -39,7 +36,7 @@ class ClassMembershipTests(unittest.TestCase):
         Base.metadata.create_all(self.engine, tables=[
             User.__table__, MentorshipClass.__table__, ClassMembership.__table__,
             ClassInvite.__table__, ClassJoinAttempt.__table__, ClassAuditEvent.__table__,
-            Team.__table__, TeamMember.__table__, MentorPairing.__table__,
+            MentorPairing.__table__,
         ])
         self.db = Session(self.engine)
         self.owner = User(id="owner", email="owner@example.test", google_id="google-owner")
@@ -89,15 +86,6 @@ class ClassMembershipTests(unittest.TestCase):
         with self.assertRaises(ClassAccessError):
             require_class_context(self.db, self.owner)
         self.assertEqual(require_class_context(self.db, self.student).role, "owner")
-
-    def test_default_teams_are_local_to_each_approved_class(self) -> None:
-        first = create_class(self.db, user=self.owner, name="Autumn intake")
-        second = create_class(self.db, user=self.student, name="Winter intake")
-        first_team = ensure_default_team(self.db, self.owner)
-        second_team = ensure_default_team(self.db, self.student)
-        self.assertEqual(first_team.class_id, first.id)
-        self.assertEqual(second_team.class_id, second.id)
-        self.assertNotEqual(first_team.id, second_team.id)
 
     def test_roster_only_contains_current_team_members(self) -> None:
         create_class(self.db, user=self.owner, name="Autumn intake")

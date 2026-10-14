@@ -82,7 +82,7 @@ function MyView() {
   )
 }
 
-function MenteeCard({ userId, name, onOpen }: { userId: string; name: string; onOpen: () => void }) {
+export function MenteeCard({ userId, name, onOpen }: { userId: string; name: string; onOpen: () => void }) {
   const themes = useQuery({ queryKey: ['mentorship', 'themes', userId], queryFn: () => getMenteeThemes(userId) })
   return (
     <button type="button" onClick={onOpen} className="rounded-lg border border-line bg-white p-4 text-left hover:bg-accent-tint">

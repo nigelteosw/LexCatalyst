@@ -39,11 +39,6 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     google_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    default_team_id: Mapped[str | None] = mapped_column(
-        ForeignKey("teams.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
     firm_role: Mapped[str] = mapped_column(String(24), nullable=False, default="associate")
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -125,7 +120,7 @@ class ClassAuditEvent(Base):
     class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="CASCADE"), index=True, nullable=False)
     actor_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     subject_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    action: Mapped[str] = mapped_column(String(80), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -225,11 +220,6 @@ class Memory(Base):
         index=True,
         nullable=True,
     )
-    team_id: Mapped[str | None] = mapped_column(
-        ForeignKey("teams.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -268,17 +258,6 @@ class Document(Base):
         index=True,
         nullable=True,
     )
-    team_id: Mapped[str | None] = mapped_column(
-        ForeignKey("teams.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    # Optional folder within the document's matter (or within the owner's General space).
-    folder_id: Mapped[str | None] = mapped_column(
-        ForeignKey("document_folders.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
     # "executed" (signed) or "draft"; None when unknown. Precedent ranks executed first.
     execution_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     processing_started_at: Mapped[datetime | None] = mapped_column(
@@ -308,38 +287,6 @@ class Document(Base):
         back_populates="document",
         cascade="all, delete-orphan",
         order_by="DocumentComment.created_at",
-    )
-
-
-class DocumentFolder(Base):
-    """One-level folder inside a matter. matter_id NULL = the creator's General space."""
-
-    __tablename__ = "document_folders"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
-    # Deleting a matter deletes its folders; their documents fall back to General.
-    matter_id: Mapped[str | None] = mapped_column(
-        ForeignKey("matters.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-    created_by: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
     )
 
 
@@ -397,57 +344,12 @@ class DocumentComment(Base):
     author: Mapped[User] = relationship()
 
 
-class Team(Base):
-    __tablename__ = "teams"
-    __table_args__ = (UniqueConstraint("class_id", "name", name="uq_teams_class_name"),)
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(160), nullable=False)
-    practice_area: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-
-class TeamMember(Base):
-    __tablename__ = "team_members"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    team_id: Mapped[str] = mapped_column(
-        ForeignKey("teams.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False,
-    )
-    role: Mapped[str] = mapped_column(String(24), nullable=False, default="associate")
-    joined_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    team: Mapped[Team] = relationship()
-    user: Mapped[User] = relationship(foreign_keys=[user_id])
-
-
 class Matter(Base):
     __tablename__ = "matters"
     __table_args__ = (UniqueConstraint("class_id", "case_number", name="uq_matters_class_case_number"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
-    team_id: Mapped[str] = mapped_column(
-        ForeignKey("teams.id", ondelete="RESTRICT"),
-        index=True,
-        nullable=False,
-    )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     case_number: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
     _client_name: Mapped[str | None] = mapped_column("client_name", Text, nullable=True)
@@ -463,8 +365,6 @@ class Matter(Base):
         onupdate=func.now(),
         nullable=False,
     )
-
-    team: Mapped[Team] = relationship()
 
     @property
     def client_name(self) -> str | None:
@@ -511,11 +411,6 @@ class KnowledgeBankEntry(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     class_id: Mapped[str] = mapped_column(ForeignKey("mentorship_classes.id", ondelete="RESTRICT"), index=True, nullable=False)
-    team_id: Mapped[str | None] = mapped_column(
-        ForeignKey("teams.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
     matter_id: Mapped[str | None] = mapped_column(
         ForeignKey("matters.id", ondelete="SET NULL"),
         index=True,
@@ -572,7 +467,6 @@ class KnowledgeBankEntry(Base):
         nullable=False,
     )
 
-    team: Mapped[Team | None] = relationship()
     matter: Mapped[Matter | None] = relationship()
     creator: Mapped[User] = relationship(foreign_keys=[created_by])
     source_entry: Mapped["KnowledgeBankEntry | None"] = relationship(remote_side=[id])
@@ -661,11 +555,6 @@ class ResourceMetadata(Base):
         index=True,
         nullable=True,
     )
-    team_id: Mapped[str | None] = mapped_column(
-        ForeignKey("teams.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
     matter_id: Mapped[str | None] = mapped_column(
         ForeignKey("matters.id", ondelete="SET NULL"),
         index=True,
@@ -693,7 +582,6 @@ class ResourceMetadata(Base):
 
     owner: Mapped[User | None] = relationship(foreign_keys=[owner_user_id])
     creator: Mapped[User | None] = relationship(foreign_keys=[created_by])
-    team: Mapped[Team | None] = relationship()
     matter: Mapped[Matter | None] = relationship()
     source_document: Mapped[Document | None] = relationship()
 

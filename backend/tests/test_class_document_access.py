@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.database import Base
 from app.models import (
-    ClassMembership, Document, DocumentFolder, Matter, MatterMember,
-    MentorshipClass, Team, User,
+    ClassMembership, Document, Matter, MatterMember,
+    MentorshipClass, User,
 )
 from app.services.document_service import can_access_document, create_pending_document, document_access_filter
 from app.services.mentorship_class_service import ClassAccessError
@@ -26,8 +26,8 @@ class ClassDocumentAccessTests(unittest.TestCase):
         engine = create_engine("sqlite://")
         Base.metadata.create_all(engine, tables=[
             User.__table__, MentorshipClass.__table__, ClassMembership.__table__,
-            Team.__table__, Matter.__table__, MatterMember.__table__,
-            DocumentFolder.__table__, Document.__table__,
+            Matter.__table__, MatterMember.__table__,
+            Document.__table__,
         ])
         with Session(engine) as db:
             db.add(User(id="reader", email="reader@example.test", google_id="reader"))
@@ -46,8 +46,8 @@ class ClassDocumentAccessTests(unittest.TestCase):
         engine = create_engine("sqlite://")
         Base.metadata.create_all(engine, tables=[
             User.__table__, MentorshipClass.__table__, ClassMembership.__table__,
-            Team.__table__, Matter.__table__, MatterMember.__table__,
-            DocumentFolder.__table__, Document.__table__,
+            Matter.__table__, MatterMember.__table__,
+            Document.__table__,
         ])
         with Session(engine) as db:
             db.add(User(id="reader", email="reader@example.test", google_id="reader"))
@@ -56,8 +56,7 @@ class ClassDocumentAccessTests(unittest.TestCase):
                 MentorshipClass(id="b", name="B", status="active", created_by="reader"),
             ])
             db.add(ClassMembership(class_id="a", user_id="reader", status="active", role="member"))
-            db.add(Team(id="team-b", class_id="b", name="Foreign"))
-            db.add(Matter(id="matter-b", class_id="b", team_id="team-b", title="Foreign", case_number="B-1"))
+            db.add(Matter(id="matter-b", class_id="b", title="Foreign", case_number="B-1"))
             db.commit()
             with patch("app.services.document_service.upload_document_file") as upload:
                 with self.assertRaises(ClassAccessError):

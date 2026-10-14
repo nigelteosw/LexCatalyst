@@ -20,7 +20,6 @@ router = APIRouter(prefix="/resources/metadata", tags=["resource-metadata"])
 def list_metadata(
     resource_type: str | None = None,
     matter_id: str | None = None,
-    team_id: str | None = None,
     scope: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -33,7 +32,6 @@ def list_metadata(
             user=current_user,
             resource_type=resource_type,
             matter_id=matter_id,
-            team_id=team_id,
             scope=scope,
             limit=limit,
             offset=offset,

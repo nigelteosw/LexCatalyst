@@ -22,7 +22,7 @@ class ResourceMetadataTests(unittest.TestCase):
             class_id="class-1",
             filename="Agreement.pdf",
             user_id="user-1",
-            team_id="team-1",
+            
             matter_id="matter-1",
             status="ready",
         )
@@ -45,7 +45,7 @@ class ResourceMetadataTests(unittest.TestCase):
             class_id="class-1",
             title="Share purchase checklist",
             created_by="user-1",
-            team_id=None,
+            
             matter_id=None,
             scope="private",
             source_document_id=None,
@@ -63,7 +63,7 @@ class ResourceMetadataTests(unittest.TestCase):
         self.assertEqual(existing.title, "Share purchase checklist")
         self.assertEqual(existing.metadata_json["entry_type"], "knowledge_bank")
 
-    def test_access_filter_includes_team_and_matter_membership(self) -> None:
+    def test_access_filter_includes_class_team_and_matter_membership(self) -> None:
         user = SimpleNamespace(id="user-1", is_admin=False)
         sql = str(
             resource_metadata_access_filter(user).compile(
@@ -72,9 +72,8 @@ class ResourceMetadataTests(unittest.TestCase):
             )
         ).lower()
 
-        self.assertIn("resource_metadata.scope = 'firm_wide'", sql)
+        self.assertIn("resource_metadata.scope = 'team'", sql)
         self.assertIn("resource_metadata.owner_user_id = 'user-1'", sql)
-        self.assertIn("team_members", sql)
         self.assertIn("matter_members", sql)
         self.assertIn("class_memberships", sql)
 

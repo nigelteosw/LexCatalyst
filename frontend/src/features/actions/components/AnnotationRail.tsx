@@ -719,7 +719,6 @@ function PromoteModal({
             >
               <option value="matter">Matter</option>
               <option value="team">Team</option>
-              <option value="firm_wide">Firm-wide</option>
             </select>
           </div>
           <p className="text-meta text-[#76766f]">

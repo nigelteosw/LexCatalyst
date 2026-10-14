@@ -41,7 +41,7 @@ backend/
     routers/          # thin HTTP handlers — one file per domain
     services/         # business logic — keep route handlers thin
     providers/        # LLM and embedding adapters (openrouter, embeddings)
-  migrations/         # Alembic; current head: 00a55a720011
+  migrations/         # Alembic; current head: b2e4c6d8f0a1
   Makefile
   requirements.txt
 
@@ -54,9 +54,9 @@ frontend/
       auth/           # LoginPage
       birdie/         # Birdie AI mentor panel
       chat/           # ChatPanel, header, matter chip, footnote source panel
-      documents/      # MatterDocuments (folders, upload, rename, delete; used on each matter page); DocumentsPanel is the single-document review page at /knowledge/documents/:id
+      documents/      # MatterDocuments (flat source-document list: upload, rename, delete; used on each matter page); DocumentsPanel is the single-document review page at /knowledge/documents/:id
       knowledge-bank/ # KB panel + filters + dialogs; per-matter page (MatterPage)
-      home/           # Home: matters list (CRUD), needs-attention, recent documents
+      home/           # Home: mentorship (from mentors, mentees, team guidance), Workboard attention, matters list (CRUD)
       memories/       # Memories panel (CRUD)
       navigation/     # Collapsible sidebar; chats grouped by matter (chat page only)
       settings/       # Settings panel
@@ -180,7 +180,7 @@ Do not add a tool registry unless it removes real duplication.
 
 All schema changes go through Alembic (`backend/migrations/`). Never add new tables or indexes only to `create_db_tables()` — that path runs only when `AUTO_CREATE_TABLES=true`, which is not the case in production.
 
-Current head: `00a55a720011`
+Current head: `b2e4c6d8f0a1`
 
 ```sh
 cd backend && source .venv/bin/activate
@@ -266,7 +266,9 @@ Within a team, an owner or mentor pairs each mentee with their mentors (`mentor_
 
 ## Matters
 
-Everything is grouped by matter: documents, Knowledge Bank entries, LexChats and Workboard items each carry an optional `matter_id`; no matter means "General". Matters are listed and managed on Home (create, edit, delete), and each has a page at `/matters/:id` (documents with one-level folders, cases, LexChats, pending). `/matters/general` is the same page for items with no matter. There is no standalone Documents list. `DELETE /matters/{id}` is a hard delete (partner/admin): linked records fall back to General, and matter-scoped KB entries become private. Chats and documents are reassigned with `PATCH` and `matter_id` (`null` = General).
+Knowledge Bank scopes are `team` (everyone in the mentorship team; partners publish), `matter` and `private`.
+
+Everything is grouped by matter: documents, Knowledge Bank entries, LexChats and Workboard items each carry an optional `matter_id`; no matter means "General". Matters are listed and managed on Home (create, edit, delete), and each has a page at `/matters/:id` (source documents as a flat list, cases, LexChats, pending). Matters belong to the mentorship team; there are no practice-group teams, and no document folders. `/matters/general` is the same page for items with no matter. There is no standalone Documents list. `DELETE /matters/{id}` is a hard delete (partner/admin): linked records fall back to General, and matter-scoped KB entries become private. Chats and documents are reassigned with `PATCH` and `matter_id` (`null` = General).
 
 ## Frontend Guidance
 

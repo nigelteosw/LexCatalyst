@@ -4,8 +4,8 @@ import {
   CheckSquare,
   ChevronsLeft,
   ChevronsUpDown,
+  Briefcase,
   FolderInput,
-  Home,
   MessageSquare,
   MoreHorizontal,
   Pencil,
@@ -40,6 +40,8 @@ export type SidebarProps = {
   userFullName: string
   userInitials: string
   userRole: string
+  /** Team Management is shown to team owners and mentors only. */
+  classRole?: 'owner' | 'mentor' | 'member' | null
   menuExtra?: ReactNode
 }
 
@@ -78,6 +80,7 @@ export function Sidebar({
   userFullName,
   userInitials,
   userRole,
+  classRole,
   menuExtra,
 }: SidebarProps) {
   const {
@@ -280,8 +283,6 @@ export function Sidebar({
             aria-label="Workspace"
             className="flex flex-col gap-[4px] border-b border-hairline px-[10px] py-[8px]"
           >
-            <NavItem icon={Home} label="Home" collapsed={isCollapsed} active={current.view === 'home' || current.view === 'matter' || current.view === 'documents'}
-              onClick={() => { selectHome(); closeMobile() }} />
             <NavItem icon={MessageSquare} label="LexChat" collapsed={isCollapsed} active={current.view === 'chat'}
               onClick={() => { onNewChat(); closeMobile() }} />
             <NavItem icon={BookMarked} label="Knowledge Bank" collapsed={isCollapsed} active={kbActive}
@@ -292,8 +293,13 @@ export function Sidebar({
             <NavItem icon={CheckSquare} label="Workboard" collapsed={isCollapsed} active={current.view === 'actions'}
               badge={pendingTaskCount} onPrefetch={() => prefetchWorkspace('actions')}
               onClick={() => { selectActions(); closeMobile() }} />
-            <NavItem icon={UsersRound} label="Team Management" collapsed={isCollapsed} active={current.view === 'team'}
-              onClick={() => { selectTeam(); closeMobile() }} />
+            {/* Matters are listed on Home, so this entry opens Home. */}
+            <NavItem icon={Briefcase} label="Matters" collapsed={isCollapsed} active={current.view === 'home' || current.view === 'matter'}
+              onClick={() => { selectHome(); closeMobile() }} />
+            {(classRole === 'owner' || classRole === 'mentor') && (
+              <NavItem icon={UsersRound} label="Team Management" collapsed={isCollapsed} active={current.view === 'team'}
+                onClick={() => { selectTeam(); closeMobile() }} />
+            )}
           </nav>
 
           {/* Chats by matter: only on the LexChat page */}
@@ -461,7 +467,7 @@ function NavItem({
   onPrefetch,
   badge,
 }: {
-  icon: typeof Home
+  icon: typeof MessageSquare
   label: string
   active: boolean
   collapsed: boolean

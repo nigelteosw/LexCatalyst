@@ -31,7 +31,7 @@ class PendingReviewEntryTests(unittest.TestCase):
         db.add.side_effect = added.append
         user = SimpleNamespace(id="u", firm_role="partner", default_team_id=None)
         schema = KnowledgeBankEntryCreate(
-            scope="firm_wide",
+            scope="team",
             entry_type="knowledge_bank",
             title="Indemnity position",
             body_markdown="Acme Corp shall indemnify",
@@ -57,7 +57,7 @@ class PendingReviewEntryTests(unittest.TestCase):
         self.assertEqual(entry.body_markdown, "[CLIENT] shall indemnify")
         self.assertIsInstance(redaction, PiiRedaction)
         self.assertEqual(redaction.original_content, "Acme Corp shall indemnify")
-        self.assertEqual(redaction.target_scope, "firm_wide")
+        self.assertEqual(redaction.target_scope, "team")
         self.assertIn(redaction, added)
 
 
@@ -80,7 +80,7 @@ class AnnotationPromotionTests(unittest.TestCase):
                     annotation=_annotation(),
                     handoff=self.handoff,
                     user=self.user,
-                    schema=ReviewAnnotationPromoteRequest(target_scope="firm_wide"),
+                    schema=ReviewAnnotationPromoteRequest(target_scope="team"),
                 )
             )
         self.assertEqual(entry.id, "kb-1")
@@ -121,7 +121,7 @@ class AnnotationPromotionTests(unittest.TestCase):
                         annotation=_annotation(promoted="kb-existing"),
                         handoff=self.handoff,
                         user=self.user,
-                        schema=ReviewAnnotationPromoteRequest(target_scope="firm_wide"),
+                        schema=ReviewAnnotationPromoteRequest(target_scope="team"),
                     )
                 )
         pending.assert_not_called()

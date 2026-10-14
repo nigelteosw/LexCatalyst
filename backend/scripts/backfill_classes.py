@@ -6,7 +6,7 @@ Run from backend/ against the database in DATABASE_URL:
     .venv/bin/python -m scripts.backfill_classes apply --mapping mapping.json
 
 The mapping file is an explicit object: {"<table>": {"<row id>": "<class id>"}}. Nothing is
-inferred from the shared default team. The apply runs as one transaction and rolls back if
+inferred from the team or the matter. The apply runs as one transaction and rolls back if
 any link would cross classes. Report output carries counts only, never row content.
 """
 

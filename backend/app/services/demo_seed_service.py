@@ -1,6 +1,6 @@
 """Seed a believable demo firm. Everything here is synthetic.
 
-Resets are scoped to demo rows only: the dummy users' content, the demo team and matter, and
+Resets are scoped to demo rows only: the dummy users' content, the demo matter, and
 knowledge-bank entries tagged ``demo-seed``. The presenter's own data is never touched.
 
 External services: documents go through the normal upload pipeline (R2 + worker + OpenAI
@@ -25,8 +25,6 @@ from app.models import (
     Memory,
     ReviewAnnotation,
     ReviewHandoff,
-    Team,
-    TeamMember,
     User,
 )
 from app.schemas import KnowledgeBankEntryCreate
@@ -48,7 +46,6 @@ from app.services.mentorship_class_service import require_class_context
 
 _log = logging.getLogger(__name__)
 
-DEMO_TEAM = "Corporate (Demo)"
 DEMO_CASE = "DEMO-MERIDIAN-001"
 DEMO_MATTER_TITLE = "Meridian Capital — Share Purchase"
 DEMO_TAG = "demo-seed"
@@ -89,28 +86,28 @@ NDA_FEEDBACK = [
 
 KB_ENTRIES = [
     (
-        "firm_wide",
+        "team",
         "style_guide",
         "Firm style guide: defined terms and plain English",
         "## Defined terms\n\n- Define a term once, in clause 1 or the definitions schedule, and use it exactly thereafter.\n- Never introduce a second label for the same thing (for example *Proprietary Information* alongside *Confidential Information*).\n\n## Plain English\n\n- Prefer *agree* to *hereby agree and do hereby acknowledge*.\n- One idea per sentence. Avoid *aforesaid*, *hereinafter*, *witnesseth*.\n\n## Numbering\n\n- Clauses 1, 2, 3; sub-clauses 1.1, 1.2; paragraphs (a), (b).",
         ["style", "drafting"],
     ),
     (
-        "firm_wide",
+        "team",
         "knowledge_bank",
         "Playbook: indemnity caps",
         "## Standard position\n\nIndemnities in NDAs and commercial agreements are capped at the fees paid or payable under the agreement, and limited to direct losses.\n\n## Why\n\nUncapped indemnities create open-ended exposure and are rarely accepted by insurers.\n\n## Fallbacks\n\n- Cap at the greater of fees paid and GBP 1 million where the counterparty insists.\n- Never agree to an uncapped indemnity without partner sign-off.",
         ["playbook", "indemnity"],
     ),
     (
-        "firm_wide",
+        "team",
         "knowledge_bank",
         "Playbook: governing law and jurisdiction",
         "## Standard position\n\nFor UK-incorporated clients and UK targets, use English law and the courts of England and Wales.\n\n## Fallbacks\n\n- A neutral law (for example Singapore) may be accepted for cross-border deals with partner approval.\n- Do not accept the law of a US state on a UK transaction.",
         ["playbook", "governing-law"],
     ),
     (
-        "firm_wide",
+        "team",
         "knowledge_bank",
         "Playbook: limitation of liability and baskets",
         "## Baskets\n\nPrefer a **tipping** basket (once the threshold is crossed, liability runs from the first pound). A **deductible** basket removes the threshold from every claim and favours the sellers.\n\n## Caps\n\nOverall liability should not exceed the purchase price; warranty claims are usually capped lower.",
@@ -181,7 +178,6 @@ def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> Non
     """Delete previously seeded demo content. Keeps the dummy users themselves."""
     class_id = require_class_context(db, presenter).class_id
     matter = db.scalar(select(Matter).where(Matter.class_id == class_id, Matter.case_number == DEMO_CASE))
-    team = db.scalar(select(Team).where(Team.class_id == class_id, Team.name == DEMO_TEAM))
     matter_id = matter.id if matter else None
 
     # Actions and handoffs reference each other; break the cycle first.
@@ -233,10 +229,6 @@ def reset_demo(db: Session, *, presenter: User, demo_user_ids: list[str]) -> Non
         db.execute(delete(MatterMember).where(MatterMember.matter_id == matter.id))
         db.delete(matter)
         db.flush()
-    if team:
-        db.execute(update(User).where(User.default_team_id == team.id).values(default_team_id=None))
-        db.execute(delete(TeamMember).where(TeamMember.team_id == team.id))
-        db.delete(team)
     db.commit()
 
     for key in storage_keys:
@@ -257,15 +249,8 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
 
     summary: dict = {"documents": 0, "documents_failed": 0, "kb_entries": 0, "kb_failed": 0}
 
-    # Team + matter ---------------------------------------------------------------------------
-    team = Team(class_id=class_id, name=DEMO_TEAM, practice_area="Corporate / M&A")
-    db.add(team)
-    db.flush()
-    for user in (presenter, sarah, jane, marcus):
-        db.add(TeamMember(team_id=team.id, user_id=user.id, role=user.firm_role))
-    for user in (sarah, jane, marcus):
-        user.default_team_id = team.id
-    matter = Matter(class_id=class_id, team_id=team.id, title=DEMO_MATTER_TITLE, case_number=DEMO_CASE)
+    # Matter ----------------------------------------------------------------------------------
+    matter = Matter(class_id=class_id, title=DEMO_MATTER_TITLE, case_number=DEMO_CASE)
     matter.client_name = "Meridian Capital Ltd"
     db.add(matter)
     db.flush()
@@ -292,7 +277,6 @@ async def seed_demo(db: Session, *, presenter: User) -> dict:
             content_type="application/pdf",
             file_bytes=pdf_bytes,
             matter_id=matter.id,
-            team_id=team.id,
         )
         docs[key] = document
         if document.status == "failed":

@@ -1,7 +1,6 @@
 import type { Matter, MessageSource } from '../../shared/types/workspace'
 
 const SCOPE_LABELS: Record<string, string> = {
-  firm_wide: 'Firm-wide',
   team: 'Team',
   private: 'Private',
 }
@@ -10,7 +9,7 @@ function titleCase(value: string) {
   return value.replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-/** One-line description under a source's title, e.g. "M-2026-0142 · p. 3" or "Firm-wide · Playbook". */
+/** One-line description under a source's title, e.g. "M-2026-0142 · p. 3" or "Team · Playbook". */
 export function describeSource(source: MessageSource, matters: Matter[]): string {
   if (source.kind === 'elitigation') {
     return ['eLitigation', source.locator].filter(Boolean).join(' · ')

@@ -57,7 +57,6 @@ def kb_entries(
     entry_type: str | None = None,
     matter_id: str | None = None,
     context_matter_id: str | None = None,
-    team_id: str | None = None,
     pii_status: str | None = None,
     query: str | None = None,
     limit: int = Query(default=30, ge=1, le=100),
@@ -73,7 +72,6 @@ def kb_entries(
             entry_type=entry_type,
             matter_id=matter_id,
             context_matter_id=context_matter_id,
-            team_id=team_id,
             pii_status=pii_status,
             query=query,
             limit=limit,
@@ -99,7 +97,7 @@ async def post_kb_entry(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> KnowledgeBankEntryResponse:
-    if schema.scope == "firm_wide":
+    if schema.scope == "team":
         require_partner_or_admin(current_user)
     try:
         entry = await create_kb_entry(db, user=current_user, schema=schema)
@@ -224,7 +222,7 @@ async def patch_kb_entry(
     existing = get_kb_entry(db, entry_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Knowledge Bank entry not found")
-    classification_fields = {"scope", "team_id", "matter_id"}
+    classification_fields = {"scope", "matter_id"}
     if classification_fields.intersection(schema.model_fields_set):
         require_kb_owner(current_user, existing)
     else:

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import KnowledgeBankEntry, Matter, MatterMember, TeamMember, User
+from app.models import KnowledgeBankEntry, Matter, MatterMember, User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/google")
 
@@ -94,15 +94,6 @@ def require_matter_member(db: Session, user: User, matter_id: str) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Matter access denied")
 
 
-def _is_team_member(db: Session, user_id: str, team_id: str) -> bool:
-    return db.scalar(
-        select(TeamMember.id).where(
-            TeamMember.team_id == team_id,
-            TeamMember.user_id == user_id,
-        )
-    ) is not None
-
-
 def check_kb_read(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
     from app.services.mentorship_class_service import ClassAccessError, require_class_context
     try:
@@ -111,12 +102,10 @@ def check_kb_read(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
         return False
     if entry.class_id != context.class_id:
         return False
-    if entry.scope == "firm_wide":
+    if entry.scope == "team":
         return True
     if entry.scope == "private":
         return entry.created_by == user.id
-    if entry.scope == "team" and entry.team_id:
-        return _is_team_member(db, user.id, entry.team_id)
     if entry.scope == "matter" and entry.matter_id:
         return _is_matter_member(db, user.id, entry.matter_id)
     return False
@@ -132,12 +121,10 @@ def check_kb_write(db: Session, user: User, entry: KnowledgeBankEntry) -> bool:
         return False
     if entry.created_by == user.id:
         return True
-    if entry.scope == "firm_wide":
+    if entry.scope == "team":
         return user.firm_role in PARTNER_ROLES
     if entry.scope == "private":
         return entry.created_by == user.id
-    if entry.scope == "team" and entry.team_id:
-        return _is_team_member(db, user.id, entry.team_id)
     if entry.scope == "matter" and entry.matter_id:
         return _is_matter_member(db, user.id, entry.matter_id)
     return False

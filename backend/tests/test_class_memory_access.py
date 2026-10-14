@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.database import Base
-from app.models import ChatMessage, ChatThread, ClassMembership, Matter, Memory, MentorshipClass, Team, User
+from app.models import ChatMessage, ChatThread, ClassMembership, Matter, Memory, MentorshipClass, User
 from app.schemas import MemoryCreate
 from app.services.memory_service import create_memory, get_memory, list_memories
 
@@ -14,7 +14,7 @@ class ClassMemoryAccessTests(unittest.TestCase):
         engine = create_engine("sqlite://")
         Base.metadata.create_all(engine, tables=[
             User.__table__, MentorshipClass.__table__, ClassMembership.__table__,
-            Team.__table__, Matter.__table__, ChatThread.__table__,
+            Matter.__table__, ChatThread.__table__,
             ChatMessage.__table__, Memory.__table__,
         ])
         with Session(engine) as db:

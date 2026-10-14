@@ -8,7 +8,7 @@ from app.class_boundary import CLASS_LINKS
 QUARANTINE_CLASS_ID = "00000000-0000-0000-0000-000000000000"
 
 CONTENT_TABLES = (
-    "teams", "matters", "documents", "document_folders", "chat_threads",
+    "matters", "documents", "chat_threads",
     "memories", "kb_entries", "resource_metadata", "action_items",
     "review_handoffs", "review_lessons", "birdie_reviews",
     "retrieval_audit_events",

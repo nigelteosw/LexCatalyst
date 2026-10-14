@@ -22,8 +22,6 @@ from app.models import (
     ReviewAnnotation,
     ReviewHandoff,
     ReviewLesson,
-    Team,
-    TeamMember,
     User,
 )
 from app.schemas import KnowledgeBankEntryCreate
@@ -176,7 +174,7 @@ NOTE_V1_LESSONS = [
 
 
 async def _ensure_demo_document(
-    db: Session, *, owner: User, matter: Matter, team: Team, filename: str, pdf: DemoPdf
+    db: Session, *, owner: User, matter: Matter, filename: str, pdf: DemoPdf
 ) -> Document:
     """Create (or recover) one synthetic demo PDF on a matter; embedding runs through the normal worker."""
     document = db.scalar(select(Document).where(
@@ -186,7 +184,7 @@ async def _ensure_demo_document(
     if document is None:
         document = await document_service.create_pending_document(
             db, user_id=owner.id, filename=filename, content_type="application/pdf",
-            file_bytes=pdf.bytes, matter_id=matter.id, team_id=team.id,
+            file_bytes=pdf.bytes, matter_id=matter.id,
         )
     elif document.status == "failed" or (document.status == "uploaded" and not document.storage_key):
         try:
@@ -214,7 +212,7 @@ async def _ensure_demo_document(
     return document
 
 
-async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users: dict[str, User]) -> dict:
+async def _seed_bishan_review(db: Session, *, matter: Matter, users: dict[str, User]) -> dict:
     """Two review rounds on Jane's OTP note: v1 returned with Sarah's comments and lessons, v2 waiting."""
     jane, sarah = users["jane"], users["sarah"]
     ticket = db.scalar(select(ActionItem).where(ActionItem.matter_id == matter.id, ActionItem.title == OTP_TICKET))
@@ -224,7 +222,7 @@ async def _seed_bishan_review(db: Session, *, matter: Matter, team: Team, users:
 
     v1_pdf, v2_pdf = DemoPdf(NOTE_V1_BLOCKS), DemoPdf(NOTE_V2_BLOCKS)
     docs = [
-        await _ensure_demo_document(db, owner=jane, matter=matter, team=team, filename=filename, pdf=pdf)
+        await _ensure_demo_document(db, owner=jane, matter=matter, filename=filename, pdf=pdf)
         for filename, pdf in zip(filenames, (v1_pdf, v2_pdf))
     ]
 
@@ -317,10 +315,10 @@ TAMPINES_DOCUMENTS = [
 ]
 
 
-async def _seed_tampines_documents(db: Session, *, matter: Matter, team: Team, users: dict[str, User]) -> dict:
+async def _seed_tampines_documents(db: Session, *, matter: Matter, users: dict[str, User]) -> dict:
     owner = users["jane"]
     docs = [
-        await _ensure_demo_document(db, owner=owner, matter=matter, team=team, filename=name, pdf=DemoPdf(blocks))
+        await _ensure_demo_document(db, owner=owner, matter=matter, filename=name, pdf=DemoPdf(blocks))
         for name, blocks in TAMPINES_DOCUMENTS
     ]
     return {
@@ -339,7 +337,7 @@ async def _seed_style_guide(db: Session, *, presenter: User) -> bool:
             db,
             user=presenter,
             schema=KnowledgeBankEntryCreate(
-                scope="firm_wide", entry_type="style_guide", title=STYLE_GUIDE_TITLE,
+                scope="team", entry_type="style_guide", title=STYLE_GUIDE_TITLE,
                 body_markdown=STYLE_GUIDE_BODY,
                 tags=["style", "conveyancing", "Singapore property", DEMO_TAG],
             ),
@@ -355,19 +353,11 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
     class_id = require_class_context(db, presenter).class_id
     users = {u.google_id.split(":", 1)[1].split("-")[0]: u for u in create_dummy_users(db, actor=presenter)}
     participants = [presenter, *users.values()]
-    team = db.scalar(select(Team).where(Team.class_id == class_id, Team.name == "Singapore Property (Demo)"))
-    if team is None:
-        team = Team(class_id=class_id, name="Singapore Property (Demo)", practice_area="Singapore property law")
-        db.add(team)
-        db.flush()
-    for user in participants:
-        if db.scalar(select(TeamMember).where(TeamMember.team_id == team.id, TeamMember.user_id == user.id)) is None:
-            db.add(TeamMember(team_id=team.id, user_id=user.id, role=user.firm_role))
     matters = []
     for case_number, title in MATTERS:
         matter = db.scalar(select(Matter).where(Matter.class_id == class_id, Matter.case_number == case_number))
         if matter is None:
-            matter = Matter(class_id=class_id, team_id=team.id, case_number=case_number, title=title)
+            matter = Matter(class_id=class_id, case_number=case_number, title=title)
             db.add(matter)
             db.flush()
         for user in participants:
@@ -419,8 +409,8 @@ async def seed_property_workboard(db: Session, *, presenter: User) -> dict:
     if otp is not None and otp.status != "done":
         otp.due_date = now - timedelta(days=1)
         db.commit()
-    review = await _seed_bishan_review(db, matter=matters[0], team=team, users=users)
-    tampines = await _seed_tampines_documents(db, matter=matters[1], team=team, users=users)
+    review = await _seed_bishan_review(db, matter=matters[0], users=users)
+    tampines = await _seed_tampines_documents(db, matter=matters[1], users=users)
     style_guide = await _seed_style_guide(db, presenter=presenter)
     return {
         "style_guide_created": style_guide,
