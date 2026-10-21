@@ -112,7 +112,7 @@ def _backfill() -> None:
     lessons = sa.table(
         "review_lessons",
         sa.column("id"), sa.column("handoff_id"), sa.column("mentee_user_id"),
-        sa.column("source_annotation_ids"), sa.column("source_feedback_ids"),
+        sa.column("source_annotation_ids", sa.JSON), sa.column("source_feedback_ids", sa.JSON),
     )
 
     rows = bind.execute(

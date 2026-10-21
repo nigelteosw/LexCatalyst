@@ -209,6 +209,43 @@ class ClassMigrationPostgresTests(unittest.TestCase):
         self.assertEqual([(action, subject) for action, subject in audit], [("kb_scope_narrowed:kb-two", "u3")])
         self.assertFalse(has_teams)
 
+    def test_mentorship_backfill_copies_returned_review_lessons_with_evidence(self) -> None:
+        # Regression: lessons with annotations failed to backfill on Railway (JSON column given a list).
+        self.migrate("b5c6d7e8f9a0")
+        with self.engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO users (id, email, google_id) VALUES "
+                "('mentee', 'mentee@example.test', 'mentee'), ('reviewer', 'reviewer@example.test', 'reviewer')"
+            ))
+            conn.execute(text("INSERT INTO mentorship_classes (id, name, status) VALUES ('class-a', 'A', 'active')"))
+            conn.execute(text(
+                "INSERT INTO documents (id, class_id, user_id, filename, content_type, status) "
+                "VALUES ('doc-1', 'class-a', 'mentee', 'a.pdf', 'application/pdf', 'ready')"
+            ))
+            conn.execute(text(
+                "INSERT INTO review_handoffs (id, class_id, document_id, submitted_by, status) "
+                "VALUES ('h-1', 'class-a', 'doc-1', 'mentee', 'completed')"
+            ))
+            conn.execute(text(
+                "INSERT INTO review_annotations (id, handoff_id, document_id, page_no, kind, anchor_quote, "
+                "author_user_id, note) VALUES ('ann-1', 'h-1', 'doc-1', 1, 'comment', 'Clause', 'reviewer', 'Tighten this')"
+            ))
+            conn.execute(text(
+                "INSERT INTO review_lessons (id, class_id, handoff_id, title, body, source_annotation_ids) "
+                "VALUES ('l-1', 'class-a', 'h-1', 'Tighten clauses', 'Be direct', CAST('[\"ann-1\"]' AS JSON))"
+            ))
+
+        self.migrate(CLASS_HEAD_REVISION)
+
+        with self.engine.connect() as conn:
+            lesson = conn.execute(text(
+                "SELECT mentee_user_id, source_feedback_ids FROM review_lessons WHERE id = 'l-1'"
+            )).one()
+            feedback = conn.execute(text("SELECT count(*) FROM mentor_feedback WHERE mentee_user_id = 'mentee'")).scalar_one()
+        self.assertEqual(lesson[0], "mentee")
+        self.assertEqual(len(lesson[1]), 1)
+        self.assertEqual(feedback, 1)
+
     def run_cli(self, *args: str) -> tuple[int, str]:
         out = io.StringIO()
         with mock.patch("scripts.backfill_classes.SessionLocal", sessionmaker(bind=self.engine)):
